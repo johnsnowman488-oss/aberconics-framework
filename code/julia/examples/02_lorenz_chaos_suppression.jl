@@ -28,6 +28,7 @@ begin
     import Pkg
    
     using DifferentialEquations, LinearAlgebra, Statistics, Random
+    using DiffEqCallbacks
     using PlotlyLight, PlutoUI
     using Optimization, OptimizationOptimJL
     println("Packages loaded.")
@@ -100,17 +101,17 @@ end
 
 function solver_candidates(hint::Symbol)
     if hint == :stiff
-        return [Rosenbrock23(), TRBDF2(), Rodas4P(), Tsit5()]
+        return [Rosenbrock23(), Rodas5P(), Tsit5()]
     elseif hint == :explicit
-        return [Tsit5(), AutoTsit5(Rosenbrock23()), Rodas4P(), TRBDF2()]
+        return [Tsit5(), AutoTsit5(Rosenbrock23()), Rosenbrock23(), Rodas5P()]
     else
-        return [AutoTsit5(Rosenbrock23()), Rodas4P(), TRBDF2(), Tsit5()]
+        return [AutoTsit5(Rosenbrock23()), Rodas5P(), Rosenbrock23(), Tsit5()]
     end
 end
 
 function solve_with_fallback(prob; hint::Symbol=:auto, saveat=nothing, reltol=1e-6, abstol=1e-8, save_everystep=false, callback=nothing, maxiters=600_000, solver_warnings=false, trace_fallback=false)
     attempts = String[]
-    kwargs = (reltol=reltol, abstol=abstol, save_everystep=save_everystep, maxiters=maxiters, verbose=solver_warnings)
+    kwargs = (reltol=reltol, abstol=abstol, save_everystep=save_everystep, maxiters=maxiters)
     if saveat !== nothing
         kwargs = merge(kwargs, (saveat=saveat,))
     end
@@ -185,7 +186,7 @@ function lyapunov_direct(γs, ws, u0; ρ0=28.0, tspan=(0.0, 120.0), transient=30
     base_prob = ODEProblem(lorenz_memory!, u0v, tspan, p)
     base_sol = nothing
     try
-        base_sol = solve(base_prob, Rodas4P(); reltol=1e-6, abstol=1e-8, save_everystep=false, maxiters=800_000)
+        base_sol = solve(base_prob, Rodas5P(); reltol=1e-6, abstol=1e-8, save_everystep=false, maxiters=800_000)
         if !SciMLBase.successful_retcode(base_sol.retcode)
             return NaN
         end
@@ -219,7 +220,7 @@ function lyapunov_direct(γs, ws, u0; ρ0=28.0, tspan=(0.0, 120.0), transient=30
     end, dt_renorm; save_positions=(false, false))
     
     try
-        solve(var_prob, Rodas4P(); reltol=1e-7, abstol=1e-9, save_everystep=false, callback=cb, maxiters=800_000)
+        solve(var_prob, Rodas5P(); reltol=1e-7, abstol=1e-9, save_everystep=false, callback=cb, maxiters=800_000)
     catch
         return NaN
     end
@@ -251,8 +252,8 @@ end
 function rho_stats(sol, p)
     L = length(p.γs)
     ρvals = Float64[]
-    for i in eachindex(sol.t)
-        chis = @view sol[i][4:3+L]
+    for u in sol.u
+        chis = @view u[4:3+L]
         push!(ρvals, p.ρ0 + dot(p.ws, chis))
     end
     return (
@@ -350,7 +351,7 @@ end
 begin
     # Extract data
     t = sol.t
-    x = [sol[i][1] for i in eachindex(sol.t)]
+    x = [u[1] for u in sol.u]
     
     # Create PlotlyLight figure
     plt_ts = PlotlyLight.Plot()
@@ -365,7 +366,7 @@ begin
     # Add memory channels if you want
     colors = ["red", "green", "purple"]
     for i in 1:L
-        chi = [sol[j][3+i] for j in eachindex(sol.t)]
+        chi = [u[3 + i] for u in sol.u]
         trace_chi = PlotlyLight.Config(
             x = t, y = chi,
             type = "scatter", mode = "lines",
@@ -393,9 +394,9 @@ end
 
 # ╔═╡ 78e3f8e5-b9b2-4f0f-9fb2-9b3764651f45
 begin
-    x_all = [sol[i][1] for i in 1:length(sol.t)]
-    y_all = [sol[i][2] for i in 1:length(sol.t)]
-    z_all = [sol[i][3] for i in 1:length(sol.t)]
+    x_all = [u[1] for u in sol.u]
+    y_all = [u[2] for u in sol.u]
+    z_all = [u[3] for u in sol.u]
     
     plt_3d = PlotlyLight.Plot()
     trace_3d = PlotlyLight.Config(
@@ -598,13 +599,13 @@ begin
     
     plt_compare = PlotlyLight.Plot()
     trace_base = PlotlyLight.Config(
-        x = sol.t, y = [sol[i][1] for i in eachindex(sol.t)],
+        x = sol.t, y = [u[1] for u in sol.u],
         type = "scatter", mode = "lines",
         name = "Baseline (λ=$(round(λ,digits=3)))",
         line = Dict("color" => "gray", "width" => 1)
     )
     trace_opt = PlotlyLight.Config(
-        x = sol_opt.t, y = [sol_opt[i][1] for i in eachindex(sol_opt.t)],
+        x = sol_opt.t, y = [u[1] for u in sol_opt.u],
         type = "scatter", mode = "lines",
         name = "Optimised (λ=$(round(λ_opt,digits=3)))",
         line = Dict("color" => "red", "width" => 1.5)

@@ -1,3 +1,4 @@
+
 ### A Pluto.jl notebook ###
 # v0.20.21
 # ==========================================
@@ -31,7 +32,7 @@ end
 ### A) Packages and helpers
 begin
     
-    using DifferentialEquations, DSP, Statistics, LinearAlgebra, Random
+    using DifferentialEquations, StochasticDiffEq, DSP, Statistics, LinearAlgebra, Random, Dates
     using PlotlyLight, PlutoUI,  OptimizationOptimJL
 
     # random seed for reproducibility
@@ -704,6 +705,73 @@ begin
         ]
         index_path = write_plot_index(plots_dir, "index", plot_files, title="OU Noise Analysis")
         println("\nPlot index written to: $index_path")
+    end
+end
+
+# ╔═╡ Export metrics to results/ou_noise/
+### Metrics Export: Write summary to results directory
+begin
+    results_dir = "results_ou_noise"
+    
+    function ensure_results_dir(dir::AbstractString)
+        if !isdir(dir)
+            mkpath(dir)
+        end
+    end
+    
+    ensure_results_dir(results_dir)
+    
+    # Write metrics summary matching old format
+    metrics_path = joinpath(results_dir, "metrics_summary.txt")
+    open(metrics_path, "w") do io
+        write(io, "OU_Noise Experiment Report\n")
+        write(io, "$(Dates.now())\n\n")
+        write(io, "SUMMARY:\n")
+        write(io, "- SOE memory kernel fit validated against colored OU target.\n")
+        write(io, "- Reported L1 fit error: $(round(l1_error, digits=5)).\n")
+        write(io, "- Reported effective dimension: D_eff ≈ $(round(su_fit.Deff, digits=2)).\n")
+        write(io, "- See HTML: ou_acf.html, ou_psd.html.\n\n")
+        
+        write(io, "DETAILED METRICS:\n")
+        write(io, "  Mcap (Memory Capacity):    $(round(su_fit.Mcap, digits=4)) seconds\n")
+        write(io, "  Mscale (Spectral Span):    $(round(su_fit.Mscale, digits=4)) decades\n")
+        write(io, "  Mres (Memory Resolution):  $(round(su_fit.Mres, digits=4)) modes/decade\n")
+        write(io, "  Hmem (Spectral Entropy):   $(round(su_fit.Hmem, digits=4)) nats\n")
+        write(io, "  Hnorm (Normalized):        $(round(su_fit.Hnorm, digits=4))\n")
+        write(io, "  Deff (Effective Dim):      $(round(su_fit.Deff, digits=2))\n")
+        write(io, "  L1 Error (NNLS fit):       $(round(l1_error, digits=5))\n")
+        write(io, "  Active modes (pruned):     $(length(w_fit))/15\n\n")
+        
+        write(io, "SIMULATION CONFIG:\n")
+        write(io, "  Horizon T:                 $(T_sim) seconds\n")
+        write(io, "  Timestep dt:               $(dt_sim)\n")
+        write(io, "  Total samples:             $(Int(T_sim/dt_sim)+1)\n")
+        write(io, "  ACF max lag:               $(maxlag) timesteps\n")
+        write(io, "  Aberconics channels L:     $(L_ab)\n")
+        write(io, "  NNLS basis size:           15 (γ ∈ [10⁻², 10¹])\n\n")
+        
+        write(io, "FITTED KERNEL (γ, w):\n")
+        for i in 1:length(γ_fit)
+            write(io, "  Channel $i: γ=$(round(γ_fit[i], digits=6)), w=$(round(w_fit[i], digits=6))\n")
+        end
+        write(io, "\n")
+        
+        write(io, "RUNTIME:\n")
+        write(io, "  Total elapsed:             $(round(t_total_elapsed, digits=2))s\n")
+    end
+    
+    println("\n[METRICS EXPORT] Written to: $metrics_path")
+    
+    # Copy HTML plots to results directory for consistency
+    if save_plots
+        for src_file in ["ou_acf.html", "ou_psd.html"]
+            src_path = joinpath(plots_dir, src_file)
+            dst_path = joinpath(results_dir, src_file)
+            if isfile(src_path)
+                cp(src_path, dst_path, force=true)
+                println("  ✓ Copied $src_file to results/")
+            end
+        end
     end
 end
 

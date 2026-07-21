@@ -1,6 +1,10 @@
 # Julia artifacts
-*.ji
-*.so
+code/julia/examples/plots_ou_noise
+code/julia/examples/plots_lorenz63
+results_ou_noise
+debug_lorenz_memory.jl
+debug_lorenz_min.jl
+
 *.dylib
 *.dll
 Manifest.toml
@@ -44,6 +48,7 @@ SESSION_HANDOFF.md
 
 # Keep canonical repo layout only
 # (Do not commit ad-hoc plot/image dumps)
+code/python/d2c/progress/lorenz63
 results/**/*.png
 results/**/*.jpg
 results/**/*.jpeg

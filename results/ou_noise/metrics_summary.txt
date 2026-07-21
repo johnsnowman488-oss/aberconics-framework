@@ -1,5 +1,39 @@
-OU_Noisev1 summary (from latest validated run in local workspace):
+OU_Noise Experiment Report
+2026-07-17T18:39:00.075
+
+SUMMARY:
 - SOE memory kernel fit validated against colored OU target.
-- Reported L1 fit error: < 0.005.
-- Reported effective dimension: D_eff ≈ 6.86.
-- See HTML: acf_comparison.html, psd_spectra.html.
+- Reported L1 fit error: 0.00533.
+- Reported effective dimension: D_eff ≈ 58.33.
+- See HTML: ou_acf.html, ou_psd.html.
+
+DETAILED METRICS:
+  Mcap (Memory Capacity):    66.1023 seconds
+  Mscale (Spectral Span):    1.5 decades
+  Mres (Memory Resolution):  5.3333 modes/decade
+  Hmem (Spectral Entropy):   1.9866 nats
+  Hnorm (Normalized):        0.9554
+  Deff (Effective Dim):      58.33
+  L1 Error (NNLS fit):       0.00533
+  Active modes (pruned):     8/15
+
+SIMULATION CONFIG:
+  Horizon T:                 500 seconds
+  Timestep dt:               0.01
+  Total samples:             50001
+  ACF max lag:               200 timesteps
+  Aberconics channels L:     3
+  NNLS basis size:           15 (γ ∈ [10⁻², 10¹])
+
+FITTED KERNEL (γ, w):
+  Channel 1: γ=0.01, w=0.16758
+  Channel 2: γ=0.016379, w=0.165039
+  Channel 3: γ=0.026827, w=0.16081
+  Channel 4: γ=0.04394, w=0.153707
+  Channel 5: γ=0.071969, w=0.141637
+  Channel 6: γ=0.117877, w=0.120839
+  Channel 7: γ=0.19307, w=0.084585
+  Channel 8: γ=0.316228, w=0.021438
+
+RUNTIME:
+  Total elapsed:             11.95s
