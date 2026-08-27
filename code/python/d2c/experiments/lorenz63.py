@@ -11,18 +11,33 @@ import os
 from pathlib import Path
 from statistics import mean, pstdev
 import sys
+
+
+if __package__ in {None, ""}:
+    repo_root = Path(__file__).resolve().parents[4]
+    python_root = repo_root / "code" / "python"
+    if str(python_root) not in sys.path:
+        sys.path.insert(0, str(python_root))
 import threading
 import time
 from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, Sequence, TextIO
 
 import gfe_ctypes as gfe
 
-from ..configs.training import ExperimentRecord, ExperimentStatus, TrainingPhaseConfig
-from ..ffi import load_library
-from ..schemas import AbersoeRunResult
+try:
+    from ..configs.training import ExperimentRecord, ExperimentStatus, TrainingPhaseConfig
+    from ..ffi import load_library
+    from ..schemas import AbersoeRunResult
+except ImportError:  # pragma: no cover - direct script execution fallback
+    from d2c.configs.training import ExperimentRecord, ExperimentStatus, TrainingPhaseConfig
+    from d2c.ffi import load_library
+    from d2c.schemas import AbersoeRunResult
 
 if TYPE_CHECKING:
-    from ..runtime.director import AberconicsDirector, DirectorState
+    try:
+        from ..runtime.director import AberconicsDirector, DirectorState
+    except ImportError:  # pragma: no cover - direct script execution fallback
+        from d2c.runtime.director import AberconicsDirector, DirectorState
 
 SolverHint = Literal["auto", "stiff", "explicit"]
 
@@ -2203,7 +2218,10 @@ def run_terminal_lorenz_comparison(
     """Run the baseline-vs-memory comparison with terminal progress and saved outputs."""
 
     if use_director:
-        from ..runtime.director import AberconicsDirector
+        try:
+            from ..runtime.director import AberconicsDirector
+        except ImportError:  # pragma: no cover - direct script execution fallback
+            from d2c.runtime.director import AberconicsDirector
 
         active_director = director or AberconicsDirector(
             lib=lib,
@@ -2315,7 +2333,10 @@ def run_terminal_lorenz_comparison(
         trace_store_path.write_text(
             json.dumps(active_director.trace_store.to_mapping(), indent=2, sort_keys=True), encoding="utf-8"
         )
-        from ..learning import analyze_trace_store_windows, format_learning_analysis_report
+        try:
+            from ..learning import analyze_trace_store_windows, format_learning_analysis_report
+        except ImportError:  # pragma: no cover - direct script execution fallback
+            from d2c.learning import analyze_trace_store_windows, format_learning_analysis_report
 
         learning_analysis = analyze_trace_store_windows(
             active_director.trace_store,
@@ -2408,7 +2429,10 @@ def run_terminal_lorenz_batch(
     """Run multi-IC batch analysis with saved per-IC reports."""
 
     if use_director:
-        from ..runtime.director import AberconicsDirector
+        try:
+            from ..runtime.director import AberconicsDirector
+        except ImportError:  # pragma: no cover - direct script execution fallback
+            from d2c.runtime.director import AberconicsDirector
 
         active_director = director or AberconicsDirector(
             lib=lib,
@@ -2436,7 +2460,10 @@ def run_terminal_lorenz_batch(
         }
         window_manifest_path = Path(paths["bundle_dir"]) / "trace_windows.json"
         window_manifest_path.write_text(json.dumps(window_manifest, indent=2, sort_keys=True), encoding="utf-8")
-        from ..learning import analyze_trace_store_windows, format_learning_analysis_report
+        try:
+            from ..learning import analyze_trace_store_windows, format_learning_analysis_report
+        except ImportError:  # pragma: no cover - direct script execution fallback
+            from d2c.learning import analyze_trace_store_windows, format_learning_analysis_report
 
         learning_analysis = analyze_trace_store_windows(
             result.trace_store,
@@ -2639,7 +2666,10 @@ def run_terminal_learning_episode(
     total_steps: int = 2000,
 ) -> dict[str, str]:
     """Run a single-IC online learning episode with saved reports and traces."""
-    from ..runtime.director import AberconicsDirector
+    try:
+        from ..runtime.director import AberconicsDirector
+    except ImportError:  # pragma: no cover - direct script execution fallback
+        from d2c.runtime.director import AberconicsDirector
 
     active_director = AberconicsDirector(
         lib=lib,

@@ -4,6 +4,7 @@ code/julia/examples/plots_lorenz63
 results_ou_noise
 debug_lorenz_memory.jl
 debug_lorenz_min.jl
+code/python/d2c/progress
 
 *.dylib
 *.dll
@@ -15,7 +16,7 @@ node_modules/
 .DS_Store
 .vscode/
 .idea/
-.venv/
+.venv
 venv/
 env/
 
@@ -65,3 +66,6 @@ code/c++ core/build-*/
 
 Context.md
 .codex
+codex_context.txt
+# Patch backup files
+*.orig

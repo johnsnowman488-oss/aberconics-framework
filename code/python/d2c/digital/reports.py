@@ -12,6 +12,9 @@ def format_symbolic_induction_report(result: Mapping[str, object]) -> str:
         "=========================",
         f"Experiment: {result['experiment_name']}",
         f"Variant:    {result['variant']}",
+        f"Pairs:      {result['pair_count']}",
+        f"Distractors: {result.get('distractor_pair_count', 0)}",
+        f"Binding:    {result.get('binding_mode', 'token_code')}",
         f"Gap:        {result['gap']}",
         f"Seeds:      {result['seed_count']}",
         "",
@@ -27,6 +30,10 @@ def format_symbolic_induction_report(result: Mapping[str, object]) -> str:
         f"D_eff:           {result['memory_diagnostics']['deff']:.3f}",
         f"Stability Ratio: {result['memory_diagnostics']['stability_ratio']:.3f}",
     ]
+    if "minimum_binding_score" in result:
+        lines.append(f"Min. Evidence: {result['minimum_binding_score']:.6f}")
+    if result.get("binding_noise_std", 0.0):
+        lines.append(f"Binding Noise: {result['binding_noise_std']:.4f}")
     if result.get("baseline"):
         baseline = result["baseline"]
         lines.extend([

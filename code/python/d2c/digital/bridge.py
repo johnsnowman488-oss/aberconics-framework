@@ -55,6 +55,48 @@ class TokenForcingBridge:
 
 
 @dataclass(slots=True)
+class KeyValueBindingBridge:
+    """Deterministic outer-product slots for key-conditioned retrieval.
+
+    A binding occupies one coordinate for each ``(key, value)`` pair.  The
+    resulting vector can be stored by the same SOE memory stepper as ordinary
+    token forcing, then queried by contracting the stored slots with a key.
+    """
+
+    key_tokens: list[str]
+    value_tokens: list[str]
+    amplitude: float = 1.0
+
+    def __post_init__(self) -> None:
+        if not self.key_tokens or not self.value_tokens:
+            raise ValueError("key_tokens and value_tokens must not be empty")
+        if len(set(self.key_tokens)) != len(self.key_tokens):
+            raise ValueError("key_tokens must be unique")
+        if len(set(self.value_tokens)) != len(self.value_tokens):
+            raise ValueError("value_tokens must be unique")
+
+    @property
+    def state_dim(self) -> int:
+        return len(self.key_tokens) * len(self.value_tokens)
+
+    def binding_for_pair(self, key_token: str, value_token: str) -> list[float]:
+        try:
+            key_index = self.key_tokens.index(key_token)
+            value_index = self.value_tokens.index(value_token)
+        except ValueError as exc:
+            raise ValueError("binding pair tokens must be in the configured vocabularies") from exc
+        forcing = self.zero_forcing()
+        forcing[key_index * len(self.value_tokens) + value_index] = self.amplitude
+        return forcing
+
+    def zero_forcing(self) -> list[float]:
+        return [0.0 for _ in range(self.state_dim)]
+
+    def to_mapping(self) -> dict[str, object]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
 class DigitalMemoryConfig:
     gamma: list[float]
     w: list[float]
@@ -102,6 +144,36 @@ class DigitalMemoryConfig:
             leak_rate=float(data.get("leak_rate", 1.0)),
             form=str(data.get("form", "input_driven")),
         )
+
+
+@dataclass(slots=True)
+class DigitalStabilityContract:
+    """Shared construction/validation contract for adaptive digital kernels."""
+
+    leak_rate: float = 2.0
+    dt: float = 0.05
+    stability_margin: float = 0.9
+    target_ratio: float = 0.8
+
+    def __post_init__(self) -> None:
+        if self.leak_rate <= 0.0 or self.dt <= 0.0:
+            raise ValueError("leak_rate and dt must be positive")
+        if not 0.0 < self.target_ratio <= self.stability_margin <= 1.0:
+            raise ValueError("require 0 < target_ratio <= stability_margin <= 1")
+
+    def config(self, *, gamma: Sequence[float], ratio_allocation: Sequence[float]) -> DigitalMemoryConfig:
+        rates = _coerce(gamma, name="gamma")
+        allocation = _coerce(ratio_allocation, name="ratio_allocation")
+        if len(rates) != len(allocation) or any(value < 0.0 for value in allocation):
+            raise ValueError("ratio_allocation must be non-negative and match gamma")
+        total = sum(allocation)
+        if not math.isclose(total, 1.0, rel_tol=0.0, abs_tol=1e-9):
+            raise ValueError("ratio_allocation must sum to one")
+        weights = [self.target_ratio * part * rate * self.leak_rate for rate, part in zip(rates, allocation)]
+        config = DigitalMemoryConfig(gamma=rates, w=weights, dt=self.dt, leak_rate=self.leak_rate)
+        if config.stability_ratio() > self.stability_margin:
+            raise RuntimeError("constructed kernel violates the stability contract")
+        return config
 
 
 @dataclass(slots=True)
