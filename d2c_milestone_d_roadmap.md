@@ -1,6 +1,6 @@
 # D2C Milestone D: Digital Autonomy Technical Plan
 
-Status: working plan
+Status: active roadmap; D0, D1/D1.2, and D2 are complete at single-level scope
 Scope: Python D2C layer first, C ABI extensions only when the experiment path requires them
 Primary aim: move D2C from physical-system demonstrations toward autonomous digital-space operation while preserving the architecture's core strengths: explicit multiscale memory, stability monitoring, interpretable diagnostics, and online credit assignment.
 
@@ -87,45 +87,36 @@ The repo already supports:
   - `HierarchyEdgeConfig`
   - `ChainLevelSpec`
   - `ChainEdgeSpec`
+- Digital D2C substrate:
+  - deterministic vocabulary, event stream, forcing, and trace schemas
+  - Python-side stable SOE memory stepping with evolving and frozen silence
+  - `DigitalDirector` for task-provided forcing episodes and event traces
+  - explicit key/value outer-product bindings and a finite-window baseline
+  - deterministic binding decoding and a trained query-conditioned MLP readout
+  - symbolic retrieval and thinking-between-tokens experiment entrypoints
 
 ## 4. Current Gaps
 
 These gaps define the implementation order.
 
-### 4.1 Digital Stream Gap
+### 4.1 Digital Stream Gap — closed for D0
 
-There is no generic event/token stream representation. Existing traces are Lorenz-specific.
+`digital/tokens.py`, `streams.py`, `traces.py`, and `tasks.py` provide the
+generic substrate. The symbolic retrieval experiment also has deterministic
+held-out assignment splits. New tasks should reuse these types.
 
-Required:
+### 4.2 Token Bridge and Readout Gap — closed for D0/D1.2
 
-- token/event vocabularies
-- symbolic task generators
-- timestamped event streams
-- train/test split support for synthetic digital tasks
-- generic trace store independent of Lorenz63
+`TokenForcingBridge`, `KeyValueBindingBridge`, forcing schedules, silence
+controls, deterministic decoders, and `QueryConditionedMLPReadout` now cover
+the initial scope. The MLP trains only readout weights over frozen state; the
+outer-product binding writer remains an explicit control, not learned grounding.
 
-### 4.2 Token Bridge Gap
+### 4.3 Digital Director Gap — stepping closed; learning integration open
 
-There is no reusable token-to-forcing bridge.
-
-Required:
-
-- token embedding or deterministic token code
-- token-to-forcing schedule
-- no-input/free-evolution intervals
-- readout from `(u, chi)` into token/action logits or scores
-
-### 4.3 Digital Director Gap
-
-`AberconicsDirector` is still Lorenz-oriented.
-
-Required:
-
-- a generic `DigitalDirector` or a refactored base Director
-- stateful single-level stepping over arbitrary token/event forcing
-- task-specific reward/error hooks
-- trace collection for digital episodes
-- evaluation-only and learning-enabled modes
+`DigitalDirector` owns state initialization, SOE stepping, and generic traces
+for arbitrary task-provided `DigitalEpisode` schedules. Reward hooks, phase
+scheduling, online updates, and consolidation are the D3 integration work.
 
 ### 4.4 Hierarchy Step Gap
 
@@ -138,15 +129,11 @@ Required before serious hierarchical digital autonomy:
 - active-kernel export after top-down modulation
 - per-level state and spectral diagnostics at each step
 
-### 4.5 Baseline Gap
+### 4.5 Baseline Gap — minimum D1 baseline closed
 
-The repo does not currently contain digital baselines.
-
-Required:
-
-- simple n-gram or table baseline for retrieval tasks
-- small Elman RNN or LSTM-style baseline implemented in pure Python where feasible
-- optional external baselines later, not required for D0-D1
+`window_limited_lookup_prediction` is the finite-context baseline for D1/D2.
+A token-synchronous recurrent baseline remains optional, but is useful for
+D3/D5 comparisons and should not block delayed-feedback integration.
 
 ## 5. Proposed Module Layout
 
@@ -294,7 +281,7 @@ Do not immediately break the Lorenz63 Director. First build the Digital Director
 
 ## 7. Milestone Sequence
 
-### D0: Digital Substrate
+### D0: Digital Substrate — complete
 
 Goal:
 
@@ -324,7 +311,7 @@ Initial implementation choice:
 - Use deterministic token codes before learned embeddings.
 - Use nearest-code or ridge-free linear readout before training a neural decoder.
 
-### D1: Symbolic Retrieval over Long Gaps
+### D1: Symbolic Retrieval over Long Gaps — complete, bounded claim
 
 Goal:
 
@@ -366,7 +353,7 @@ Acceptance criteria:
 - D_eff increases with symbolic load or gap complexity in a measurable way.
 - Stability remains within configured bounds.
 
-### D2: Thinking Between Tokens
+### D2: Thinking Between Tokens — complete, bounded claim
 
 Goal:
 
@@ -381,6 +368,15 @@ token pulse -> silent interval -> token pulse -> silent interval -> prediction
 Hypothesis:
 
 Allowing latent state to evolve during no-input intervals produces better state organization than token-synchronous updates.
+
+Result:
+
+Free evolution does not improve passive retrieval in the fixed linear
+substrate; it lowers confidence. It does encode elapsed interval in the timing
+probe, while the duration-matched frozen control remains at chance. Separated
+slow modes preserve retrieval through silence better than the no-slow and
+collapsed-timescale ablations. This establishes interval representation and
+retention, not productive latent reasoning.
 
 Baselines:
 
@@ -402,13 +398,41 @@ Acceptance criteria:
 - the improvement disappears or shrinks when memory channels are removed
 - silent intervals do not create stability violations
 
-### D3: Temporal Logic and Delayed Inference
+### D3: Temporal Logic and Delayed Inference — active; randomized causal task next
 
 Goal:
 
 Move from retrieval to rule-conditioned prediction/action.
 
-Task:
+Current finding and evaluation correction:
+
+The initial four-case temporal-rule control demonstrated a narrow
+full/no-slow memory and persistent-credit attribution separation, but its
+nominal held-out episodes repeat the same four canonical streams as training.
+Its `0.25`, `0.50`, and `1.00` scores are consequently quantized case counts,
+not generalization evidence. The task-gated `1.00` result is an upper-bound
+control because it supplies the relevant premise event explicitly.
+
+Next task: randomized indexed rule-conditioned retrieval
+
+```text
+MODE: IDENTITY or INVERT
+...
+SLOT_3 = BIT_0
+SLOT_7 = BIT_1
+... variable-order, matched distractor events ...
+QUERY: SLOT_7
+-> ACTION_1 for IDENTITY; ACTION_0 for INVERT
+```
+
+Generate train and test episodes independently. Randomize assignments, event
+order, target position, distractor identities/count, delay, and silence
+timing, while stratifying the rule/action distribution. The first version may
+retain an explicit binding writer as a bounded representation control; the
+learning question is whether D2C can select and use the causally relevant
+earlier event from delayed feedback.
+
+Legacy task form:
 
 ```text
 IF X occurred earlier AND Y occurs now THEN predict/action Z
@@ -424,6 +448,12 @@ Hypothesis:
 
 SOE memory traces provide a natural eligibility substrate for delayed rule composition.
 
+Implementation prerequisite:
+
+Wire the existing per-channel TD-error, three-factor-update, and fast/slow
+consolidation helpers into `DigitalDirector` episode phases. Begin with a
+fixed kernel and explicit binding writer to isolate delayed credit assignment.
+
 Baselines:
 
 - token-synchronous recurrent baseline
@@ -433,15 +463,25 @@ Baselines:
 Metrics:
 
 - delayed-rule accuracy
-- error attribution to earlier trigger tokens
+- per-rule, per-delay, and confidence-interval accuracy on independently
+  generated held-out streams
+- error attribution to earlier target events versus matched distractors
 - TD-error by channel
 - rule horizon at which performance collapses
 - noise/jitter tolerance
+- intervention sensitivity: changing the queried stored value must change the
+  action, while changing an unqueried distractor must not
 
 Acceptance criteria:
 
-- D2C maintains rule accuracy over longer delays than the no-slow-channel ablation.
-- TD/error traces identify the earlier condition token more strongly than irrelevant filler tokens.
+- Full D2C exceeds finite-window/no-gate and no-slow controls over longer
+  delays on genuinely unseen episodes; report at least 20 seeds.
+- TD/error traces identify the earlier queried event more strongly than
+  matched irrelevant events, and intervention tests confirm that this feature
+  is causally used for action selection.
+- The task-gated result remains an upper bound, not evidence of learned
+  eligibility. Do not advance adaptive-kernel or hierarchy claims unless the
+  ungated learned path clears the above tests.
 
 ### D4: Hierarchical Digital Probe
 
@@ -705,14 +745,16 @@ Implement in this order:
     - no slow channels
     - collapsed gamma
     - window-limited lookup
-11. Only after D1-D2, revisit hierarchy step ABI.
+11. D1/D2 are complete. Implement D3 delayed-feedback integration before
+    revisiting the hierarchy step ABI.
 
 ## 15. Definition of Done for Milestone D
 
 Milestone D is done when:
 
 - the repo contains a reusable digital event/token substrate
-- at least two symbolic digital tasks run end-to-end
+- at least two digital tasks run end-to-end, including one with delayed
+  feedback that changes future behaviour
 - every task has a baseline and an ablation
 - reports include memory diagnostics and stability checks
 - D_eff or channel usage is shown to vary with task difficulty in at least one controlled experiment

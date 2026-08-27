@@ -49,13 +49,17 @@ The current foundation includes:
 - shared-library builds for Python/Julia wrapper use
 - canonical runtime scenarios for single-level and hierarchical runs
 - typed ABI access to hierarchy reports and constrained custom chain specs
+- a Python digital token/event substrate with SOE stepping, generic traces,
+  explicit-binding retrieval, silence controls, and a learned
+  query-conditioned readout
 - passing C++ and Python smoke/regression-style tests in the local tree
 
 What is not yet fully implemented from the D2C technical reference:
 - predictive-coding training heads
-- per-channel value critics / TD learning runtime
-- full Python-side Director / TraceStore training orchestration
-- discrete-to-continuous token bridge for language-style experiments
+- digital delayed-feedback integration for the existing TD, three-factor, and
+  consolidation helpers
+- learned binding writing and a full online digital training runtime
+- stateful hierarchy stepping for event-by-event Python digital experiments
 
 So the repo is ready for:
 - runtime experimentation

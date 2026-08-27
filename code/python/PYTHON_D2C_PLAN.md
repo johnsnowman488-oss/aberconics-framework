@@ -1,6 +1,9 @@
 # Python D2C Plan
 
-This document defines the next Python-facing implementation track for HierAberConic-D2C on top of the current C++ core, C ABI, and `ctypes` wrapper.
+This document records the Python-facing implementation track for
+HierAberConic-D2C on top of the current C++ core, C ABI, and `ctypes` wrapper.
+The original Phases 1–5 are substantially implemented; the active next step is
+to integrate delayed-feedback learning into the digital runtime.
 
 The goal is not to rebuild the C++ engine in Python.
 The goal is to build the Python-side application layer that can:
@@ -22,12 +25,11 @@ The repository already has a strong lower-level foundation:
   - renorm reports
   - constrained custom chain specs
 
-What is missing is the Python-side D2C layer described in `D2C.md`:
-- Director-style orchestration
-- trace storage
-- training phase scheduling
-- predictive-coding and value-learning scaffolding
-- experiment suites organized as a coherent subsystem
+The Python-side D2C layer now includes Director-style orchestration, trace
+storage, training/learning scaffolding, reproducible experiment modules, and
+a single-level digital token/event substrate. What remains missing is online
+digital delayed-feedback learning, learned binding writing, and a stateful
+hierarchy-step surface for Python.
 
 ## Proposed Python Workspace
 
@@ -92,9 +94,9 @@ code/python/d2c/
 
 This should be treated as an implementation target, not a rigid final shape.
 
-## Development Phases
+## Implementation Status and Development Phases
 
-### Phase 1: Python D2C shell over the existing wrapper
+### Phase 1: Python D2C shell over the existing wrapper — implemented
 
 Deliver:
 - `d2c/ffi.py`
@@ -121,7 +123,7 @@ Definition of done:
 - Python callers no longer need to work directly against raw `gfe_ctypes` output dictionaries for common workflows
 - the new layer remains a wrapper over the current tested ABI, not a duplicate engine
 
-### Phase 2: Experiment organization and reproducibility
+### Phase 2: Experiment organization and reproducibility — implemented
 
 Deliver:
 - experiment modules for:
@@ -141,7 +143,7 @@ Definition of done:
 - results are emitted in predictable locations
 - ablations do not require direct CLI usage
 
-### Phase 3: Runtime orchestration layer
+### Phase 3: Runtime orchestration layer — implemented for Lorenz; digital core implemented
 
 Deliver:
 - `runtime/director.py`
@@ -161,7 +163,7 @@ Definition of done:
 - Python can manage stateful experiment loops without re-encoding the logic in notebooks or ad hoc scripts
 - trace collection and stability inspection become reusable components
 
-### Phase 4: Learning scaffolding
+### Phase 4: Learning scaffolding — implemented, digital integration pending
 
 Deliver:
 - predictive-coding placeholders and interfaces
@@ -177,7 +179,7 @@ Definition of done:
 - the D2C learning pieces have explicit Python homes
 - experiments can begin to attach learned heads without destabilizing the core runtime surface
 
-### Phase 5: Language/discrete bridge
+### Phase 5: Language/discrete bridge — implemented at synthetic-task scope
 
 Deliver:
 - token-to-forcing adapters
@@ -187,6 +189,20 @@ Deliver:
 Definition of done:
 - the repo has a real place for Section 7 of `D2C.md`
 - token-style experiments can be developed without contaminating the low-level wrapper layer
+
+Implemented additions:
+
+- `d2c/digital/` supplies vocabulary and event schemas, token/binding forcing,
+  SOE stepping, traces, a generic Director, deterministic decoding, and a
+  dependency-free trained query-conditioned MLP readout.
+- D1/D2 entrypoints cover noisy long-gap retrieval, matched silence controls,
+  and elapsed-interval classification.
+
+Active next step:
+
+- connect `d2c/learning` TD, three-factor, and consolidation primitives to
+  `DigitalDirector` phases for D3 delayed-feedback tasks. Keep kernel weights
+  and explicit bindings frozen in the first experiment.
 
 ## Recommended ABI Additions
 

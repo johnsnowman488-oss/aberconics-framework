@@ -49,6 +49,50 @@ export GFE_CORE_LIB="$(pwd)/code/c++ core/build-shared/libgfe_core.so"
 pytest -q code/python/tests
 ```
 
+## Run the Lorenz63 experiment (practical notes)
+
+If you want to run the full `lorenz63` experiment script (the one under `d2c/experiments`), follow these extra steps I used to run it successfully:
+
+- Build the C++ core as a shared library (so the Python `ctypes` loader can find it):
+
+```bash
+cd "code/c++ core"
+cmake -S . -B build-shared -DBUILD_SHARED_LIBS=ON
+cmake --build build-shared -- -j
+cd -
+```
+
+- Make sure Python can find the local Python package sources (run from the repo root):
+
+```bash
+cd /path/to/aberconics-framework
+export PYTHONPATH=code/python:$PYTHONPATH
+```
+
+- If the shared library is in the default build location, point the loader to it (optional; `gfe_ctypes` also tries common build paths):
+
+```bash
+export GFE_CORE_LIB="$PWD/code/c++ core/build-shared/libgfe_core.so"
+```
+
+- The experiment expects to be run as a package so relative imports resolve. Run it like this from the repository root:
+
+```bash
+/usr/bin/python3 -m d2c.experiments.lorenz63
+```
+
+- Install plotting dependencies if you want the script to emit PNG plots (the script uses `matplotlib`):
+
+```bash
+/usr/bin/python3 -m pip install --user matplotlib
+```
+
+Notes:
+- Run the script from the repository root so the relative imports in `d2c` work correctly.
+- If you see "No module named 'gfe_ctypes'", confirm `PYTHONPATH` includes `code/python` (or set up an editable install).
+- If the script errors loading the shared library, verify `GFE_CORE_LIB` points to `code/c++ core/build-shared/libgfe_core.so` or rebuild with `BUILD_SHARED_LIBS=ON`.
+
+
 ## Minimal Example
 
 ```python
