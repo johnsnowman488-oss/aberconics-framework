@@ -31,6 +31,8 @@ class ThreeFactorUpdateConfig:
     max_weight: float | None = None
     leak_rate: float = 1.0
     stability_margin: float = 0.9
+    signed_hebbian: bool = False
+    error_modulated_decay: bool = False
 
     def __post_init__(self) -> None:
         if self.dt <= 0.0:
@@ -102,16 +104,24 @@ def propose_three_factor_update(
     if len(old) != len(rates) or len(old) != len(activity):
         raise ValueError("weights, gamma, and channel_activity must have matching lengths")
 
+    if isinstance(prediction_error, (float, int)):
+        eps = float(prediction_error)
+        pred_signal = abs(eps)
+    else:
+        errors = _coerce_float_list(prediction_error, name="prediction_error")
+        eps = sum(errors) / len(errors)
+        pred_signal = _mean_abs(prediction_error)
+
     if hebbian_signal is not None:
         hebb_signals = _coerce_float_list(hebbian_signal, name="hebbian_signal")
         if len(hebb_signals) != len(old):
             raise ValueError("hebbian_signal must match weights length")
+    elif cfg.signed_hebbian:
+        # Hebbian term chi_l * eps: signed per-channel correlation with the
+        # prediction error, so anticorrelated channels are weakened.
+        hebb_signals = [value * eps for value in activity]
     else:
-        if isinstance(prediction_error, (float, int)):
-            pred_signal = abs(float(prediction_error))
-        else:
-            pred_signal = _mean_abs(prediction_error)
-        hebb_signals = [abs(a) * pred_signal for a in activity]
+        hebb_signals = [abs(value) * pred_signal for value in activity]
 
     if td_error is None:
         td_signals = [0.0 for _ in old]
@@ -122,13 +132,17 @@ def propose_three_factor_update(
         if len(td_signals) != len(old):
             raise ValueError("td_error must match weights length")
 
+    # Error-modulated decay (D2C reference Eq. 33): forget faster when
+    # predictions are accurate and slower when errors are large.
+    decay = cfg.decay / (1.0 + pred_signal) if cfg.error_modulated_decay else cfg.decay
+
     proposed: list[float] = []
     deltas: list[float] = []
     for weight, h_signal, td_value in zip(old, hebb_signals, td_signals):
         delta = cfg.dt * (
             cfg.eta_pred * h_signal
             + cfg.eta_val * td_value
-            - cfg.decay * weight
+            - decay * weight
         )
         deltas.append(delta)
         proposed.append(weight + delta)
@@ -141,6 +155,10 @@ def propose_three_factor_update(
     after = stability_ratio(clipped, rates, cfg.leak_rate)
     rescaled = False
     notes: list[str] = []
+    if cfg.signed_hebbian and hebbian_signal is None:
+        notes.append("signed hebbian signal (chi * eps)")
+    if cfg.error_modulated_decay:
+        notes.append(f"error-modulated decay beta={decay:.6g}")
     if after > cfg.stability_margin:
         scale = cfg.stability_margin / after
         clipped = [value * scale for value in clipped]

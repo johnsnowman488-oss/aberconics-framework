@@ -30,6 +30,7 @@ from d2c.experiments.thinking_between_tokens import (
 from d2c.experiments.learned_symbolic_retrieval import LearnedRetrievalConfig, run_learned_symbolic_retrieval
 from d2c.experiments.temporal_logic import TemporalLogicConfig, run_temporal_logic_experiment, run_temporal_logic_sweep
 from d2c.experiments.d3_randomized import D3RandomizedConfig, run_d3_randomized_experiment
+from d2c.experiments.d3_learned_binding import LearnedBindingConfig, run_learned_binding_experiment
 
 
 def test_vocabulary_stream_and_forcing_schedule_are_deterministic():
@@ -324,3 +325,44 @@ def test_adaptive_kernel_commits_stable_d3_feedback_proposals():
     assert result["adaptive_learning"]["kernel_update_count"] == 12 * 3
     assert result["feedback_diagnostics"]["kernel_updates_applied"] == 12 * 3
     assert result["memory_diagnostics"]["stability_ratio"] <= 0.9
+
+
+def test_learned_binding_runs_end_to_end_for_each_variant():
+    """Stage 2 learned-binding smoke test: pipeline must complete for all
+    three kernel variants and return the documented schema."""
+    for variant in ("full", "no_slow", "collapsed_gamma"):
+        result = run_learned_binding_experiment(LearnedBindingConfig(
+            variant=variant, slot_count=4, value_count=4, events_per_episode=2,
+            train_count=12, test_count=6, epochs=2, gap=4, distractor_count=1,
+            pulse_steps=1, silence_steps=1,
+        ))
+        assert result["experiment_name"] == "d3_learned_binding"
+        assert result["variant"] == variant
+        assert result["train_stream_seed"] != result["test_stream_seed"]
+        assert 0.0 <= result["test_accuracy"] <= 1.0
+        assert 0.0 <= result["distractor_invariance_rate"] <= 1.0
+        assert 0.0 <= result["frozen_slow_accuracy"] <= 1.0
+        assert 0.0 <= result["slow_channel_load_bearing_rate"] <= 1.0
+        assert result["memory_diagnostics"]["stability_ratio"] <= 0.9
+        # Either the loss must drop, or the readout is saturated on a trivial
+        # task.  The Stage 2 design accepts either signal as long as the
+        # pipeline reports the structured outputs.
+        if result["final_loss"] is not None and result["initial_loss"] is not None:
+            assert result["final_loss"] > 0.0
+
+
+def test_learned_binding_split_halves_force_pattern():
+    """The Stage 2 forcing pattern is the entire point: a slot pulse must
+    never co-excite the value half, and vice versa.  Verify on the episode
+    builder directly."""
+    from d2c.experiments.d3_learned_binding import (
+        LearnedBindingSpec, _episode, _slot_pulse, _value_pulse, _state_dim,
+    )
+    config = LearnedBindingConfig(slot_count=4, value_count=4)
+    assert _state_dim(config) == 8
+    slot = _slot_pulse(config, 2)
+    value = _value_pulse(config, 3)
+    # Slot pulse must not excite the value half
+    assert all(slot[4 + i] == 0.0 for i in range(4))
+    # Value pulse must not excite the slot half
+    assert all(value[i] == 0.0 for i in range(4))

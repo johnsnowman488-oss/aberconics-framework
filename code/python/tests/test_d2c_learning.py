@@ -139,6 +139,89 @@ def test_three_factor_update_proposal_is_stability_bounded():
     assert proposal_hebb.proposed_weights[1] < 0.2
 
 
+def test_default_three_factor_behavior_is_unchanged():
+    """Signed/error-modulated flags default off; legacy path must be stable."""
+    proposal = propose_three_factor_update(
+        weights=[0.16, 0.108, 0.0448],
+        gamma=[2.0, 0.45, 0.035],
+        channel_activity=[0.5, 0.3, 0.1],
+        prediction_error=0.4,
+        td_error=0.1,
+        config=ThreeFactorUpdateConfig(dt=1.0, eta_pred=0.01, eta_val=0.01, decay=0.001,
+                                       leak_rate=4.0),
+    )
+    # Unsigned hebbian: delta = 0.01 * |act| * |eps| + 0.01 * 0.1 - 0.001 * w
+    for weight, activity, delta in zip([0.16, 0.108, 0.0448], [0.5, 0.3, 0.1], proposal.delta):
+        expected = 0.01 * abs(activity) * 0.4 + 0.01 * 0.1 - 0.001 * weight
+        assert delta == pytest.approx(expected)
+    assert proposal.notes == []
+
+
+def test_signed_hebbian_produces_channel_selective_updates():
+    """Signed chi * eps weakens channels when error is negative, proportionally."""
+    activity = [0.5, 0.3, 0.1]
+    base = dict(
+        weights=[0.16, 0.108, 0.0448],
+        gamma=[2.0, 0.45, 0.035],
+        channel_activity=activity,
+        td_error=0.0,
+        config=ThreeFactorUpdateConfig(dt=1.0, eta_pred=0.1, eta_val=0.01, decay=0.0,
+                                       signed_hebbian=True),
+    )
+    positive = propose_three_factor_update(prediction_error=0.4, **base)
+    negative = propose_three_factor_update(prediction_error=-0.4, **base)
+    for delta_pos, delta_neg, act in zip(positive.delta, negative.delta, activity):
+        assert delta_pos == pytest.approx(0.1 * act * 0.4)
+        assert delta_neg == pytest.approx(-0.1 * act * 0.4)
+        # channel selectivity: larger activity -> larger magnitude delta
+    assert abs(positive.delta[0]) > abs(positive.delta[2])
+
+
+def test_error_modulated_decay_scales_forgetting_with_error():
+    """Larger prediction error slows decay (beta = beta0 / (1 + |eps|))."""
+    base = dict(
+        weights=[0.16, 0.108, 0.0448],
+        gamma=[2.0, 0.45, 0.035],
+        channel_activity=[0.5, 0.3, 0.1],
+        td_error=0.0,
+        config=ThreeFactorUpdateConfig(dt=1.0, eta_pred=0.0, eta_val=0.0, decay=0.01,
+                                       error_modulated_decay=True),
+    )
+    accurate = propose_three_factor_update(prediction_error=0.1, **base)
+    inaccurate = propose_three_factor_update(prediction_error=1.0, **base)
+    # Pure decay: delta = -beta * w with beta = 0.01 / (1 + |eps|)
+    for delta_small, delta_large, weight in zip(accurate.delta, inaccurate.delta, base["weights"]):
+        assert delta_small == pytest.approx(-0.01 / 1.1 * weight)
+        assert delta_large == pytest.approx(-0.01 / 2.0 * weight)
+    assert any("error-modulated decay" in note for note in accurate.notes)
+
+
+def test_sequential_commits_differ_from_aggregated_commit():
+    """Error-modulated decay makes sequential commits nonlinear in signals."""
+    weights = [0.16, 0.108, 0.0448]
+    gamma = [2.0, 0.45, 0.035]
+    activity = [0.5, 0.3, 0.1]
+    config = ThreeFactorUpdateConfig(dt=1.0, eta_pred=0.0, eta_val=0.0, decay=0.01,
+                                     error_modulated_decay=True)
+
+    # Sequential: two commits with different per-episode errors.
+    first = propose_three_factor_update(
+        weights=weights, gamma=gamma, channel_activity=activity,
+        prediction_error=0.2, config=config)
+    second = propose_three_factor_update(
+        weights=first.clipped_weights, gamma=gamma, channel_activity=activity,
+        prediction_error=1.0, config=config)
+    sequential = second.clipped_weights
+
+    # Aggregate: one commit with the mean error.
+    aggregate = propose_three_factor_update(
+        weights=weights, gamma=gamma, channel_activity=activity,
+        prediction_error=0.6, config=config).clipped_weights
+
+    for seq, agg in zip(sequential, aggregate):
+        assert seq != pytest.approx(agg)
+
+
 def test_consolidation_moves_slow_weights_toward_fast_weights():
     state = ConsolidationState(fast_weights=[0.5, 0.2, 0.1], slow_weights=[0.3, 0.15, 0.08])
     result = consolidate_weights(state, ConsolidationConfig(rate=0.25))
