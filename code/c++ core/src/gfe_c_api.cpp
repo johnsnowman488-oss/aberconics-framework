@@ -1504,6 +1504,102 @@ int gfe_c_hierarchical_get_renorm_report_for_chain_spec(
     }
 }
 
+int gfe_c_hierarchical_step_chain_spec(
+    const gfe_c_hierarchical_chain_spec_view* spec,
+    gfe_c_state_mut_view* level_states,
+    size_t level_count,
+    const double* external_forcing,
+    size_t external_forcing_size,
+    size_t forcing_level,
+    gfe_c_memory_kernel_mut_view* active_kernels,
+    size_t active_kernel_count,
+    gfe_c_spectral_units* spectral_units,
+    size_t spectral_count,
+    char* error_msg,
+    size_t error_msg_capacity) {
+    try {
+        if (!spec || !level_states || !active_kernels || !spectral_units) {
+            write_error(error_msg, error_msg_capacity, "Null pointer argument");
+            return GFE_C_STATUS_INVALID_ARGUMENT;
+        }
+        const auto cpp_spec = to_cpp_hierarchical_chain_spec(*spec);
+        std::string validation_error;
+        if (!abersoe::validate_hierarchical_chain_spec(cpp_spec, &validation_error)) {
+            write_error(error_msg, error_msg_capacity, validation_error);
+            return GFE_C_STATUS_INVALID_ARGUMENT;
+        }
+        if (level_count != spec->level_count ||
+            active_kernel_count != spec->level_count ||
+            spectral_count != spec->level_count) {
+            write_error(error_msg, error_msg_capacity, "Array counts must equal level_count");
+            return GFE_C_STATUS_INVALID_ARGUMENT;
+        }
+        if (forcing_level >= spec->level_count) {
+            write_error(error_msg, error_msg_capacity, "forcing_level out of range");
+            return GFE_C_STATUS_INVALID_ARGUMENT;
+        }
+
+        const auto model = abersoe::make_hierarchical_model_from_spec(cpp_spec);
+
+        // Build current hierarchy state from the per-level mutable views.
+        abersoe::HierarchicalState current(level_count);
+        for (std::size_t i = 0; i < level_count; ++i) {
+            current[i].state = to_cpp_state(level_states[i]);
+            current[i].active_kernel = model.levels[i].model.kernel;
+            if (current[i].state.chi.empty()) {
+                current[i].state.chi.assign(current[i].active_kernel.gamma.size(), 0.0);
+            }
+            current[i].spectral = gfe::spectral_units(
+                current[i].active_kernel.w, current[i].active_kernel.gamma);
+        }
+
+        // Build external forcing vector.
+        gfe::State ext(external_forcing, external_forcing + external_forcing_size);
+
+        // Step with external forcing injection.
+        const auto next = abersoe::step_with_external_forcing(
+            model, current, forcing_level, ext);
+
+        // Validate all output buffers BEFORE writing anything, following the
+        // two-phase write-sizes/validate/copy pattern used by the other ABI
+        // entry points.  Prevents partial writes and buffer overruns when a
+        // caller supplies undersized buffers.
+        for (std::size_t i = 0; i < level_count; ++i) {
+            write_state_sizes(level_states[i], next[i].state);
+            write_kernel_sizes(active_kernels[i], next[i].active_kernel);
+        }
+        for (std::size_t i = 0; i < level_count; ++i) {
+            if (!can_copy_state(level_states[i], next[i].state) ||
+                !can_copy_kernel(active_kernels[i], next[i].active_kernel)) {
+                write_error(error_msg, error_msg_capacity, "Output buffer too small");
+                return GFE_C_STATUS_BUFFER_TOO_SMALL;
+            }
+        }
+
+        // Write back updated states, active kernels, and spectral units.
+        for (std::size_t i = 0; i < level_count; ++i) {
+            copy_state(level_states[i], next[i].state);
+            copy_kernel(active_kernels[i], next[i].active_kernel);
+            spectral_units[i].mcap  = next[i].spectral.Mcap;
+            spectral_units[i].mscale = next[i].spectral.Mscale;
+            spectral_units[i].mres  = next[i].spectral.Mres;
+            spectral_units[i].hmem  = next[i].spectral.Hmem;
+            spectral_units[i].hnorm = next[i].spectral.Hnorm;
+            spectral_units[i].deff  = next[i].spectral.Deff;
+        }
+        return GFE_C_STATUS_OK;
+    } catch (const std::invalid_argument& e) {
+        write_error(error_msg, error_msg_capacity, e.what());
+        return GFE_C_STATUS_INVALID_ARGUMENT;
+    } catch (const std::exception& e) {
+        write_error(error_msg, error_msg_capacity, e.what());
+        return GFE_C_STATUS_RUNTIME_ERROR;
+    } catch (...) {
+        write_error(error_msg, error_msg_capacity, "Unknown C API error");
+        return GFE_C_STATUS_RUNTIME_ERROR;
+    }
+}
+
 int gfe_c_validate_memory_kernel(const gfe_c_memory_kernel_view* kernel,
                                  char* error_msg,
                                  size_t error_msg_capacity) {

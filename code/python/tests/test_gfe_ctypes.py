@@ -6,6 +6,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import gfe_ctypes as gfe
+
 from gfe_ctypes import (
     GFE_C_ABERSOE_SCENARIO_LINEAR,
     GFE_C_ABERSOE_SCENARIO_LORENZ63,
@@ -309,3 +311,110 @@ def test_ctypes_hierarchical_chain_spec_run():
         assert Path(chain_bundle_paths["summary_csv"]).exists()
         assert Path(chain_bundle_paths["cross_level_csv"]).exists()
         assert Path(chain_bundle_paths["renorm_csv"]).exists()
+
+
+def test_ctypes_hierarchical_step_chain_spec():
+    """D4B smoke test: stateful single-step with external forcing injection."""
+    try:
+        lib = load_gfe_library(_lib_path())
+    except OSError as exc:
+        pytest.skip(f"shared library unavailable: {exc}")
+
+    levels = [
+        {
+            "name": "fast",
+            "gamma": [1.0, 0.4],
+            "w": [0.65, 0.35],
+            "u": [0.0],
+            "chi": [0.0, 0.0],
+            "dt": 0.01,
+            "linear_decay": [0.25],
+            "forcing_bias": [0.0],
+            "form": GFE_C_COUPLING_FORM_B,
+            "coupling_index": 0,
+        },
+        {
+            "name": "slow",
+            "gamma": [0.7, 0.15],
+            "w": [0.6, 0.4],
+            "u": [0.0],
+            "chi": [0.0, 0.0],
+            "dt": 0.01,
+            "linear_decay": [0.08],
+            "forcing_bias": [0.0],
+            "form": GFE_C_COUPLING_FORM_B,
+            "coupling_index": 0,
+        },
+    ]
+    edges = [
+        {
+            "source_level": 0,
+            "target_level": 1,
+            "relation": GFE_C_HIERARCHICAL_RELATION_BOTTOM_UP,
+            "gain": 0.35,
+            "normalize_weights": True,
+        },
+        {
+            "source_level": 1,
+            "target_level": 0,
+            "relation": GFE_C_HIERARCHICAL_RELATION_TOP_DOWN,
+            "gain": 0.18,
+            "normalize_weights": True,
+        },
+    ]
+
+    # Initial states: zeroed out.
+    level_states = [
+        {"u": [0.0], "chi": [0.0, 0.0], "t": 0.0},
+        {"u": [0.0], "chi": [0.0, 0.0], "t": 0.0},
+    ]
+
+    # Step once with a non-zero forcing pulse at level 0.
+    result = gfe.step_hierarchical_chain_spec(
+        lib, levels, edges,
+        level_states=level_states,
+        external_forcing=[1.0],
+        forcing_level=0,
+    )
+
+    # Basic structural checks.
+    assert "level_states" in result
+    assert "active_kernels" in result
+    assert "spectral_units" in result
+    assert len(result["level_states"]) == 2
+    assert len(result["active_kernels"]) == 2
+    assert len(result["spectral_units"]) == 2
+
+    # After one step with forcing, level 0 state should have moved.
+    assert result["level_states"][0]["u"][0] != 0.0
+    # Time should have advanced by dt.
+    assert result["level_states"][0]["t"] == pytest.approx(0.01)
+    assert result["level_states"][1]["t"] == pytest.approx(0.01)
+
+    # Active kernels should match the spec.
+    assert len(result["active_kernels"][0]["gamma"]) == 2
+    assert len(result["active_kernels"][0]["w"]) == 2
+    assert result["active_kernels"][0]["gamma"] == [1.0, 0.4]
+
+    # Spectral units should be populated.
+    assert result["spectral_units"][0]["deff"] > 0.0
+
+    # Step again using the updated states — stateful progression.
+    result2 = gfe.step_hierarchical_chain_spec(
+        lib, levels, edges,
+        level_states=result["level_states"],
+        external_forcing=[0.5],
+        forcing_level=0,
+    )
+    assert result2["level_states"][0]["t"] == pytest.approx(0.02)
+    # State should have changed further.
+    assert result2["level_states"][0]["u"][0] != result["level_states"][0]["u"][0]
+
+    # Step with zero forcing — silent step.
+    result3 = gfe.step_hierarchical_chain_spec(
+        lib, levels, edges,
+        level_states=result2["level_states"],
+        external_forcing=[0.0],
+        forcing_level=0,
+    )
+    assert result3["level_states"][0]["t"] == pytest.approx(0.03)

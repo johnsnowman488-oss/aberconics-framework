@@ -147,6 +147,30 @@ def get_chain_renorm_report_raw(
     return gfe.get_hierarchical_renorm_report_for_chain_spec(lib, levels, edges)
 
 
+def step_hierarchy_raw(
+    lib: ctypes.CDLL,
+    levels: list[dict[str, object]],
+    edges: list[dict[str, object]],
+    *,
+    level_states: list[dict[str, object]],
+    external_forcing: Sequence[float],
+    forcing_level: int = 0,
+) -> dict[str, object]:
+    """Stateful single-step of the hierarchy with external forcing injection.
+
+    This is the D4B streaming interface: the caller owns the per-level state
+    dicts and calls this function once per token event.
+    """
+    return gfe.step_hierarchical_chain_spec(
+        lib,
+        levels,
+        edges,
+        level_states=level_states,
+        external_forcing=external_forcing,
+        forcing_level=forcing_level,
+    )
+
+
 def get_scenario_cross_level_report_raw(
     lib: ctypes.CDLL,
     scenario: int,

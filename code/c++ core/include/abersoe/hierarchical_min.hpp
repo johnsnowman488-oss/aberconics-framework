@@ -120,6 +120,15 @@ HierarchicalState initialize_hierarchy_state(
 
 HierarchicalState step(const HierarchicalMINModel& model, const HierarchicalState& state);
 
+// Stateful single-step with external forcing injected at a specific level.
+// ``external_forcing`` is added to level ``forcing_level``'s base forcing
+// for this step only; other levels are stepped as usual.
+HierarchicalState step_with_external_forcing(
+    const HierarchicalMINModel& model,
+    const HierarchicalState& state,
+    std::size_t forcing_level,
+    const gfe::State& external_forcing);
+
 HierarchicalRunResult run(
     const HierarchicalMINModel& model,
     const HierarchicalState& state0,

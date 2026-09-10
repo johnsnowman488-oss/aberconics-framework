@@ -616,6 +616,42 @@ GFE_C_API int gfe_c_hierarchical_get_renorm_report_for_chain_spec(
     char* error_msg,
     size_t error_msg_capacity);
 
+// Stateful single-step of the hierarchy with external forcing at a specified
+// level.  This is the D4B streaming interface: the caller owns the per-level
+// state buffers and calls this function once per token event.
+//
+// ``spec``            -- chain-spec defining the hierarchy (levels, edges).
+// ``level_states``    -- array of mutable state views, one per level.
+//                         On entry these hold the current (u, chi, t);
+//                         on exit they are updated to the post-step values.
+// ``level_count``     -- must equal spec.level_count.
+// ``external_forcing``-- forcing vector added to level ``forcing_level``
+//                         (typically level 0) for this step only.
+// ``external_forcing_size`` -- dimension of external_forcing (must match
+//                              level forcing_level's state dimension).
+// ``forcing_level``   -- which level receives the external forcing (usually 0).
+// ``active_kernels``  -- array of mutable kernel views, one per level.
+//                         On exit, filled with each level's post-step
+//                         active kernel (w, gamma).
+// ``active_kernel_count`` -- must equal level_count.
+// ``spectral_units``  -- array of spectral-unit structs, one per level.
+//                         On exit, filled with each level's post-step
+//                         spectral diagnostics.
+// ``spectral_count``  -- must equal level_count.
+GFE_C_API int gfe_c_hierarchical_step_chain_spec(
+    const gfe_c_hierarchical_chain_spec_view* spec,
+    gfe_c_state_mut_view* level_states,
+    size_t level_count,
+    const double* external_forcing,
+    size_t external_forcing_size,
+    size_t forcing_level,
+    gfe_c_memory_kernel_mut_view* active_kernels,
+    size_t active_kernel_count,
+    gfe_c_spectral_units* spectral_units,
+    size_t spectral_count,
+    char* error_msg,
+    size_t error_msg_capacity);
+
 GFE_C_API int gfe_c_validate_memory_kernel(const gfe_c_memory_kernel_view* kernel,
                                            char* error_msg,
                                            size_t error_msg_capacity);

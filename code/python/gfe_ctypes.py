@@ -101,6 +101,17 @@ class GfeCSpectralUnitOptions(ctypes.Structure):
     ]
 
 
+class GfeCSpectralUnits(ctypes.Structure):
+    _fields_ = [
+        ("mcap", c_double),
+        ("mscale", c_double),
+        ("mres", c_double),
+        ("hmem", c_double),
+        ("hnorm", c_double),
+        ("deff", c_double),
+    ]
+
+
 class GfeCAbersoeDiagnostics(ctypes.Structure):
     _fields_ = [
         ("steps_executed", c_size_t),
@@ -632,6 +643,22 @@ def load_gfe_library(path: str | None = None) -> ctypes.CDLL:
         c_size_t,
     ]
     lib.gfe_c_hierarchical_run_chain_spec.restype = c_int
+
+    lib.gfe_c_hierarchical_step_chain_spec.argtypes = [
+        POINTER(GfeCHierarchicalChainSpecView),
+        POINTER(GfeCStateMutView),
+        c_size_t,
+        POINTER(c_double),
+        c_size_t,
+        c_size_t,
+        POINTER(GfeCMemoryKernelMutView),
+        c_size_t,
+        POINTER(GfeCSpectralUnits),
+        c_size_t,
+        POINTER(c_char),
+        c_size_t,
+    ]
+    lib.gfe_c_hierarchical_step_chain_spec.restype = c_int
 
     lib.gfe_c_hierarchical_get_cross_level_report_for_chain_spec.argtypes = [
         POINTER(GfeCHierarchicalChainSpecView),
@@ -2265,6 +2292,137 @@ def get_hierarchical_renorm_report(
         }
         for i in range(n)
     ]
+
+
+def step_hierarchical_chain_spec(
+    lib: ctypes.CDLL,
+    levels: List[Dict[str, object]],
+    edges: List[Dict[str, object]],
+    *,
+    level_states: List[Dict[str, object]],
+    external_forcing: Sequence[float],
+    forcing_level: int = 0,
+) -> Dict[str, object]:
+    """Stateful single-step of the hierarchy with external forcing injection.
+
+    Parameters
+    ----------
+    levels, edges : chain-spec definition (same format as run_hierarchical_chain_spec).
+    level_states : list of ``{"u": [...], "chi": [...], "t": float}`` dicts,
+        one per level, holding the current state.
+    external_forcing : forcing vector injected at ``forcing_level``.
+    forcing_level : which level receives the external forcing (default 0).
+
+    Returns
+    -------
+    dict with keys ``"level_states"`` (updated states), ``"active_kernels"``,
+    and ``"spectral_units"`` (per-level diagnostics).
+    """
+    spec, keepalive = _build_hierarchical_chain_spec(levels, edges)
+    _ = keepalive
+
+    n_levels = len(level_states)
+    if n_levels != len(levels):
+        raise ValueError("level_states length must match levels length")
+
+    # Build mutable state views for each level.
+    state_keepalive: List[object] = []
+    state_structs: List[GfeCStateMutView] = []
+    for st in level_states:
+        u = [float(v) for v in st["u"]]
+        chi = [float(v) for v in st.get("chi", [])]
+        u_buf = (c_double * len(u))(*u)
+        chi_buf = (c_double * len(chi))(*chi) if chi else (c_double * 1)()
+        u_size = c_size_t(len(u))
+        chi_size = c_size_t(len(chi))
+        t_val = c_double(float(st.get("t", 0.0)))
+        state_keepalive.extend([u_buf, chi_buf, u_size, chi_size, t_val])
+        state_structs.append(GfeCStateMutView(
+            u_buf, len(u), ctypes.pointer(u_size),
+            chi_buf, len(chi), ctypes.pointer(chi_size),
+            ctypes.pointer(t_val),
+        ))
+    state_arr = (GfeCStateMutView * n_levels)(*state_structs)
+
+    # External forcing buffer.
+    ext = (c_double * len(external_forcing))(*[float(v) for v in external_forcing])
+
+    # Build mutable kernel views for output.
+    kernel_keepalive: List[object] = []
+    kernel_structs: List[GfeCMemoryKernelMutView] = []
+    for lev in levels:
+        n_ch = len(lev["gamma"])
+        g_buf = (c_double * n_ch)()
+        w_buf = (c_double * n_ch)()
+        g_size = c_size_t(0)
+        w_size = c_size_t(0)
+        kernel_keepalive.extend([g_buf, w_buf, g_size, w_size])
+        kernel_structs.append(GfeCMemoryKernelMutView(
+            g_buf, n_ch, ctypes.pointer(g_size),
+            w_buf, n_ch, ctypes.pointer(w_size),
+        ))
+    kernel_arr = (GfeCMemoryKernelMutView * n_levels)(*kernel_structs)
+
+    # Spectral units output.
+    spectral_arr = (GfeCSpectralUnits * n_levels)()
+
+    err = ctypes.create_string_buffer(512)
+    status = lib.gfe_c_hierarchical_step_chain_spec(
+        byref(spec),
+        state_arr,
+        n_levels,
+        ext,
+        len(external_forcing),
+        forcing_level,
+        kernel_arr,
+        n_levels,
+        spectral_arr,
+        n_levels,
+        err,
+        ctypes.sizeof(err),
+    )
+    if status != GFE_C_STATUS_OK:
+        raise RuntimeError(
+            f"gfe_c_hierarchical_step_chain_spec failed ({status}): "
+            f"{err.value.decode('utf-8')}"
+        )
+
+    # Extract results.
+    result_states = []
+    for i, st in enumerate(level_states):
+        sv = state_structs[i]
+        result_states.append({
+            "u": [sv.u[j] for j in range(len(st["u"]))],
+            "chi": [sv.chi[j] for j in range(len(st.get("chi", [])))],
+            "t": sv.t[0],
+        })
+
+    result_kernels = []
+    for i, lev in enumerate(levels):
+        n_ch = len(lev["gamma"])
+        kv = kernel_structs[i]
+        result_kernels.append({
+            "gamma": [kv.gamma[j] for j in range(n_ch)],
+            "w": [kv.w[j] for j in range(n_ch)],
+        })
+
+    result_spectral = []
+    for i in range(n_levels):
+        s = spectral_arr[i]
+        result_spectral.append({
+            "mcap": s.mcap,
+            "mscale": s.mscale,
+            "mres": s.mres,
+            "hmem": s.hmem,
+            "hnorm": s.hnorm,
+            "deff": s.deff,
+        })
+
+    return {
+        "level_states": result_states,
+        "active_kernels": result_kernels,
+        "spectral_units": result_spectral,
+    }
 
 
 if __name__ == "__main__":

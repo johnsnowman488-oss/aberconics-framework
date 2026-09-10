@@ -553,6 +553,35 @@ HierarchicalState step(const HierarchicalMINModel& model, const HierarchicalStat
     return next;
 }
 
+HierarchicalState step_with_external_forcing(
+    const HierarchicalMINModel& model,
+    const HierarchicalState& state,
+    std::size_t forcing_level,
+    const gfe::State& external_forcing) {
+    std::string error;
+    if (!validate_hierarchical_model(model, &error)) {
+        throw std::invalid_argument("Invalid hierarchical model: " + error);
+    }
+    if (forcing_level >= model.levels.size()) {
+        throw std::invalid_argument("forcing_level out of range");
+    }
+
+    // Build a shallow-copied model with the target level's forcing overridden.
+    HierarchicalMINModel mod_model = model;
+    const auto original_forcing = mod_model.levels[forcing_level].model.operators.forcing;
+    mod_model.levels[forcing_level].model.operators.forcing =
+        [original_forcing, external_forcing](double t) {
+            gfe::State total = original_forcing ? original_forcing(t)
+                                                : gfe::State(external_forcing.size(), 0.0);
+            for (std::size_t k = 0; k < external_forcing.size() && k < total.size(); ++k) {
+                total[k] += external_forcing[k];
+            }
+            return total;
+        };
+
+    return step(mod_model, state);
+}
+
 HierarchicalRunResult run(
     const HierarchicalMINModel& model,
     const HierarchicalState& state0,

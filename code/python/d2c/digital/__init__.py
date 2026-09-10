@@ -13,6 +13,10 @@ from .bridge import (
     step_memory,
 )
 from .director import DigitalDirector, DigitalEpisode, DigitalEpisodeResult, DigitalFeedbackResult
+from .hierarchy_director import (
+    HierarchicalDigitalDirector,
+    HierarchicalEpisodeResult,
+)
 from .metrics import DigitalMetricSummary, DigitalPrediction, summarize_predictions
 from .readout import (
     QueryConditionedMLPReadout,
@@ -48,6 +52,8 @@ __all__ = [
     "DigitalTrace",
     "DigitalTraceStep",
     "ForcingSchedule",
+    "HierarchicalDigitalDirector",
+    "HierarchicalEpisodeResult",
     "KeyValueBindingBridge",
     "QueryConditionedMLPReadout",
     "SymbolicInductionConfig",

@@ -515,7 +515,7 @@ Acceptance criteria:
 - top-down modulation changes lower-level memory diagnostics in the expected direction
 - renorm reports pass consistency checks or log actionable failures
 
-#### D4B: Stateful Hierarchy Step ABI
+#### D4B: Stateful Hierarchy Step ABI — complete
 
 Add the missing bridge for real streaming hierarchy experiments.
 
@@ -546,6 +546,16 @@ Acceptance criteria:
 - Python can step a two-level chain one event at a time
 - per-level state and active kernel round-trip correctly
 - existing hierarchy run/report tests remain green
+
+Implementation note (2026-09-08): All deliverables landed. The C++ side adds
+`step_with_external_forcing()` which wraps the existing `step()` with a
+per-step forcing override at the target level. The C ABI function
+`gfe_c_hierarchical_step_chain_spec` exposes this with in/out state buffers,
+output kernel buffers, and output spectral-unit arrays. Python wrappers in
+`gfe_ctypes.step_hierarchical_chain_spec` and `ffi.step_hierarchy_raw`. Smoke
+test `test_ctypes_hierarchical_step_chain_spec` covers structural checks,
+stateful multi-step progression, and silent steps. All 63 Python tests and
+13 C++ tests pass.
 
 ### D5: Minimal Digital Agent Sandbox
 
