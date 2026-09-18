@@ -1,5 +1,10 @@
 """Experiment scaffolds for Python-side D2C work."""
 
+from .babi_qa import (
+    BabiQAConfig,
+    run_babi_qa_experiment,
+    save_babi_qa_bundle,
+)
 from .lorenz63 import (
     ascii_sparkline,
     default_cpp_lorenz63_kernel_metadata,
@@ -51,6 +56,7 @@ from .lorenz63 import (
 )
 
 __all__ = [
+    "BabiQAConfig",
     "ascii_sparkline",
     "default_cpp_lorenz63_kernel_metadata",
     "LorenzBatchComparison",
@@ -93,6 +99,8 @@ __all__ = [
     "run_terminal_lorenz_batch",
     "run_terminal_lorenz_comparison",
     "run_python_lorenz63_baseline",
+    "run_babi_qa_experiment",
+    "save_babi_qa_bundle",
     "save_lorenz_batch_bundle",
     "save_lorenz_comparison_bundle",
     "spectral_diagnosis_from_kernel",

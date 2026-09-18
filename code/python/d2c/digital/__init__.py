@@ -1,5 +1,14 @@
 """Digital token/event substrate for D2C Milestone D."""
 
+from .babi import (
+    BabiDataset,
+    BabiStory,
+    babi_story_to_episode,
+    build_babi_answer_set,
+    build_babi_bridge,
+    build_babi_memory_config,
+    build_babi_vocabulary,
+)
 from .baselines import window_limited_lookup_prediction
 from .bridge import (
     DigitalMemoryConfig,
@@ -38,6 +47,8 @@ from .tokens import Vocabulary, nearest_token
 from .traces import DigitalTrace, DigitalTraceStep
 
 __all__ = [
+    "BabiDataset",
+    "BabiStory",
     "DigitalEvent",
     "DigitalDirector",
     "DigitalEpisode",
@@ -60,6 +71,11 @@ __all__ = [
     "SymbolicInductionExample",
     "TokenForcingBridge",
     "Vocabulary",
+    "babi_story_to_episode",
+    "build_babi_answer_set",
+    "build_babi_bridge",
+    "build_babi_memory_config",
+    "build_babi_vocabulary",
     "build_forcing_schedule",
     "build_symbolic_induction_vocabulary",
     "combined_readout_vector",

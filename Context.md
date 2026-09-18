@@ -3,6 +3,235 @@
 Local, untracked progress ledger. Record durable implementation milestones,
 verification, conclusions, and the next decision before moving on.
 
+> **Active record file:** `Step_Context.md` tracks the current Phase E+F stage.
+> This file (Context.md) retains all prior milestone history through 2026-09-15.
+> New entries for the E+F phase go in Step_Context.md.
+
+## 2026-09-16 — Phase E+F roadmap created; Step_Context.md established
+
+- Restructured `d2c_milestone_f.md` as the unified E+F roadmap (was Milestone F only).
+- Created `Step_Context.md` as the active progress ledger for Phase E+F.
+- Dataset selected: Facebook's bAbI (~150-token vocabulary, 20 structured reasoning tasks).
+- Task ordering: QA1 → QA2 → QA3 → QA5 → QA11 → QA14.
+- State dimensions: 64 and 150 (run both, report comparison).
+- Next action: build `code/python/d2c/digital/babi.py` (bAbI task loader).
+
+## 2026-09-15 — Next-stage plan: the post-D4A sequence
+
+### Stage position (what this stage established)
+
+- Milestone D Definition of Done (roadmap §15) is met on all seven criteria.
+- The ABI scalar-chi substrate is committed; the two substrates (vector-chi
+  contract vs scalar-chi ABI) are documented, both Euler-B, ~9% divergent.
+- The slow channel's role is **regime-dependent**: interference filtering on
+  the rich vector-chi substrate; **retention** on the constrained scalar-chi
+  substrate (gap-32 signature: no_slow turns over at 0.698 while full climbs
+  to 0.771).
+- The D3-R action-separation gate is met on the ABI: full beats no_slow
+  (+0.047, t=3.81, p<0.01, 20 seeds) and collapsed (+0.028, t=2.35), with
+  attribution margins confirming it (19/20 and 18/20 seeds positive).
+- The hierarchy's top-down effect decomposes to ~80% static w-boost /
+  ~20% negligible γ-dilation; genuine context-adaptive modulation requires a
+  scale-preserving materialisation (C++ change, deferred).
+
+### Step 1 — D3-R-LB on the ABI substrate (next, highest leverage)
+
+- **Question:** does the action-level full-vs-ablation separation survive
+  without the explicit binding writer?
+- **Implementation:** swap `d3_learned_binding.py`'s Python director for the
+  ABI flat director (same pattern as `d4a_probe.py`; chi broadcast compat).
+- **Protocol:** loaded D3-R-LB setting, budget 96×96, seeds 101–120, variants
+  full / no_slow / collapsed_gamma.
+- **Gate:** full beats no_slow on held-out accuracy with paired CI, attention
+  margin retained, and intervention responses above chance — with no writer.
+- **If pass:** the D3-R claim is fully honest for the first time — kernel-level
+  memory differences reach actions through self-formed bindings.
+- **If fail:** the separation depends on supplied slot coordinates; scope the
+  claim to "pre-bound retrieval on constrained substrates."
+
+### Step 2 — Phase E resumes: E2 same-integrator control on the ABI
+
+- The E1→E2 gate premise changed: action-level separation under load now
+  exists on the ABI substrate, so the anti-"free capacity" check is testable.
+- **Design** (per the Phase E plan): adaptive arm (E1-R sequential\_signed
+  three-factor rule) vs its frozen twin vs a same-integrator control
+  (identical update signals on a rescaled/collapsed kernel, same activity
+  budget).
+- **Gate:** adaptive beats its frozen twin on paired CIs without unbounded
+  rescale dependence AND the attribution advantage is retained; the
+  improvement must NOT replicate on the same-integrator control.
+- Run on the ABI substrate where slow channels are load-bearing — plasticity
+  now has something to reach.
+
+### Step 3 — Selection competition (queued task from the Phase E plan)
+
+- Admit DIST events into the eligibility softmax with a null-slot update path.
+- Currently distractors interfere only through state overlap; this is the
+  sharpest unsolved stress and intersects naturally with adaptive arms.
+- **Gate:** the learned eligibility head maintains its margin advantage when
+  distractors compete for attention, not merely for state coordinates.
+
+### Step 4 — D5: Minimal Digital Agent Sandbox (roadmap §7)
+
+- Unblocked: stateful hierarchy ABI (D4B), load-bearing slow channels, credit
+  machinery (D3), and consolidation helpers all exist.
+- Environment: pick one candidate — key-door symbolic world or streaming
+  rule-change recommended (they exercise memory-of-instruction and rule-shift
+  adaptation directly).
+- Loop: observe → memory update → predict → act → delayed reward → credit →
+  consolidate.
+- Uses the stateful hierarchy step ABI for context-modulated autonomy per the
+  Hierarchy Usage Plan (roadmap §8).
+- Acceptance criteria per roadmap §7 (multi-step memory task, delayed feedback
+  changing action selection, consolidation across episodes, memory-horizon
+  report).
+
+### Open items carried forward
+
+- Scale-preserving top-down materialisation (C++ change) if genuine
+  context-adaptive hierarchy modulation is to be claimed.
+- Protocol matching (test_count 12 vs 32) if formal cross-substrate tables
+  are needed for publication-grade comparison.
+
+### Plan revision (post D2C.md gap assessment, same date)
+
+Assessed the repo against the D2C.md reference.  Substrate components are
+complete (memory block + stability, spectral diagnostics, hierarchy
+stepping + renorm, bridge at toy scale) and the three-factor rule is
+mechanism-validated (E1-R = Eq 33).  The missing half is the **autonomy
+stack**: the §9.2 runtime state machine, predictive-coding
+self-supervision (§5.5/Lpred), channel birth/death (§8.4), and the
+composite objective (§9.5, Eq 37).  This is what separates "validated
+insights" from the always-on self-adapting agent, which is the project's
+stated aim.
+
+The four-step plan above is therefore revised — not discarded, but
+re-homed into the runtime:
+
+| step | change |
+|------|--------|
+| 1. D3-R-LB on ABI | unchanged, still first (cheapest; gates self-formed bindings) |
+| 2. Runtime spine | NEW: §9.2 state machine (WARMUP→EXPLORE→CONSOLIDATE→EVALUATE→PRUNE/GROW) over existing subroutines; StabilityCheck every step; contiguous TraceStore.  Old steps 2–3 run as its first tenants |
+| 3. Self-supervision | NEW: prediction head + Lpred into the three-factor rule; composite objective (Eq 37) with timescale-diversity penalty.  Gate: E1-R-style channel-selective adaptation on prediction error alone, no labels |
+| 4. Self-organising memory | NEW: channel birth/death (§8.4) gated on D_eff saturation + uncovered error power, preserving CM and margin by construction; then γ-adaptation (E3) |
+| 5. D5 as habitat | REDEFINED: the loop runs continuously in a key-door / streaming rule-change environment; acceptance = roadmap §7 plus always-on criteria (zero stability violations over the horizon, consolidation events logged, no restarts) |
+
+Rationale: the old steps 2–3 (E2, selection competition) become the first
+EXPLORE-phase tenants of the spine instead of standalone scripts — one
+build hosts them, D5, and all later work.  Predictive self-supervision
+moves onto the critical path early because it is the transition from
+task-supervised to self-supervised learning — the defining property of
+the target system.  The regime-dependence finding justifies step 4 (grow
+channels exactly where they become load-bearing); the margin contract is
+what makes "no off button" survivable.
+
+### Step 1 result — D3-R-LB on the ABI substrate (loaded, gap=16, 96×96)
+
+Ran the D3-R-LB learned-binding task (self-formed bindings, no explicit
+writer) on both substrates with three kernel variants (full / no\_slow /
+collapsed\_gamma), 20 seeds (101–120), loaded setting (σ=0.10, 4
+distractors, gap=16, budget 96×96).
+
+**Loaded grid (all at or near chance, 4-class chance = 0.25):**
+
+| substrate | variant | acc (mean ± 95% CI) | lb |
+|---|---|---|---|
+| ABI | full | 0.233 ± 0.036 | 0.017 |
+| ABI | no\_slow | 0.245 ± 0.030 | 0.025 |
+| ABI | collapsed | 0.242 ± 0.030 | 0.019 |
+| contract | full | 0.270 ± 0.027 | 0.041 |
+| contract | no\_slow | 0.222 ± 0.037 | 0.047 |
+| contract | collapsed | 0.222 ± 0.034 | 0.008 |
+
+ABI: no separation (full − no\_slow = −0.013, t=−0.94).  Contract:
+full − no\_slow = +0.048, t=+2.21, 14/20 seeds positive — weak but
+significant.  All conditions are essentially at chance; the loaded
+difficulty is too hard for self-formed bindings without the explicit
+writer.
+
+**Difficulty sweep (3 seeds per cell, no binding noise):**
+
+| substrate | dist | gap | full | no\_slow | collapsed | full−no\_slow |
+|---|---|---|---|---|---|---|
+| ABI | 0 | 4 | **0.552** | 0.490 | 0.510 | **+0.063** |
+| ABI | 0 | 8 | 0.500 | 0.458 | 0.438 | +0.042 |
+| ABI | 2 | 4 | 0.177 | 0.229 | 0.208 | −0.052 |
+| ABI | 2 | 8 | 0.177 | 0.250 | 0.229 | −0.073 |
+| contract | 0 | 4 | **0.573** | 0.552 | 0.573 | +0.021 |
+| contract | 0 | 8 | 0.562 | 0.573 | 0.604 | −0.010 |
+| contract | 2 | 4 | **0.333** | **0.229** | 0.229 | **+0.104** |
+| contract | 2 | 8 | 0.271 | 0.250 | 0.302 | +0.021 |
+
+**Findings:**
+
+1. Self-formed bindings work without distractors on both substrates (ABI
+   full 0.552, contract full 0.573 at gap=4).  The architecture CAN form
+   its own slot/value associations when there is no interference.
+2. The slow channel helps for self-formed bindings even on the ABI in clean
+   conditions (full − no\_slow = +0.063 at dist=0, gap=4).  The retention
+   signature extends to self-formed bindings in easy conditions.
+3. Under mild interference (2 distractors, gap=4), the contract substrate
+   still works and the slow channel becomes load-bearing (full − no\_slow =
+   +0.104).  This is the first evidence of slow-channel retention for
+   self-formed bindings under interference.
+4. The ABI collapses at 2 distractors (full 0.177, below chance).  The
+   scalar-chi memory cannot self-form bindings when there is competing
+   forcing, even mild.
+
+**Formation-capacity boundary:**
+
+```
+                no interference    mild (2 dist)    heavy (4 dist)
+ABI:            works (0.55)       collapses (0.18) collapses (0.23)
+contract:       works (0.57)       works (0.33)     collapses (0.27)
+```
+
+**Interpretation:** The explicit binding writer's role is precisely
+characterised: it shifts the task from the "formation-capable" regime to
+the "formation-assumed" regime.  Without the writer, formation is the
+binding constraint under interference.  The D4A full-vs-no\_slow
+separation (with writer) was about retrieval of pre-formed bindings; this
+Step 1 finding distinguishes retrieval capacity (proven, load-bearing)
+from formation capacity (not yet proven under load).
+
+### Honest incumbency assessment for the folding/control projections
+
+Lined up against actual field incumbents, the projected applied roles do
+not hold up and must not be claimed:
+
+- **Folding**: MSM / TPT / committor analysis already provide rigorous,
+  offline causal attribution of folding events; the metadynamics / ABF /
+  OPES family covers adaptive sampling with mature convergence practice.
+  Our attribution layer and bounded-bias roles are incremental at best, and
+  contact disentanglement at toy scale does not transfer to molecular
+  energetics. The defensible residue is the timescale/capacity design rule
+  as an *analysis lens*, pending the capacity sweep.
+- **Control**: MRAC / L1 (Lyapunov-proved adaptation), CBF-based safe
+  learning, and Koopman mode decompositions (eigenvalues = timescales)
+  largely cover safe, interpretable online adaptation; the margin contract
+  is cruder than a Lyapunov proof, and error-modulated decay is a relative
+  of σ/e-modification. Residual niche: online per-event causal attribution
+  without fault-mode models — incremental over model-based FDI; worth one
+  targeted shot (telemetry setting), not a research program.
+
+**Where the community benefit is defensible:**
+
+1. **Memory-architecture science**: the regime-dependence result (slow
+   memory filters when capacity is rich, retains when constrained) and the
+   capacity sweep are mechanism-level claims about memory architectures as
+   a class — the audience is agent-memory design, SSM/RNN state design, and
+   memory-hierarchy research, not folding or control deployment.
+2. **Causal-audit methodology**: the intervention recipe (queried-content
+   flip → output flip; distractor flip → invariance; margin vs uniform) is
+   a portable audit protocol for any memory-based model.
+3. **Streaming causal attribution** in non-stationary, model-free settings
+   (industrial telemetry) — the one applied niche where incumbents are
+   thin; unproven, single-shot.
+
+Revised framing: the project's community value is the science and the
+audit methodology; folding/control are use cases to *learn from*, not
+deployment targets.
+
 ## 2026-09-09 — D4B Step 1: HierarchicalDigitalDirector + ABI/Python parity finding
 
 ### Implementation
@@ -71,36 +300,365 @@ determines the outcome).  For now it is a note, not a plan.
 
 ### Quick-mode ABI flat re-baseline
 
-Re-ran the loaded D3-R task (σ=0.10, 4 distractors, gap 16, budget 32×32,
-12 epochs, eligibility enabled) through the ABI flat director (single level,
-no edges, scalar-chi substrate).  Added `d4a_probe.py` with
-`run_d4a_rebaseline()` using the D3-R eligibility + readout machinery
-broadcast into u-dim channel vectors (ABI chi scalar → uniform broadcast).
+Re-ran the loaded D3-R task (σ=0.10, 4 distractors, gap 16) through the ABI
+flat director.  Added `d4a_probe.py` with `run_d4a_rebaseline()` using the
+D3-R eligibility + readout machinery broadcast into u-dim channel vectors
+(ABI chi scalar → uniform broadcast).
 
-| seed | accuracy | margin  | flip  | invar | init_loss | final_loss |
-|------|----------|---------|-------|-------|-----------|------------|
-| 41   | 0.438    | 0.0022  | 0.312 | 0.938 | 0.8229    | 0.4131     |
-| 43   | 0.812    | 0.0054  | 0.500 | 0.438 | 0.7285    | 0.1442     |
-| 47   | 0.562    | 0.0004  | 0.375 | 0.562 | 0.5401    | 0.0753     |
+**Initial 32×32 quick-mode** (3 seeds, 12 epochs, diagnostic only):
 
-Mean accuracy ≈ 0.60 (vs D3-R contract ≈ 0.80).  Seed 43 reaches 0.81,
-demonstrating the substrate can support the task when the readout adapts
-well.  Attention margins are positive but small (0.0004–0.005 vs
-contract 0.08–0.10).  Stability at 0.80 (correct, kernel is frozen).
+| seed | accuracy | margin  | flip  | invar |
+|------|----------|---------|-------|-------|
+| 41   | 0.438    | 0.0022  | 0.312 | 0.938 |
+| 43   | 0.812    | 0.0054  | 0.500 | 0.438 |
+| 47   | 0.562    | 0.0004  | 0.375 | 0.562 |
 
-The reduced accuracy is expected: scalar-chi concentrates memory feedback
-at `coupling_index=0` only, mode coordinates `u[12:13]` have no memory
-support and decay via leak.  The readout adapts to this weaker
-representation, which is the committed-path claim.
+At 32×32 the readout is under-trained; seed-dependent non-convergence
+dominates.  Mean ≈ 0.60, margins ~0.002.  Same regime as the contract's
+own 24×12 calibration point (0.633 ± 0.092).  Not a substrate result.
+
+**Calibrated 96×96 re-baseline** (3 seeds, loaded σ=0.10, 4 distractors, gap 16):
+
+| seed | accuracy | margin | flip  | invar | init_loss | final_loss | elapsed |
+|------|----------|--------|-------|-------|-----------|------------|---------|
+| 41   | 0.750    | 0.1623 | 0.594 | 0.688 | 0.7193    | 0.0011     | 30.1s   |
+| 43   | 0.875    | 0.1740 | 0.656 | 0.719 | 0.6391    | 0.0001     | 29.4s   |
+| 47   | 0.812    | 0.1326 | 0.656 | 0.750 | 0.6453    | 0.0010     | 29.2s   |
+| mean | 0.812    | 0.156  | 0.635 | 0.719 | —         | —          | —       |
+
+**Contract reference (loaded, gap 16, 96×96, 20 seeds):** accuracy
+0.804 ± 0.069; margin 0.074; flip/invariance 0.55–0.71 / 0.68–0.81;
+stability 0.80.
+
+### Re-baseline conclusion (updates the earlier 32×32 interpretation)
+
+At the calibrated budget the ABI flat substrate **matches the contract
+baseline on accuracy (0.812 vs 0.804) and doubles its attention margin
+(0.156 vs 0.074)**.  The 32×32 low numbers were entirely a budget artifact,
+exactly mirroring the contract's own 24×12 → 96×96 calibration curve.  The
+broadcast-into-vector eligibility feature path is a valid substrate bridge.
+
+Margins are ~2× the contract's loaded result — the readout found a sharper
+target-vs-distractor separation on the ABI's aggregate memory signal than
+the contract did with per-coordinate memory.  This is a genuine empirical
+surprise: the scalar-chi substrate's uniform memory feedback apparently
+provides a cleaner attention target than the vector-chi's per-coordinate
+feedback for this task.
+
+All losses are fully converged (final 0.0001–0.0011), invariance/flip rates
+sit inside the contract's loaded range, and stability stays at the 0.80
+contract bound.
+
+This 3-seed mean needs a 20-seed run for formal reference status, but the
+seed-to-seed consistency (accuracy 0.750–0.875, margins 0.13–0.17) is
+already tight.
 
 ### Next actions
 
-1. ✅ Quick-mode ABI re-baseline done — numbers above serve as the
-   flat-ABI reference envelope.
-2. Build the D4A hierarchy probe (loaded D3-R task, arms flat\_abi /
-   hier\_bu / hier\_bu\_td, same seeds, paired by seed) and the
-   per-step per-level diagnostics report (active-kernel deltas,
-   Deff trajectories, cross-level relation deltas).
+1. ✅ 96×96 ABI re-baseline done — numbers above are the flat-ABI
+   reference.  Consider a 20-seed confirmation run before the full grid.
+2. ✅ D4A hierarchy probe wired and run — results below.
+3. Next: 20-seed confirmation and/or top\_down\_gain sweep to determine
+   whether the small positive hierarchy effect is real.
+
+### D4A hierarchy probe results (96×96, loaded, gap 16, 3 seeds × 3 arms)
+
+Extended `d4a_probe.py` with `run_d4a_probe(config, arm=...)` supporting
+`flat_abi`, `hier_bu` (bottom-up only), and `hier_bu_td` (bottom-up +
+top-down kernel modulation).  Context level: gamma [0.35, 0.08], w
+[0.05, 0.02], leak 0.5; bottom-up gain 0.4; top-down gain 2.0 (the active
+kernel's w is normalised to sum 1.0 by the materialisation step, giving
+~3.2× stronger aggregate feedback; gamma is uniformly diluted by
+exp(-gain·drive) where drive = mean(|context u|)).
+
+| arm       | seed | acc   | margin | flip  | invar |
+|-----------|------|-------|--------|-------|-------|
+| flat\_abi | 41   | 0.750 | 0.1623 | 0.594 | 0.688 |
+| flat\_abi | 43   | 0.875 | 0.1740 | 0.656 | 0.719 |
+| flat\_abi | 47   | 0.812 | 0.1326 | 0.656 | 0.750 |
+| hier\_bu  | 41   | 0.750 | 0.1623 | 0.594 | 0.688 |
+| hier\_bu  | 43   | 0.875 | 0.1740 | 0.656 | 0.719 |
+| hier\_bu  | 47   | 0.812 | 0.1326 | 0.656 | 0.750 |
+| hier\_bu\_td | 41 | 0.781 | 0.1665 | 0.656 | 0.750 |
+| hier\_bu\_td | 43 | 0.906 | 0.1802 | 0.750 | 0.750 |
+| hier\_bu\_td | 47 | 0.781 | 0.1245 | 0.625 | 0.781 |
+
+Arm means: flat 0.812/0.1563, hier\_bu 0.812/0.1563, hier\_bu\_td
+0.823/0.1571.
+
+Paired seed-wise deltas (hier\_bu\_td − flat\_abi):
+
+| seed | d\_acc  | d\_margin | d\_flip | d\_invar |
+|------|---------|-----------|---------|----------|
+| 41   | +0.031  | +0.0042   | +0.062  | +0.062   |
+| 43   | +0.031  | +0.0062   | +0.094  | +0.031   |
+| 47   | −0.031  | −0.0082   | −0.031  | +0.031   |
+
+**Findings:**
+
+- `hier_bu` matches `flat_abi` exactly on every seed and metric — the
+  control-arm prediction is confirmed (bottom-up alone does not affect
+  level-0 dynamics).
+- `hier_bu_td` shows a small positive effect on 2/3 seeds (+0.031
+  accuracy, +0.004–0.006 margin) and reverses on seed 47 (−0.031,
+  −0.008).  Mean paired delta: +0.011 accuracy, +0.001 margin.
+- The effect size is 2–5% relative to the base margins (0.13–0.17).
+  Not decisive at 3 seeds; the sign flip on seed 47 means the positive
+  mean could be noise.
+- The top-down mechanism's dominant effect is the w-normalisation side
+  effect (always-active 3.2× feedback increase), not the drive-dependent
+  gamma dilation (drive values ~0.01–0.05 give only ~3–10% gamma change
+  at gain 2.0).  Attribute any observed effect to the aggregate feedback
+  strength change unless a gain sweep shows otherwise.
+
+**Verdict:** weak positive / inconclusive at 3 seeds.  Does not meet the
+D4A mechanism gate (paired margin advantage with non-overlapping seed
+CIs) yet.  Does not reject it either.  Next: 20-seed confirmation run
+(~9 min at 27s/run) or a top\_down\_gain sweep to amplify the
+context-dependent component.
+
+### D4A gain sweep and 20-seed confirmation (96×96, loaded, gap 16)
+
+**Gain sweep** (top\_down\_gain ∈ {0.5, 2.0, 5.0, 10.0}, 3 seeds, hier\_bu\_td):
+
+| gain | mean acc | mean margin | Δacc vs flat | Δmargin vs flat |
+|------|----------|-------------|--------------|-----------------|
+| 0.5  | 0.833    | 0.1609      | +0.021       | +0.0045         |
+| 2.0  | 0.823    | 0.1571      | +0.010       | +0.0007         |
+| 5.0  | 0.844    | 0.1597      | +0.031       | +0.0034         |
+| 10.0 | 0.833    | 0.1566      | +0.021       | +0.0002         |
+| flat | 0.812    | 0.1563      | —            | —               |
+
+The gain sweep confirms the effect is **insensitive to the drive-dependent
+gamma-dilation parameter**.  All gains give similar paired deltas
+(+0.01 to +0.03 accuracy).  The top-down mechanism's dominant effect is
+the w-normalisation side effect (constant ~3.2× aggregate feedback
+increase from `materialize_positive_kernel` normalising to sum 1.0),
+not context-adaptive temporal modulation.
+
+**20-seed confirmation** (seeds 101–120, flat\_abi vs hier\_bu\_td, gain 2.0):
+
+| arm | acc (mean ± 95% CI) | margin (mean ± 95% CI) | flip | invar |
+|-----|---------------------|------------------------|------|-------|
+| flat\_abi | 0.825 ± 0.043 | 0.1498 ± 0.0151 | 0.681 | 0.798 |
+| hier\_bu\_td | 0.845 ± 0.042 | 0.1515 ± 0.0152 | 0.695 | 0.811 |
+
+Paired seed-wise statistics (hier\_bu\_td − flat\_abi, n=20):
+
+| metric | mean | std | sem | t | positive seeds |
+|--------|------|-----|-----|---|----------------|
+| Δacc | +0.0203 | 0.0292 | 0.0065 | **+3.115** | 9/20 |
+| Δmargin | +0.0017 | 0.0050 | 0.0011 | +1.532 | 13/20 |
+| Δflip | +0.0141 | 0.0470 | 0.0105 | +1.339 | 8/20 |
+| Δinvar | +0.0125 | 0.0342 | 0.0077 | +1.633 | 8/20 |
+
+### D4A confirmation verdict
+
+- **Accuracy improvement is statistically significant** (paired
+  t=+3.115, df=19, p<0.05 two-tailed; critical t≈2.09).  Top-down
+  modulation reliably improves held-out action accuracy on this task.
+- **Attention margin improvement is NOT significant** (t=+1.532).  The
+  +0.0017 mean margin gain is in the right direction but within noise.
+- **Only 9/20 seeds show a positive accuracy delta** — the improvement
+  is concentrated in seeds where the hierarchy amplifies readout
+  learning, not uniform across seeds.
+- **Gain sweep attributes the effect to the w-normalisation**, not the
+  drive-dependent dilation.  To make the hierarchy genuinely
+  context-adaptive (rather than always-on stronger feedback), the
+  top-down materialisation would need to preserve relative w scale —
+  e.g., skip the normalisation or use `normalize_weights=false`.
+
+**D4A acceptance criteria status:**
+- "Top-down modulation changes lower-level memory diagnostics in the
+  expected direction": partially — the active kernel is measurably
+  different, but the *context-adaptive* component is small at current
+  gains.
+- "Reports show interpretable cross-level differences between
+  ablations": yes — hier\_bu = flat (no effect), hier\_bu\_td ≠ flat
+  (significant accuracy gain).
+
+**Honest assessment:** the D4A probe demonstrates a small but real
+accuracy improvement from top-down modulation, but the effect is
+attributable to the always-on feedback-strength increase rather than to
+genuinely context-adaptive modulation.  The architecture works; the
+chain-spec materialisation's normalisation step conflates two mechanisms.
+A follow-up that separates them (either `normalize_weights=false` or a
+C++ change to preserve w scale) would cleanly test whether the
+context-adaptive component adds anything beyond the static feedback
+boost.
+
+### D4A mechanism decomposition: w_boost_flat control (20 seeds)
+
+Added the `w_boost_flat` arm to `d4a_probe.py`: a flat single-level arm
+with the spec kernel's w statically normalised to sum 1.0 (exactly the
+constant active-kernel w that hier\_bu\_td's materialisation produces,
+since the exp(gain·drive) factor cancels under normalisation).  Same
+gamma, leak, dt, no edges.  This isolates the always-on feedback-strength
+component with zero context dependence.
+
+**Three-arm comparison** (20 seeds, loaded, gap 16, 96×96):
+
+| arm | acc (mean ± 95% CI) | margin (mean ± 95% CI) | flip | invar |
+|-----|---------------------|------------------------|------|-------|
+| flat\_abi | 0.825 ± 0.043 | 0.1498 ± 0.0151 | 0.681 | 0.798 |
+| w\_boost\_flat | 0.841 ± 0.042 | 0.1514 ± 0.0152 | 0.694 | 0.806 |
+| hier\_bu\_td | 0.845 ± 0.042 | 0.1515 ± 0.0152 | 0.695 | 0.811 |
+
+**Additive decomposition of the +0.020 accuracy effect:**
+
+| component | Δacc | Δmargin | interpretation |
+|-----------|------|---------|----------------|
+| static w-boost (w\_boost\_flat − flat) | **+0.016** | +0.0016 | ~80% of the effect |
+| context-adaptive γ (hier\_bu\_td − w\_boost\_flat) | **+0.005** | +0.0001 | ~20% — negligible |
+
+**Per-seed detail for the γ component:** hier\_bu\_td matches w\_boost\_flat
+**exactly on 18/20 seeds** (d\_acc = 0.000).  Only seeds 102 (+0.063) and
+119 (+0.031) differ — both positive.  Mean paired Δmargin across seeds:
++0.0002.
+
+**Nonlinear interaction note (answering the design question):** with
+`normalize_weights=True` the drive-dependence is purely γ (w is pinned by
+normalisation); with `normalize_weights=False` both w and γ scale with
+drive and the loop gain Σ(w/γ) grows as exp(2·gain·drive) — the
+mechanisms multiply.  Empirically, at this task and gain (drive values
+~0.01–0.05, gain 2.0), the γ component is so small that the
+multiplicative regime is moot: 18/20 seeds produce identical results
+with and without the context-adaptive component.
+
+### D4A final verdict
+
+The top-down modulation's observed +0.020 accuracy improvement is
+**~80% a static w-boost effect and ~20% (statistically negligible)
+context-adaptive γ dilation**.  The chain-spec ABI's
+`materialize_positive_kernel` conflates these two mechanisms through its
+normalisation step.  To make the hierarchy genuinely context-adaptive
+(rather than an always-on stronger-memory arm), the C++ materialisation
+would need to preserve relative w scale.  As implemented, D4A's positive
+finding is real but is an "always-on stronger memory" result, not a
+"context-adaptive modulation" result.
+
+### Next actions
+
+1. ✅ D4A mechanism decomposition done — the w-boost explains ~80% of
+   the effect; γ dilation is negligible at current gains.
+2. ✅ Option B: kernel-variant grid through the ABI — results below.
+3. Next: interpret the full/no-slow/collapsed separation (the first
+   action-level full-vs-ablation separation in the project) and decide
+   whether this re-opens the D3-R/D5 gates on the ABI substrate.
+
+### Option B: kernel-variant grid through the ABI (20 seeds, loaded, gap 16)
+
+Re-ran the full kernel-variant grid (full / no_slow / collapsed\_gamma)
+through the ABI flat director at the contract's loaded protocol
+(σ=0.10, 4 distractors, gap 16, budget 96×96, seeds 101–120).  All arms
+use the same spec-w semantics from `memory_config_for_variant` on the
+same scalar-chi substrate — the "same w semantics" framing.
+
+**Variant means (20 seeds, ABI substrate):**
+
+| variant | acc (mean ± 95% CI) | margin (mean ± 95% CI) | flip | invar |
+|---------|---------------------|------------------------|------|-------|
+| full | 0.825 ± 0.043 | **0.1498 ± 0.0151** | 0.681 | 0.798 |
+| no\_slow | 0.778 ± 0.053 | 0.1133 ± 0.0191 | 0.608 | 0.741 |
+| collapsed\_gamma | 0.797 ± 0.051 | 0.1285 ± 0.0181 | 0.625 | 0.770 |
+
+**Paired comparisons (full vs ablations, per-seed, n=20):**
+
+| comparison | Δacc | t | positive seeds | Δmargin | t | positive seeds |
+|-----------|------|---|----------------|---------|---|----------------|
+| full − no\_slow | **+0.047** | **+3.81** | 13/20 | **+0.037** | **+6.29** | **19/20** |
+| full − collapsed | **+0.028** | **+2.35** | 12/20 | **+0.021** | **+4.51** | **18/20** |
+
+### Interpretation: the first action-level full-vs-ablation separation
+
+On the contract's vector-chi substrate, no action-level full/no-slow
+separation ever appeared (all variants 0.90–0.92 clean, and under load
+no\_slow actually exceeded full at gap 16: 0.842 vs 0.804).  The
+D3-R-LB disentanglement attributed the full kernel's value to
+interference filtering, not retention.
+
+On the ABI scalar-chi substrate, the picture reverses:
+
+- **full beats no\_slow on action accuracy** (+0.047, t=+3.81, p<0.01)
+  and on attention margin (+0.037, t=+6.29, 19/20 seeds positive).
+- **full beats collapsed\_gamma** on both metrics as well.
+
+The mechanism: the scalar-chi substrate's aggregate memory is weaker
+(only `u[coupling_index]` drives it, feedback enters one coordinate).
+Removing the slow channel (no\_slow: gamma=[2.0, 0.9]) removes most of
+the retention capacity — the binding signal decays quickly during the
+gap and retrieval degrades.  The full kernel's slow channel
+(gamma=0.035) is now load-bearing: it retains the binding across the
+gap when the fast channels have washed out.
+
+**This means the slow channel's role is substrate-dependent.**  On a
+strong-memory substrate (vector-chi), slow channels are redundant for
+this task (interference filtering only).  On a weaker substrate
+(scalar-chi), slow-channel retention becomes the dominant mechanism and
+produces the full-vs-ablation action separation that the D3-R roadmap
+gates have been looking for since the original D3 experiments.
+
+### D3-R roadmap gate status (on the ABI substrate)
+
+- "Full D2C exceeds no-slow controls over longer delays on genuinely
+  unseen episodes; report at least 20 seeds": **met** (+0.047, t=3.81,
+  p<0.01, 20 seeds, held-out streams).
+- Attribution margin: full margin 0.150 vs no\_slow 0.113, 19/20 seeds
+  positive, t=+6.29 — the eligibility head discriminates the queried
+  event more sharply with slow channels present.
+
+The D3-R action-separation gate is re-opened on the ABI substrate with a
+positive result.  Whether this carries to D5 (hierarchy-driven agent
+sandbox) depends on whether the weak-substrate regime generalises or is
+an artifact of the scalar-chi formulation's reduced capacity.
+
+### Gap-sweep disentanglement: retention vs filtering on the ABI (quick, 3 seeds)
+
+The cross-substrate comparison raised the mechanistic question: is the
+ABI's full-vs-no_slow separation (a) slow-channel *retention* (a new
+regime) or (b) the same interference *filtering* the contract showed,
+just amplified by the weaker substrate?  Retention predicts Δ(full −
+no_slow) grows with gap; filtering predicts flat Δ.
+
+Quick sweep (2 variants × 4 gaps × 3 seeds 101/104/107, loaded
+σ=0.10, 4 distractors, 96×96):
+
+| variant | gap=4 | gap=8 | gap=16 | gap=32 |
+|---------|-------|-------|--------|--------|
+| full acc | 0.667 | 0.729 | 0.729 | **0.771** |
+| full margin | 0.096 | 0.108 | 0.123 | 0.133 |
+| no\_slow acc | 0.635 | 0.688 | 0.708 | **0.698** |
+| no\_slow margin | 0.089 | 0.075 | 0.091 | 0.111 |
+
+Paired Δ(full − no\_slow):
+
+| gap | Δacc | Δmargin | seeds positive |
+|-----|------|---------|----------------|
+| 4 | +0.031 | +0.006 | 2/3 |
+| 8 | +0.042 | +0.033 | 3/3 |
+| 16 | +0.021 | +0.033 | 1/3 (+0.062, 0.000, 0.000) |
+| 32 | **+0.073** | +0.022 | **3/3** (+0.062, +0.094, +0.062) |
+
+**Interpretation (weak, 3 seeds):** the retention signature is present
+at the longest delay.  Full accuracy climbs monotonically with gap
+(0.667 → 0.771) while no\_slow turns over between gap 16 (0.708) and
+gap 32 (0.698) — the fast-only kernel's memory has decayed enough at
+gap 32 that its absence starts to hurt.  The gap-32 separation is the
+largest in the sweep and the most consistent (3/3 positive with the
+tightest per-seed cluster).  However the trend is not monotonic (the
+gap-16 dip, with two exact-zero deltas, keeps gap 16 uninformative),
+and 3 seeds is underpowered.
+
+**Verdict:** suggestive evidence for the retention mechanism at long
+gaps, not decisive.  The formal test is a 20-seed gap sweep at gaps 16
+and 32 (~20 min).  If the gap-32 separation holds at ~+0.07 with
+non-overlapping paired CIs while gap 16 stays small, the ABI substrate
+demonstrates the "slow-channel retention becomes load-bearing on
+memory-constrained substrates" claim — a genuinely new architectural
+result distinct from the contract's interference-filtering finding, and the first mechanistic account of *when* separated slow channels earn their keep in D2C.
+
+That would also sharpen the cross-substrate comparison into a full story: the same kernel architecture expresses two different mechanisms depending on substrate memory capacity — filtering when memory is strong, retention when it's constrained.
+
 
 ## 2026-09-08 — D4B Stateful Hierarchy Step ABI
 

@@ -26,6 +26,11 @@ from .d3_randomized import (
     _sample_specs,
 )
 from .symbolic_induction import memory_config_for_variant
+from gfe_ctypes import (
+    GFE_C_COUPLING_FORM_B,
+    GFE_C_HIERARCHICAL_RELATION_BOTTOM_UP,
+    GFE_C_HIERARCHICAL_RELATION_TOP_DOWN,
+)
 
 
 @dataclass(slots=True)
@@ -72,14 +77,33 @@ def _compat(abi_result) -> _CompatResult:
     )
 
 
-def run_d4a_rebaseline(config: D3RandomizedConfig) -> dict[str, object]:
-    """Run the loaded D3-R task through the ABI flat director."""
+def run_d4a_probe(
+    config: D3RandomizedConfig,
+    *,
+    arm: str = "flat_abi",
+    bottom_up_gain: float = 0.4,
+    top_down_gain: float = 2.0,
+    context_gamma: list[float] | None = None,
+    context_leak: float = 0.5,
+) -> dict[str, object]:
+    """Run the loaded D3-R task through the ABI with the specified hierarchy arm.
+
+    Arms:
+      flat_abi   -- single level, no edges (the re-baseline reference).
+      hier_bu    -- two levels, bottom-up only (context sees events, gives
+                    nothing back).  Level-0 dynamics are identical to
+                    flat_abi; this is a control arm.
+      hier_bu_td -- two levels, bottom-up + top-down.  Level-0 receives
+                    kernel modulation from the context level: the active
+                    kernel's w is normalised (stronger aggregate feedback)
+                    and gamma is uniformly diluted by exp(-gain*drive).
+    """
     memory = memory_config_for_variant(config.variant)
     lib = load_library(None)
     state_dim = 2 * config.slot_count + 2
 
-    level = {
-        "name": "flat",
+    level0 = {
+        "name": "fast",
         "gamma": list(memory.gamma),
         "w": list(memory.w),
         "u": [0.0] * state_dim,
@@ -87,11 +111,59 @@ def run_d4a_rebaseline(config: D3RandomizedConfig) -> dict[str, object]:
         "dt": memory.dt,
         "linear_decay": [memory.leak_rate] * state_dim,
         "forcing_bias": [0.0] * state_dim,
-        "form": 1,   # GFE_C_COUPLING_FORM_B
+        "form": GFE_C_COUPLING_FORM_B,
         "coupling_index": 0,
     }
+
+    if arm == "flat_abi":
+        levels, edges = [level0], []
+    elif arm == "w_boost_flat":
+        # Flat arm with the top-down materialisation's constant w-normalisation
+        # applied statically (no hierarchy, no gamma dilation).  Isolates the
+        # always-on feedback-strength component of hier_bu_td: hier_bu_td's
+        # active w is also the normalised spec_w (drive cancels), so the
+        # hier_bu_td − w_boost_flat difference is purely the context-adaptive
+        # gamma component.
+        total_w = sum(memory.w)
+        level0 = dict(level0)
+        level0["w"] = [wk / total_w for wk in memory.w]
+        levels, edges = [level0], []
+    elif arm in ("hier_bu", "hier_bu_td"):
+        cg = context_gamma or [0.35, 0.08]
+        cw = [0.05, 0.02][: len(cg)] or [0.02] * len(cg)
+        level1 = {
+            "name": "context",
+            "gamma": list(cg),
+            "w": list(cw),
+            "u": [0.0] * state_dim,
+            "chi": [0.0] * len(cg),
+            "dt": memory.dt,
+            "linear_decay": [context_leak] * state_dim,
+            "forcing_bias": [0.0] * state_dim,
+            "form": GFE_C_COUPLING_FORM_B,
+            "coupling_index": 0,
+        }
+        edges = [{
+            "source_level": 0,
+            "target_level": 1,
+            "relation": GFE_C_HIERARCHICAL_RELATION_BOTTOM_UP,
+            "gain": bottom_up_gain,
+            "normalize_weights": True,
+        }]
+        if arm == "hier_bu_td":
+            edges.append({
+                "source_level": 1,
+                "target_level": 0,
+                "relation": GFE_C_HIERARCHICAL_RELATION_TOP_DOWN,
+                "gain": top_down_gain,
+                "normalize_weights": True,
+            })
+        levels = [level0, level1]
+    else:
+        raise ValueError(f"unknown arm: {arm}")
+
     director = HierarchicalDigitalDirector(
-        lib=lib, levels=[level], edges=[], state_dim=state_dim, memory_config=memory,
+        lib=lib, levels=levels, edges=edges, state_dim=state_dim, memory_config=memory,
     )
 
     train_specs = _sample_specs(config, seed=config.seed, count=config.train_count)
@@ -145,9 +217,10 @@ def run_d4a_rebaseline(config: D3RandomizedConfig) -> dict[str, object]:
 
     margins = [m for _, _, m in predictions]
     return {
-        "experiment_name": "d4a_abi_rebaseline",
+        "experiment_name": "d4a_hierarchy_probe",
         "config": config.to_mapping(),
         "variant": config.variant,
+        "arm": arm,
         "substrate": "abi_scalar_chi",
         "train_stream_seed": config.seed,
         "test_stream_seed": config.seed + 1_000_003,
@@ -162,3 +235,8 @@ def run_d4a_rebaseline(config: D3RandomizedConfig) -> dict[str, object]:
         },
         "memory_diagnostics": {"stability_ratio": memory.stability_ratio(), "channel_count": memory.channel_count},
     }
+
+
+def run_d4a_rebaseline(config: D3RandomizedConfig) -> dict[str, object]:
+    """Backward-compat wrapper: flat-ABI arm of the D4A probe."""
+    return run_d4a_probe(config, arm="flat_abi")

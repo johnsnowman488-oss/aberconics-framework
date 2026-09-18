@@ -116,7 +116,9 @@ julia code/julia/examples/05_capi_ccall_smoke.jl
 ├── docs/              # Theory notes and figures
 ├── results/           # Generated experiment outputs
 ├── D2C.md             # Markdown extract of the technical reference PDF
-└── Context.md         # Project context and implementation notes
+├── Context.md         # Project context and implementation notes (through 2026-09-15)
+├── Step_Context.md    # Active progress ledger for Phase E+F
+└── d2c_milestone_f.md # Unified E+F roadmap
 ```
 
 ## Recommended Entry Points
