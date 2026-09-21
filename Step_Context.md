@@ -271,3 +271,109 @@ What exists vs. what the full Q&A system needs:
 
 The bAbI experiment is the first bridge from "toy experiments" to "real data"
 and it strengthens every downstream claim.
+
+
+---
+
+## 2026-09-21 — Readout correction and dimension-scaling gap analysis
+
+### Dataset and execution setup
+
+The documented `Muennighoff/babi` en-valid mirror is now downloaded locally under
+`code/python/d2c/progress/babi_data/`:
+
+| Split | Stories | File |
+|---|---:|---|
+| train | 18,013 | `babi_train.jsonl` |
+| test | 20,000 | `babi_test.jsonl` |
+| valid | 1,987 | `babi_valid.jsonl` |
+
+All 20 tasks and the expected record counts passed validation. The bAbI unit suite
+passes with `PYTHONPATH=code/python python3 -m pytest -q code/python/tests/test_babi.py`
+(15 passed).
+
+### Readout diagnostic
+
+The original E0 sweep used `hidden_dim=32`, `learning_rate=0.05`, and five epochs.
+This learning rate was too aggressive for the dependency-free online MLP. At the
+corrected setting `learning_rate=0.005`, `hidden_dim=32`, and ten epochs, the 16-D
+QA1 result improved substantially:
+
+| Variant | Original 20-seed sweep | Corrected 5-seed confirmation |
+|---|---:|---:|
+| `full` | 18.23% | 41.40% |
+| `no_slow` | 23.37% | 44.26% |
+
+The corrected matched paired gap was `no_slow - full = +2.86` percentage points,
+positive on all five seeds, with approximate 95% CI `[+1.78, +3.94]` points.
+The optimizer setting therefore explained most, but not all, of the original gap.
+
+### 32-D preserved gap sweep
+
+A 32-D sweep used the corrected settings: `hidden_dim=32`, learning rate `0.005`,
+ten epochs, 900 train stories, 1,000 test stories, and 20 seeds. The process was
+intentionally terminated after enough results had accumulated; no final JSON bundle
+was written, but all reported terminal rows were preserved and summarized.
+
+| Variant | Completed seeds | Mean accuracy | Approx. 95% CI |
+|---|---:|---:|---:|
+| `full` | 20 | 43.39% | +/-0.68 pp |
+| `no_slow` | 20 | 47.62% | +/-0.61 pp |
+| `collapsed_gamma` | 10 | 46.59% | +/-1.19 pp |
+
+Paired comparisons on completed matched seeds:
+
+- `no_slow - full`: **+4.23 pp**, positive on 20/20 seeds; approximate 95% CI
+  `[+3.47, +4.99]` pp.
+- `collapsed_gamma - full`: **+3.22 pp**, positive on 10/10 seeds.
+- `collapsed_gamma - no_slow`: **-0.69 pp** over the first 10 matched seeds.
+
+The observed ordering remains:
+
+```text
+no_slow > collapsed_gamma > full
+```
+
+### Dimension interpretation
+
+At the corrected readout settings, the available comparison is:
+
+| Dimension | `full` | `no_slow` | Gap (`no_slow - full`) |
+|---:|---:|---:|---:|
+| 16, 5 seeds | 41.40% | 44.26% | +2.86 pp |
+| 32, 20 seeds | 43.39% | 47.62% | +4.23 pp |
+
+Increasing total dimension from 16 to 32 improved both variants, but improved
+`no_slow` more strongly. These results do **not** support the hypothesis that the
+slow channel begins contributing positively at 32 dimensions. They suggest instead
+that the current representation/readout preferentially exploits the shorter
+channels, while the distinct slow timescale is either attenuated or introduces
+interference.
+
+This is not evidence that slow memory is intrinsically harmful. Remaining confounds
+include the bag-of-words query forcing, the large query-gated feature vector, online
+single-story SGD, and unequal seed counts across the corrected 16-D and preserved
+32-D comparisons. The 32-D `collapsed_gamma` run was also stopped at 10 seeds.
+
+### Operational lesson and next action
+
+Use a quick gap sweep before any full sweep:
+
+- quick: 3 seeds, five epochs, learning rate `0.005`, all variants, candidate
+  dimensions 16/32/64/128;
+- full: 20 seeds and ten epochs only after a quick sweep identifies a meaningful
+  dimension-dependent pattern.
+
+The next diagnostic should compare feature pathways at selected dimensions:
+`u` only, weighted memory only, `[u,memory]`, individual `chi` channels, and the
+current query-gated features. This will distinguish slow-channel information loss
+from slow-channel interference in the readout.
+
+### Reproducibility files
+
+- `code/python/d2c/progress/validate_babi_setup.py` — dataset validator
+- `diagnose_babi_readout.py` — cached readout diagnostic
+- `run_babi_sweep16.sh` — original 16-D sweep runner
+- `run_babi_gap_sweep32.sh` — corrected 32-D sweep runner
+- `babi_dimension_gap_analysis.md` — analysis report
+- `analyze_32d_preserved.py` — preserved 32-D result analysis
