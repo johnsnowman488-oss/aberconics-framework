@@ -29,6 +29,7 @@ from ..digital.babi import (
 )
 from ..digital.bridge import seed_memory_state, step_memory
 from ..digital.readout import (
+    LinearReadout,
     QueryConditionedMLPReadout,
     query_conditioned_features,
 )
@@ -46,6 +47,7 @@ class BabiQAConfig:
     seeds: int = 3
     hidden_dim: int = 32
     learning_rate: float = 0.05
+    readout_type: str = "linear"
 
 
 def run_babi_qa_experiment(
@@ -78,12 +80,19 @@ def run_babi_qa_experiment(
     for seed in range(config.seeds):
         rng = random.Random(seed)
         feat_dim = config.dim + config.dim + config.dim * config.dim
-        readout = QueryConditionedMLPReadout(
-            input_dim=feat_dim,
-            output_dim=len(answer_set),
-            hidden_dim=config.hidden_dim,
-            seed=seed,
-        )
+        if config.readout_type == "linear":
+            readout = LinearReadout(
+                input_dim=feat_dim,
+                output_dim=len(answer_set),
+                seed=seed,
+            )
+        else:
+            readout = QueryConditionedMLPReadout(
+                input_dim=feat_dim,
+                output_dim=len(answer_set),
+                hidden_dim=config.hidden_dim,
+                seed=seed,
+            )
 
         # Training
         for _ in range(epochs):
@@ -138,6 +147,7 @@ def run_babi_qa_experiment(
         "task": config.task,
         "variant": config.variant,
         "dim": config.dim,
+        "readout_type": config.readout_type,
         "seeds": config.seeds,
         "train_stories": len(train_ds.stories),
         "test_stories": len(test_ds.stories),
@@ -170,6 +180,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--lr", type=float, default=0.05)
     p.add_argument("--max-stories", type=int, default=0,
                     help="Cap training stories (0 = all)")
+    p.add_argument("--readout", choices=["linear", "mlp"], default="linear",
+                    help="Readout type (default: linear)")
     p.add_argument("--quick", action="store_true")
     p.add_argument("--output-dir", type=Path, default=_PROGRESS_DIR)
     return p
@@ -180,7 +192,7 @@ def main(argv: list[str] | None = None) -> dict:
     config = BabiQAConfig(
         task=args.task, variant=args.variant, dim=args.dim,
         seeds=args.seeds, hidden_dim=args.hidden_dim,
-        learning_rate=args.lr,
+        learning_rate=args.lr, readout_type=args.readout,
     )
     result = run_babi_qa_experiment(config, quick=args.quick,
                                      max_stories=args.max_stories)

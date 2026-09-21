@@ -249,12 +249,138 @@ The current machine is adequate for code development, testing, and
 dim-16/dim-32 exploration. The E0 gate (>80% on QA1) will require either
 the numpy-ized MLP or a faster CPU.
 
+---
+
+## 2026-09-21 — Machine constraint analysis: detailed benchmarks
+
+### Hardware
+
+```
+CPU:    Intel Celeron 3855U @ 1.60GHz, 2 cores, 2 MB cache
+RAM:    3.7 GB total, ~870 MB available, 1.6 GB swap (77 MB used)
+Disk:   29 GB eMMC, 2.7 GB free
+Arch:   x86_64, Linux 5.15, Python 3.10.12
+```
+
+This is a low-end Chromebook-class processor (2016 Skylake, no turbo boost,
+no hyperthreading). It is the weakest link — RAM and disk are not the
+constraint.
+
+### Benchmark results (pure Python MLP, the actual bottleneck)
+
+| dim | features | train_step (fwd+bwd) | predict (fwd only) |
+|---|---|---|---|
+| 16 | 288 | 12.7 ms | 1.68 ms |
+| 32 | 1088 | 29.9 ms | 5.26 ms |
+| 64 | 4224 | 114.8 ms | 18.19 ms |
+
+**SOE stepper (not the bottleneck):**
+
+| dim | step time | 10k steps |
+|---|---|---|
+| 16 | 0.050 ms | 0.5 s |
+| 32 | 0.098 ms | 1.0 s |
+| 64 | 0.197 ms | 2.0 s |
+
+**NumPy forward (baseline for speedup estimate):**
+
+| dim | numpy fwd | pure-Python train_step | speedup |
+|---|---|---|---|
+| 16 | 0.046 ms | 12.7 ms | **279x** |
+| 32 | 0.117 ms | 29.9 ms | **255x** |
+| 64 | 0.401 ms | 114.8 ms | **286x** |
+
+### Time estimates per experiment cell (900 stories × 5 epochs)
+
+| dim | seeds | pure-Python | numpy-ized (est.) |
+|---|---|---|---|
+| 16 | 3 | **2.9 min** | ~6s |
+| 16 | 20 | **19 min** | ~4s |
+| 32 | 3 | **6.7 min** | ~16s |
+| 32 | 20 | **45 min** | ~11s |
+| 64 | 3 | **26 min** | ~5s |
+| 64 | 20 | **172 min** (2.9 hrs) | ~36s |
+
+### What this means for each E stage
+
+| Stage | Requirement | dim | Pure-Python time | Feasible? |
+|---|---|---|---|---|
+| E0 smoke | 3 seeds, quick | 16 | ~1 min | **Yes** |
+| E0 claim (3 variants × 20 seeds) | 60 cells × 900 stories | 16 | **~114 min** (1.9 hrs) | Marginal |
+| E0 claim | 60 cells | 64 | **~172 hrs** | **No** (pure Python) |
+| E1 D_eff analysis | 3 tasks × 3 seeds | 16 | ~9 min | **Yes** |
+| E2 full ablation | 6 tasks × 3 variants × 20 seeds = 360 cells | 16 | **~684 min** (11.4 hrs) | Marginal |
+| E2 full ablation | 360 cells | 64 | **~1032 hrs** | **No** |
+
+### The honest constraint
+
+**The SOE memory stepper is not the bottleneck.** At any dimension, the SOE
+stepper completes 10k steps in under 2 seconds. The bottleneck is the
+**pure-Python MLP readout** — specifically the nested list-comprehension
+matrix operations in `QueryConditionedMLPReadout._forward()` and
+`train_step_with_input_gradient()`.
+
+**NumPy would remove the constraint entirely.** A numpy-ized MLP is
+~270x faster, which would make the full E0 claim (60 cells × 64-dim)
+complete in ~2 minutes instead of ~172 hours.
+
+### Three resolution paths
+
+**Path A: NumPy-ize the MLP readout (recommended)**
+
+Replace the pure-Python matrix operations in `QueryConditionedMLPReadout`
+with numpy arrays and `np.dot` / `np.maximum`. This is a localised change
+to one file (`readout.py`) — the class interface stays identical. NumPy is
+already in the venv (2.2.6). No new dependencies.
+
+Estimated effort: ~2-3 hours of work. Expected speedup: ~270x.
+After this, dim=64 with 20 seeds per cell completes in seconds.
+
+**Path B: Linear readout (faster, simpler, interpretable)**
+
+Replace the MLP with a single linear layer: `features @ W → logits →
+softmax → argmax`. This is even faster than numpy-MLP, directly
+interpretable (each weight maps to a feature), and sufficient for the
+E0 claim. The interpretability story actually improves: "every feature
+contributes linearly to the answer" is a cleaner claim than "the MLP
+hides its reasoning in a hidden layer."
+
+Estimated effort: ~1 hour. Expected speedup: ~500x.
+After this, dim=150 with 20 seeds completes in seconds.
+
+**Path C: Run on a faster machine**
+
+Move claim runs to a cloud VM (2-core modern Xeon/EPYC) or a desktop.
+The code is identical; only the CPU wall-clock changes. A modern 2-core
+desktop (Zen 4, Alder Lake) would be ~5-10x faster even in pure Python.
+
+### Recommendation
+
+**Implement Path B (linear readout) first** — it is the fastest to
+implement, gives the biggest speedup, and strengthens the interpretability
+story. Then implement Path A (numpy-MLP) as a second readout option for
+the E0 gate comparison (linear vs. MLP, same as the 64-vs-150 dim
+comparison we already committed to).
+
+Both paths are localised to `readout.py` and `babi_qa.py`. No
+architectural changes, no new dependencies.
+
+### Revised E0 gate timeline
+
+With a numpy or linear readout on this machine:
+
+- E0 claim (QA1, 64-dim + 150-dim, 3 variants × 20 seeds): **~5-10 minutes**
+- E1 D_eff analysis (QA1-3, 2 dims, 3 seeds): **~30 seconds**
+- E2 full ablation (6 tasks × 3 variants × 20 seeds): **~30-60 minutes**
+
+All within this machine's capability after the readout speedup.
+
 ### Next action
 
-Tune the MLP hidden dim and epoch count at dim=16 to establish a
-baseline accuracy before scaling to 64-dim. Consider adding a linear
-readout path (simpler, faster, directly interpretable) as an alternative
-to the MLP for the E0 claim.
+Implement a `LinearReadout` class in `readout.py` (single-layer, softmax,
+cross-entropy, numpy operations). Add `--readout linear|mlp` flag to
+`babi_qa.py`. Run E0 smoke at dim=64 with linear readout to validate
+the speedup, then proceed to E0 claim runs.
 
 ### Honest distance to the Q&A vision
 
@@ -377,3 +503,79 @@ from slow-channel interference in the readout.
 - `run_babi_gap_sweep32.sh` — corrected 32-D sweep runner
 - `babi_dimension_gap_analysis.md` — analysis report
 - `analyze_32d_preserved.py` — preserved 32-D result analysis
+
+---
+
+## 2026-09-21 — Numpy readout + LinearReadout implementation; E0 dim=64 smoke
+
+### What was built
+
+Numpy-ized the entire readout pipeline in `readout.py`:
+
+| Component | Before (pure Python) | After (numpy) | Speedup |
+|---|---|---|---|
+| `query_conditioned_features()` | List comprehensions, O(dim²) in Python | `np.outer`, `np.concatenate` | ~50-100x |
+| `QueryConditionedMLPReadout._forward()` | Nested list comprehensions | `W @ x + b`, `np.maximum` | ~26-51x |
+| `QueryConditionedMLPReadout.train_step()` | Nested list comprehensions backward | `np.outer`, vectorized SGD | ~26-44x |
+
+New class: **`LinearReadout`** — single-layer `features @ W → softmax → argmax`,
+numpy throughout. ~4-5x faster than the numpy MLP, directly interpretable.
+
+### Files modified
+
+| File | Change |
+|---|---|
+| `readout.py` | Numpy-ized MLP weights (np.ndarray), forward, backward, softmax; added LinearReadout |
+| `babi_qa.py` | Added `--readout linear|mlp` flag, default=linear |
+| `__init__.py` (digital) | Added LinearReadout export |
+
+### Test results
+
+**35/35 passed** — all existing D3, D4A, temporal_logic experiments (20 tests)
++ all bAbI tests (15 tests). Zero regressions.
+
+### Benchmark: numpy MLP train_step
+
+| dim | pure-Python (before) | numpy (after) | speedup |
+|---|---|---|---|
+| 16 | 12.7 ms | 0.50 ms | **26x** |
+| 32 | 29.9 ms | 0.58 ms | **51x** |
+| 64 | 114.8 ms | 2.62 ms | **44x** |
+
+### Benchmark: LinearReadout train_step
+
+| dim | time | 900 stories × 5 epochs × 20 seeds |
+|---|---|---|
+| 16 | 0.117 ms | **10.5s** |
+| 32 | 0.386 ms | **34.7s** |
+| 64 | 0.642 ms | **57.8s** |
+| 150 | 2.928 ms | **263.5s** (4.4 min) |
+
+### E0 dim=64 smoke results (linear readout, 900 train, 1000 test, 3 seeds)
+
+| Variant | Mean Accuracy | Seeds |
+|---|---|---|
+| full | 0.405 ± 0.019 | 434, 358, 423 |
+| no_slow | 0.434 ± 0.017 | 464, 395, 442 |
+| collapsed_gamma | 0.398 ± 0.032 | 472, 341, 380 |
+
+### Interpretation
+
+Accuracy jumped from ~16% (dim=16, pure-Python MLP) to ~40% (dim=64, linear
+readout). The linear readout at dim=64 is the first configuration that shows
+meaningful learning on bAbI QA1.
+
+The ablation pattern (no_slow > full) remains inverted from the expected. This
+is consistent with the user's own 32-D gap analysis (no_slow > collapsed_gamma
+> full) documented in the 2026-09-21 entry. The slow channel's interference
+filtering advantage requires distractors to manifest — bAbI QA1 has none.
+
+### Next action
+
+1. Run the feature pathway diagnostic (compare `u` only, memory only,
+   `[u,memory]`, individual `chi` channels, gated features) to isolate
+   whether the slow channel is attenuated or interfering.
+2. Run QA2 and QA3 (two/three supporting facts) where interleaving events
+   create interference — the slow channel's advantage should emerge there.
+3. Use the quick-sweep protocol (3 seeds, 5 epochs, lr=0.005) before any
+   full 20-seed sweep.

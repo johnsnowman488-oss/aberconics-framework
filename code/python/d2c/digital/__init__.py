@@ -28,6 +28,7 @@ from .hierarchy_director import (
 )
 from .metrics import DigitalMetricSummary, DigitalPrediction, summarize_predictions
 from .readout import (
+    LinearReadout,
     QueryConditionedMLPReadout,
     combined_readout_vector,
     decode_key_value_binding,
@@ -66,6 +67,7 @@ __all__ = [
     "HierarchicalDigitalDirector",
     "HierarchicalEpisodeResult",
     "KeyValueBindingBridge",
+    "LinearReadout",
     "QueryConditionedMLPReadout",
     "SymbolicInductionConfig",
     "SymbolicInductionExample",
