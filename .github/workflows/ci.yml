@@ -1,4 +1,5 @@
 name: Python + C++ CI
+# Retried after deferring Julia checks; this workflow currently validates C++ and Python only.
 
 on:
   workflow_dispatch:
