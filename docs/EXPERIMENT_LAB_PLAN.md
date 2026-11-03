@@ -1,6 +1,6 @@
 # Experiment Lab: Browser UI and Results Explorer
 
-Status: proposed implementation plan. The interface and API described here are not yet implemented.
+Status: initial local implementation delivered; QA2 configuration and F0 audit visibility are being added. Advanced run comparison and export remain follow-up work.
 
 ## Goal
 
@@ -179,3 +179,29 @@ Build the C++ shared library and install the Python runtime dependencies first. 
     PYTHONPATH=code/python GFE_CORE_LIB="code/c++ core/build-shared/libgfe_core.so" python -m d2c.experiment_lab.server
 
 Then open http://127.0.0.1:8765. The initial UI supports E0 and E-F0 bAbI runs, one active experiment at a time, basic progress/log display, per-seed accuracy chart/table, and saved run history. It is a first functional slice, not yet the complete plan: advanced run comparison, robust process recovery, richer metrics, and automated bundle export remain follow-up work.
+
+
+## QA2 validation profile (2026-11-03)
+
+The next F0 workload is bAbI Task 2 (Two Supporting Facts). The Experiment Lab
+defaults to QA2, E-F0, isolated mode, three seeds, dimension 64, five epochs,
+and the deterministic F0 spine audit enabled. E0 remains selectable for a
+matched baseline run. The API records whether the F0 spine audit was requested
+in each run's config and passes `--exercise-spine` only to the F0 runner.
+
+The results explorer displays per-seed audit evidence alongside accuracy:
+six-phase coverage, proposal-only kernel preservation, contiguous trace
+sampling, checkpoint round-trip, and stability violations. QA1 and QA3 remain
+available as neighbouring task controls. Continuous mode is intentionally
+separate from the primary isolated QA2 accuracy comparison.
+
+Protocol for the first QA2 pass:
+1. Run E0 and E-F0 on the same QA2 train/test split, dimension 64, seeds 0–2,
+   full kernel, linear readout, and five epochs.
+2. Require the F0 audit to pass independently for every seed.
+3. Report accuracy, per-seed results, uncertainty, answer-class count, runtime
+   diagnostics, and exact dataset/story counts.
+4. Inspect representative errors and whether they involve fact chaining,
+   distractor interference, entity binding, or answer-class imbalance.
+5. Do not claim F0 improves reasoning merely because the component audit passes.
+   Keep runtime ablation for a later, separately controlled experiment.
