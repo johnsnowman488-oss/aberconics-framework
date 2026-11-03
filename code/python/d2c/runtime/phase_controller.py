@@ -85,6 +85,27 @@ class DigitalPhaseController:
             )
         )
 
+    def begin_transient(self, phase: DigitalRuntimePhase, *, reason: str) -> None:
+        """Enter a transient phase for a synchronous runtime operation."""
+        if phase not in _TRANSIENT_PHASES:
+            raise ValueError("phase must be EVALUATE, PRUNE, or GROW")
+        if self.phase in _TRANSIENT_PHASES:
+            raise RuntimeError("cannot nest transient runtime phases")
+        self._resume_phase = self.phase
+        self._resume_phase_steps = self.phase_steps
+        self._transition(phase, reason)
+
+    def finish_transient(self, reason: str = "transient phase complete") -> None:
+        """Return from a transient phase without consuming a memory timestep."""
+        if self.phase not in _TRANSIENT_PHASES:
+            raise RuntimeError("no transient phase is active")
+        resume = self._resume_phase or DigitalRuntimePhase.EXPLORE
+        resume_steps = self._resume_phase_steps
+        self._resume_phase = None
+        self._resume_phase_steps = 0
+        self._transition(resume, reason)
+        self.phase_steps = resume_steps
+
     def request_maintenance(self, phase: str, *, reason: str) -> None:
         normalized = phase.upper()
         if normalized not in {"PRUNE", "GROW"}:
@@ -97,12 +118,7 @@ class DigitalPhaseController:
         self.phase_steps += 1
 
         if self.phase in _TRANSIENT_PHASES:
-            resume = self._resume_phase or DigitalRuntimePhase.EXPLORE
-            resume_steps = self._resume_phase_steps
-            self._resume_phase = None
-            self._resume_phase_steps = 0
-            self._transition(resume, "transient phase complete")
-            self.phase_steps = resume_steps
+            self.finish_transient("transient phase complete")
             return
 
         if self.phase == DigitalRuntimePhase.WARMUP:

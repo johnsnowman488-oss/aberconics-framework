@@ -217,3 +217,93 @@ def test_maintenance_requests_do_not_change_kernel_parameters() -> None:
         reset_memory=False,
     )
     assert runtime.memory_config.to_mapping() == before
+
+
+def test_evaluation_callback_runs_inside_phase_and_restores_runtime() -> None:
+    runtime = DigitalRuntime(
+        memory_config(),
+        state_dim=2,
+        config=DigitalRuntimeConfig(
+            phase=DigitalPhaseConfig(
+                warmup_steps=5,
+                explore_steps=20,
+                consolidate_steps=2,
+                evaluation_interval=0,
+            )
+        ),
+    )
+    observed = runtime.evaluate(
+        lambda: runtime.phase.value,
+        reason="unit test readout evaluation",
+    )
+    assert observed == "EVALUATE"
+    assert runtime.phase == DigitalRuntimePhase.WARMUP
+    assert runtime.phase_controller.events[-1].current == "WARMUP"
+
+
+def test_scheduled_evaluation_phase_is_consumed_without_nested_transition() -> None:
+    runtime = DigitalRuntime(
+        memory_config(),
+        state_dim=2,
+        config=DigitalRuntimeConfig(
+            phase=DigitalPhaseConfig(
+                warmup_steps=1,
+                explore_steps=20,
+                consolidate_steps=2,
+                evaluation_interval=2,
+            )
+        ),
+    )
+    runtime.step([1.0, 0.0])
+    runtime.step([0.0, 1.0])
+    assert runtime.phase == DigitalRuntimePhase.EVALUATE
+    observed = runtime.evaluate(lambda: runtime.phase.value)
+    assert observed == "EVALUATE"
+    assert runtime.phase == DigitalRuntimePhase.EVALUATE
+    runtime.step([0.0, 0.0])
+    assert runtime.phase == DigitalRuntimePhase.EXPLORE
+
+
+def test_negative_feedback_runtime_matches_stepper_and_passes_discrete_stability() -> None:
+    config = DigitalMemoryConfig(
+        gamma=[0.1, 0.5],
+        w=[0.001, 0.002],
+        dt=0.01,
+        leak_rate=1.0,
+        form="negative_feedback",
+    )
+    forcings = [[1.0, 0.0], [0.0, 0.5], [0.0, 0.0]]
+    expected = seed_memory_state(state_dim=2, channel_count=config.channel_count)
+    for forcing in forcings:
+        expected = step_memory(expected, forcing, config)
+
+    runtime = DigitalRuntime(config, state_dim=2)
+    for forcing in forcings:
+        runtime.step(forcing)
+    close_state(runtime.memory_state, expected)
+    assert runtime.stability_violations == 0
+
+
+def test_checkpoint_restores_runtime_configuration_and_monitor() -> None:
+    original = DigitalRuntime(
+        memory_config(),
+        state_dim=2,
+        config=DigitalRuntimeConfig(
+            trace_capacity=64,
+            prediction_error_alpha=0.25,
+            phase=DigitalPhaseConfig(
+                warmup_steps=3,
+                explore_steps=12,
+                consolidate_steps=3,
+                evaluation_interval=0,
+            ),
+        ),
+    )
+    original.run_episode(episode(), reset_memory=True)
+    snapshot = original.snapshot()
+    restored = DigitalRuntime(memory_config(), state_dim=2)
+    restored.restore(snapshot)
+    assert restored.config.trace_capacity == 64
+    assert restored.config.prediction_error_alpha == 0.25
+    assert restored.config.phase == original.config.phase
+    assert restored.monitor.stability_margin == original.monitor.stability_margin

@@ -94,25 +94,40 @@ class DigitalStabilityMonitor:
         numeric = [state.t, *state.u]
         numeric.extend(value for channel in state.chi for value in channel)
         finite = all(math.isfinite(float(value)) for value in numeric)
-        positive_kernel = all(rate > 0.0 for rate in config.gamma) and all(
+        config_finite = all(
+            math.isfinite(float(value))
+            for value in [config.dt, config.leak_rate, *config.gamma, *config.w]
+        )
+        positive_kernel = config_finite and all(rate > 0.0 for rate in config.gamma) and all(
             weight >= 0.0 for weight in config.w
         )
 
-        # Test the actual explicit-Euler amplification matrix. For the
-        # input-driven form the matrix is triangular; for negative feedback
-        # the coupling shifts eigenvalues, so per-rate dt checks alone are
-        # not a sufficient discrete-time stability test.
-        channel_count = config.channel_count
-        jacobian = np.zeros((channel_count + 1, channel_count + 1), dtype=np.float64)
-        jacobian[0, 0] = -config.leak_rate
-        for index, (weight, rate) in enumerate(zip(config.w, config.gamma), start=1):
-            jacobian[index, index] = -rate
-            jacobian[0, index] = weight if config.form == "input_driven" else -weight
-            if config.form == "negative_feedback":
-                jacobian[index, 0] = 1.0
-        amplification = np.eye(channel_count + 1) + config.dt * jacobian
-        eigenvalues = np.linalg.eigvals(amplification)
-        euler_stable = bool(np.all(np.isfinite(eigenvalues)) and np.max(np.abs(eigenvalues)) < 1.0)
+        # Form the exact discrete amplification matrix for step_memory().
+        # That step first updates chi, then computes memory feedback from
+        # chi_next, so a continuous-time Jacobian is not the exact map.
+        euler_stable = False
+        if positive_kernel:
+            channel_count = config.channel_count
+            dt = config.dt
+            amplification = np.zeros((channel_count + 1, channel_count + 1), dtype=np.float64)
+            amplification[0, 0] = 1.0 - dt * config.leak_rate
+            for index, (weight, rate) in enumerate(zip(config.w, config.gamma), start=1):
+                chi_decay = 1.0 - dt * rate
+                amplification[index, index] = chi_decay
+                if config.form == "input_driven":
+                    amplification[0, index] = dt * weight * chi_decay
+                else:
+                    amplification[index, 0] = dt
+                    amplification[0, index] = -dt * weight * chi_decay
+                    amplification[0, 0] -= (dt ** 2) * weight
+            try:
+                eigenvalues = np.linalg.eigvals(amplification)
+                euler_stable = bool(
+                    np.all(np.isfinite(eigenvalues))
+                    and np.max(np.abs(eigenvalues)) < 1.0
+                )
+            except np.linalg.LinAlgError:
+                euler_stable = False
         ratio = config.stability_ratio()
         margin_applicable = config.form == "negative_feedback"
         notes: list[str] = []
@@ -221,6 +236,32 @@ class DigitalRuntime:
         self.continuity_id += 1
         self.smoothed_prediction_error = 0.0
         self.last_prediction_error = None
+
+    def evaluate(self, callback, *, reason: str = "task evaluation"):
+        """Run an evaluator inside an explicit EVALUATE phase."""
+        self.phase_controller.begin_transient(DigitalRuntimePhase.EVALUATE, reason=reason)
+        try:
+            return callback()
+        finally:
+            self.phase_controller.finish_transient("evaluation callback completed")
+
+    def evaluate(self, callback, *, reason: str = "task evaluation"):
+        """Run an evaluator inside an explicit EVALUATE phase.
+
+        A scheduled EVALUATE phase may already be active at an event boundary.
+        In that case this callback consumes the scheduled phase rather than
+        trying to nest another transient phase.
+        """
+        already_evaluating = self.phase == DigitalRuntimePhase.EVALUATE
+        if self.phase in {DigitalRuntimePhase.PRUNE, DigitalRuntimePhase.GROW}:
+            raise RuntimeError("cannot run task evaluation during a maintenance phase")
+        if not already_evaluating:
+            self.phase_controller.begin_transient(DigitalRuntimePhase.EVALUATE, reason=reason)
+        try:
+            return callback()
+        finally:
+            if not already_evaluating:
+                self.phase_controller.finish_transient("evaluation callback completed")
 
     def request_prune(self, *, reason: str = "F0 maintenance review") -> None:
         """Schedule a non-mutating prune proposal phase; F4 owns actual pruning."""

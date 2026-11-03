@@ -34,7 +34,7 @@ the complete autonomous learning stack.
    new runtime can be compared with the existing E0 results. Three-factor
    proposals, learned critics, predictive-coding heads, composite objectives,
    and channel birth/death remain later stages.
-4. EVALUATE, PRUNE, and GROW are observable runtime phases. PRUNE/GROW do not
+4. The bAbI answer readout is called through `DigitalRuntime.evaluate`, so prediction is explicitly phase-accounted. EVALUATE can be entered by the scheduler or temporarily around a task callback. PRUNE and GROW are observable, non-mutating maintenance phases. PRUNE/GROW do not
    change the channel count; those mutations belong to F4.
 5. Prediction error in F0 is a transparent last-state predictor diagnostic.
    It is not presented as a trained predictive-coding head.
