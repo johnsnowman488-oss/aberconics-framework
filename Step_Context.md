@@ -579,3 +579,67 @@ filtering advantage requires distractors to manifest — bAbI QA1 has none.
    create interference — the slow channel's advantage should emerge there.
 3. Use the quick-sweep protocol (3 seeds, 5 epochs, lr=0.005) before any
    full 20-seed sweep.
+
+---
+
+## 2026-11-03 — E-F0: Runtime-integrated digital reasoning implementation
+
+### Scope delivered on the F0 feature branch
+
+- Added a digital runtime coordinator around the existing Python SOE stepper.
+- Added WARMUP, EXPLORE, CONSOLIDATE, EVALUATE, PRUNE and GROW scheduling.
+- Added bounded circular trace storage with session/continuity identifiers and
+  contiguous-window sampling that cannot cross memory resets.
+- Added stability checks distinguishing input-driven Form A and negative-feedback
+  Form B. The Form-B analytical margin is not applied to the input-driven bAbI kernel.
+- Added runtime summary and versioned state/phase checkpoint restore.
+- Added a bAbI F0 runner with isolated and continuous modes. The original
+  babi_qa.py remains the comparison baseline.
+- Added dataset-independent runtime, trace-store and bAbI integration tests.
+- Expanded CI to install NumPy explicitly, set PYTHONPATH, run CTest, Python and Julia.
+
+### Experimental controls
+
+- Isolated mode resets episodic state at story boundaries while runtime phase
+  history and counters persist.
+- Continuous mode carries episodic state between stories and is a separate stress test.
+- F0 keeps the SOE kernel fixed and retains supervised readout learning.
+  F1-F5 learning mechanisms are not silently activated.
+- PRUNE/GROW are proposal phases only; channel-count mutations remain F4.
+
+### Verification status
+
+Local source-tree execution was unavailable in this session because the sandbox
+could not resolve github.com for a git clone. The feature branch must therefore
+be validated by the configured GitHub Actions PR run. No CI result is claimed
+until a workflow run is observed.
+
+### Next decisions
+
+1. Require a green C++/Python/Julia CI run before merging.
+2. Run matched E0-vs-F0 bAbI comparisons on QA1 at dimensions 64 and 150,
+   preserving identical seeds, readout, learning rate and train/test ordering.
+3. Progress to QA2/QA3 only after numerical equivalence and matched QA1 runs.
+4. Keep persistent cross-story tests separate from independent-story accuracy claims.
+
+### E-F0 reproducibility addition
+
+The repository does not track the bAbI dataset files. Added
+`code/python/d2c/digital/download_babi.py` to download and validate the
+train/test/valid JSONL splits from the recorded Hugging Face mirror. The
+downloader uses temporary files and atomic replacement; tests mock the network
+so CI does not depend on the external dataset host.
+
+### Verification handoff — 2026-11-03
+
+- The feature branch is maintained in PR #1; the original E0 runner remains in
+  place and the F0 runner is under `code/python/d2c/experiments/`.
+- The sandbox could not clone the repository because it could not resolve
+  `github.com`; no local pytest result is claimed.
+- GitHub's workflow-run and commit-status endpoints returned zero runs/checks
+  for the latest PR head despite subsequent PR synchronisations. The workflow
+  definition is present and includes `pull_request` plus `workflow_dispatch`.
+  A repository-admin check of Actions enablement is required before the PR can
+  be treated as CI-validated.
+- Do not merge on the basis of these code additions alone. Require the full
+  C++/Python/Julia workflow to complete successfully first.
