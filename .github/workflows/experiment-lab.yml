@@ -1,4 +1,4 @@
-name: E0 and E-F0 Experiment Lab Benchmark
+name: E0 and E-F0 QA2 Benchmark
 # Explicit benchmark workflow; separate from fast PR CI.
 
 on:
@@ -7,7 +7,7 @@ on:
       task:
         description: bAbI task number
         required: true
-        default: "1"
+        default: "2"
       dim:
         description: Memory dimension
         required: true
@@ -96,7 +96,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: babi-e0-ef0-f0-spine-results
+          name: babi-qa2-e0-ef0-f0-spine-results
           path: |
             runs/experiment-lab/
             code/python/d2c/progress/babi_data/
