@@ -238,14 +238,6 @@ class DigitalRuntime:
         self.last_prediction_error = None
 
     def evaluate(self, callback, *, reason: str = "task evaluation"):
-        """Run an evaluator inside an explicit EVALUATE phase."""
-        self.phase_controller.begin_transient(DigitalRuntimePhase.EVALUATE, reason=reason)
-        try:
-            return callback()
-        finally:
-            self.phase_controller.finish_transient("evaluation callback completed")
-
-    def evaluate(self, callback, *, reason: str = "task evaluation"):
         """Run an evaluator inside an explicit EVALUATE phase.
 
         A scheduled EVALUATE phase may already be active at an event boundary.

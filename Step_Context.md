@@ -629,3 +629,17 @@ The repository does not track the bAbI dataset files. Added
 train/test/valid JSONL splits from the recorded Hugging Face mirror. The
 downloader uses temporary files and atomic replacement; tests mock the network
 so CI does not depend on the external dataset host.
+
+### Verification handoff — 2026-11-03
+
+- The feature branch is maintained in PR #1; the original E0 runner remains in
+  place and the F0 runner is under `code/python/d2c/experiments/`.
+- The sandbox could not clone the repository because it could not resolve
+  `github.com`; no local pytest result is claimed.
+- GitHub's workflow-run and commit-status endpoints returned zero runs/checks
+  for the latest PR head despite subsequent PR synchronisations. The workflow
+  definition is present and includes `pull_request` plus `workflow_dispatch`.
+  A repository-admin check of Actions enablement is required before the PR can
+  be treated as CI-validated.
+- Do not merge on the basis of these code additions alone. Require the full
+  C++/Python/Julia workflow to complete successfully first.
