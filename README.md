@@ -157,3 +157,14 @@ preserving runtime phase history. Continuous mode carries story memory across
 boundaries and is a separate interference stress test, not an independent-story
 benchmark score. F0 freezes the SOE kernel; PRUNE/GROW are proposal phases only.
 See docs/F0_RUNTIME_INTEGRATION.md for controls and run commands.
+
+For a fresh checkout, retrieve the bAbI dataset before running either bAbI
+experiment:
+
+```bash
+PYTHONPATH=code/python python -m d2c.digital.download_babi
+PYTHONPATH=code/python python -m d2c.experiments.babi_f0 --quick
+```
+
+The downloader validates all JSONL splits and reuses valid files unless
+`--force` is supplied.

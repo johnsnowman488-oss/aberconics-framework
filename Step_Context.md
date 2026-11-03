@@ -621,3 +621,11 @@ until a workflow run is observed.
    preserving identical seeds, readout, learning rate and train/test ordering.
 3. Progress to QA2/QA3 only after numerical equivalence and matched QA1 runs.
 4. Keep persistent cross-story tests separate from independent-story accuracy claims.
+
+### E-F0 reproducibility addition
+
+The repository does not track the bAbI dataset files. Added
+`code/python/d2c/digital/download_babi.py` to download and validate the
+train/test/valid JSONL splits from the recorded Hugging Face mirror. The
+downloader uses temporary files and atomic replacement; tests mock the network
+so CI does not depend on the external dataset host.

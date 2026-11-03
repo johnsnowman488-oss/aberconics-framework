@@ -53,7 +53,13 @@ margin is not incorrectly used as the stability gate for input-driven runs.
 
 ## Run
 
-With the bAbI JSONL splits already available:
+A fresh checkout does not include the dataset files. Download and validate the three JSONL splits first:
+
+    PYTHONPATH=code/python python -m d2c.digital.download_babi
+
+Existing valid files are reused; pass `--force` to replace them. The downloader validates JSONL structure before atomically installing each split.
+
+With the bAbI JSONL splits available:
 
     PYTHONPATH=code/python python -m d2c.experiments.babi_f0 --quick
     PYTHONPATH=code/python python -m d2c.experiments.babi_f0 --task 2 --dim 64 --seeds 20
