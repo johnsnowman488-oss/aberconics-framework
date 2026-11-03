@@ -59,15 +59,20 @@ class Handler(BaseHTTPRequestHandler):
             with LOCK:
                 if ACTIVE and ACTIVE.poll() is None: return self.send(409,{"error":"another experiment is running"})
                 try:
-                    exp=data.get("experiment"); mode=data.get("mode","isolated"); task=int(data.get("task",1)); dim=int(data.get("dim",64)); seeds=int(data.get("seeds",3)); epochs=int(data.get("epochs",5))
+                    exp=data.get("experiment"); mode=data.get("mode","isolated"); task=int(data.get("task",2)); dim=int(data.get("dim",64)); seeds=int(data.get("seeds",3)); epochs=int(data.get("epochs",5))
+                    exercise_spine=data.get("exercise_spine",True)
                 except (TypeError,ValueError): return self.send(400,{"error":"numeric settings are invalid"})
+                if not isinstance(exercise_spine,bool):
+                    return self.send(400,{"error":"exercise_spine must be boolean"})
                 if exp not in {"e0","ef0"} or mode not in {"isolated","continuous"} or (exp=="e0" and mode!="isolated") or not (1<=task<=20 and 4<=dim<=512 and 1<=seeds<=100 and 1<=epochs<=100):
                     return self.send(400,{"error":"invalid experiment configuration"})
                 rid=str(uuid.uuid4()); directory=RUNS/rid; directory.mkdir(parents=True)
                 module="d2c.experiments.babi_qa" if exp=="e0" else "d2c.experiments.babi_f0"
                 args=[sys.executable,"-m",module,"--task",str(task),"--dim",str(dim),"--seeds",str(seeds),"--output-dir",str(directory),"--variant","full","--readout","linear"]
-                if exp=="ef0": args += ["--epochs",str(epochs),"--mode",mode]
-                cfg={"experiment":exp,"task":task,"dim":dim,"seeds":seeds,"epochs":epochs,"mode":mode,"variant":"full","readout":"linear"}
+                if exp=="ef0":
+                    args += ["--epochs",str(epochs),"--mode",mode]
+                    if exercise_spine: args.append("--exercise-spine")
+                cfg={"experiment":exp,"task":task,"dim":dim,"seeds":seeds,"epochs":epochs,"mode":mode,"variant":"full","readout":"linear","exercise_spine":bool(exercise_spine and exp=="ef0")}
                 (directory/"config.json").write_text(json.dumps(cfg,indent=2))
                 job={"run_id":rid,"experiment":exp,"config":cfg,"status":"running","created_at":utc(),"directory":str(directory),"command":args}
                 (directory/"metadata.json").write_text(json.dumps(public_job(job),indent=2))
