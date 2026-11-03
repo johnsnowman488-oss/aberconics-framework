@@ -27,7 +27,7 @@ jobs:
     env:
       PYTHONPATH: ${{ github.workspace }}/code/python
       GFE_CORE_LIB: ${{ github.workspace }}/code/c++ core/build-shared/libgfe_core.so
-      TASK: ${{ github.event.inputs.task || '1' }}
+      TASK: ${{ github.event.inputs.task || '2' }}
       DIM: ${{ github.event.inputs.dim || '64' }}
       SEEDS: ${{ github.event.inputs.seeds || '3' }}
     steps:
