@@ -1,0 +1,103 @@
+name: E0 and E-F0 Experiment Lab Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: bAbI task number
+        required: true
+        default: "1"
+      dim:
+        description: Memory dimension
+        required: true
+        default: "64"
+      seeds:
+        description: Number of matched seeds
+        required: true
+        default: "3"
+  push:
+    paths:
+      - ".github/workflows/experiment-lab.yml"
+
+jobs:
+  babi-comparison:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PYTHONPATH: ${{ github.workspace }}/code/python
+      GFE_CORE_LIB: ${{ github.workspace }}/code/c++ core/build-shared/libgfe_core.so
+      TASK: ${{ github.event.inputs.task || '1' }}
+      DIM: ${{ github.event.inputs.dim || '64' }}
+      SEEDS: ${{ github.event.inputs.seeds || '3' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build C++ core
+        run: |
+          cmake -S "code/c++ core" -B "code/c++ core/build-shared" -DBUILD_SHARED_LIBS=ON
+          cmake --build "code/c++ core/build-shared" -j
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy matplotlib
+      - name: Download and validate bAbI dataset
+        run: python -m d2c.digital.download_babi
+      - name: Run E0 baseline
+        run: |
+          mkdir -p runs/experiment-lab/e0
+          python -m d2c.experiments.babi_qa --task "$TASK" --variant full --dim "$DIM" --seeds "$SEEDS" --readout linear --output-dir runs/experiment-lab/e0
+      - name: Run E-F0 isolated runtime
+        run: |
+          mkdir -p runs/experiment-lab/ef0
+          python -m d2c.experiments.babi_f0 --task "$TASK" --variant full --dim "$DIM" --seeds "$SEEDS" --readout linear --mode isolated --epochs 5 --output-dir runs/experiment-lab/ef0
+      - name: Assemble comparison report
+        if: always()
+        run: |
+          python - <<'PY'
+          import csv, json, pathlib, statistics
+          root = pathlib.Path("runs/experiment-lab")
+          rows = []
+          for name in ("e0", "ef0"):
+              files = list((root / name).glob("*/summary.json"))
+              if not files:
+                  rows.append({"experiment": name, "status": "no summary produced"})
+                  continue
+              result = json.loads(files[0].read_text())
+              seeds = result.get("seed_results", [])
+              acc = [float(x["accuracy"]) for x in seeds]
+              rows.append({
+                  "experiment": name,
+                  "mean_accuracy": result.get("mean_accuracy", result.get("mean_accuracy")),
+                  "standard_error": result.get("standard_error", result.get("se_accuracy")),
+                  "train_stories": result.get("train_stories"),
+                  "test_stories": result.get("test_stories"),
+                  "per_seed_accuracy": acc,
+                  "summary_file": str(files[0])
+              })
+          (root / "comparison.json").write_text(json.dumps({
+              "protocol": {"task": int(__import__("os").environ["TASK"]), "dim": int(__import__("os").environ["DIM"]), "seeds": int(__import__("os").environ["SEEDS"]), "mode": "isolated", "readout": "linear", "epochs": 5},
+              "results": rows
+          }, indent=2))
+          with (root / "comparison.csv").open("w", newline="") as f:
+              w = csv.writer(f); w.writerow(["experiment","seed","accuracy","correct","total"])
+              for name in ("e0","ef0"):
+                  files=list((root/name).glob("*/summary.json"))
+                  if files:
+                      for s in json.loads(files[0].read_text()).get("seed_results",[]):
+                          w.writerow([name,s.get("seed"),s.get("accuracy"),s.get("correct"),s.get("total")])
+          print((root / "comparison.json").read_text())
+          PY
+      - name: Upload experiment result bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: babi-e0-ef0-results
+          path: |
+            runs/experiment-lab/
+            code/python/d2c/progress/babi_data/
+          if-no-files-found: warn
+          retention-days: 30
