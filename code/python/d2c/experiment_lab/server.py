@@ -46,8 +46,8 @@ class Handler(BaseHTTPRequestHandler):
                 p=Path(job["directory"])/"stdout.log"; q=Path(job["directory"])/"stderr.log"
                 return self.send(200,{"stdout":p.read_text(errors="replace")[-12000:] if p.exists() else "","stderr":q.read_text(errors="replace")[-12000:] if q.exists() else ""})
             if m.group(2)=="results":
-                p=Path(job["directory"])/"summary.json"
-                return self.send(200,json.loads(p.read_text()) if p.exists() else {"pending":True})
+                matches=list(Path(job["directory"]).glob("**/summary.json"))
+                return self.send(200,json.loads(matches[0].read_text()) if matches else {"pending":True})
             return self.send(200,public_job(job))
         return self.send(404,{"error":"not found"})
     def do_POST(self):
