@@ -1,4 +1,4 @@
-name: Julia + Python + C++ CI
+name: Python + C++ CI
 
 on:
   workflow_dispatch:
@@ -24,11 +24,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Setup Julia
-        uses: julia-actions/setup-julia@v2
-        with:
-          version: '1.12'
-
       - name: Build shared C++ core
         run: |
           cmake -S "code/c++ core" -B "code/c++ core/build-shared" -DBUILD_SHARED_LIBS=ON
@@ -43,10 +38,3 @@ jobs:
           python -m pip install numpy pytest matplotlib
           pytest -q code/python/tests
 
-      - name: Install Julia dependencies
-        working-directory: code/julia
-        run: julia --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'
-
-      - name: Run Julia tests
-        working-directory: code/julia
-        run: julia --project=. src/test/runtests.jl
