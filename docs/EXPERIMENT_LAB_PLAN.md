@@ -168,3 +168,14 @@ For a later integration, allow the user to publish a run bundle as a GitHub Acti
 5. The LLM returns an analysis tied to the run ID and code revision, not a free-floating claim.
 
 Do not give the LLM an unrestricted endpoint to start arbitrary commands. If remote run triggering is added later, it must use the same allow-listed experiment registry, validated parameter schema, and explicit user authorization.
+
+## Local startup (initial implementation)
+
+Build the C++ shared library and install the Python runtime dependencies first. From the repository root:
+
+    PYTHONPATH=code/python python -m d2c.digital.download_babi
+    cmake -S "code/c++ core" -B "code/c++ core/build-shared" -DBUILD_SHARED_LIBS=ON
+    cmake --build "code/c++ core/build-shared" -j
+    PYTHONPATH=code/python GFE_CORE_LIB="code/c++ core/build-shared/libgfe_core.so" python -m d2c.experiment_lab.server
+
+Then open http://127.0.0.1:8765. The initial UI supports E0 and E-F0 bAbI runs, one active experiment at a time, basic progress/log display, per-seed accuracy chart/table, and saved run history. It is a first functional slice, not yet the complete plan: advanced run comparison, robust process recovery, richer metrics, and automated bundle export remain follow-up work.
