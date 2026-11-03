@@ -54,7 +54,7 @@ jobs:
       - name: Run E-F0 isolated runtime
         run: |
           mkdir -p runs/experiment-lab/ef0
-          python -m d2c.experiments.babi_f0 --task "$TASK" --variant full --dim "$DIM" --seeds "$SEEDS" --readout linear --mode isolated --epochs 5 --output-dir runs/experiment-lab/ef0
+          python -m d2c.experiments.babi_f0 --task "$TASK" --variant full --dim "$DIM" --seeds "$SEEDS" --readout linear --mode isolated --epochs 5 --exercise-spine --output-dir runs/experiment-lab/ef0
       - name: Assemble comparison report
         if: always()
         run: |
@@ -96,7 +96,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: babi-e0-ef0-results
+          name: babi-e0-ef0-f0-spine-results
           path: |
             runs/experiment-lab/
             code/python/d2c/progress/babi_data/
