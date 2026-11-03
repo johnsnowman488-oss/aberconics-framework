@@ -76,7 +76,10 @@ create tiny JSONL fixtures and test the runtime, phase transitions, checkpoint
 restore, ring-buffer windows, formulation-aware stability checks, and bAbI
 training/evaluation execution.
 
-The repository GitHub Actions workflow builds the C++ shared library, runs
-the full Python test suite, and runs Julia tests on pull requests to main.
-Those CI checks are the authoritative integration check where the source
-cannot be cloned into a local sandbox.
+The repository GitHub Actions workflow (`Python + C++ CI`) builds the C++
+shared library, runs the C++ test suite, and runs the full Python test suite.
+Julia checks are intentionally deferred and are not part of the current CI
+gate. These CI checks validate implementation and integration behavior; they
+do not constitute a bAbI benchmark run or report task accuracy. Benchmark
+results must be produced by explicitly running an experiment and preserving
+its configuration, logs, and result files.
