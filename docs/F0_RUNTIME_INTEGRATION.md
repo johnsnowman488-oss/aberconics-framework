@@ -21,7 +21,7 @@ the complete autonomous learning stack.
   PRUNE, and GROW scheduling.
 - runtime/digital_trace_store.py: bounded circular storage and contiguous
   windows that cannot cross a memory reset or session boundary.
-- experiments/babi_f0.py: bAbI runner using the new runtime.
+- experiments/babi_f0.py: bAbI runner using the new runtime; `--exercise-spine` runs a deterministic component audit separately from scored bAbI episodes.
 - experiments/babi_qa.py: preserved original E0 baseline.
 
 ## Important experimental controls
@@ -36,7 +36,8 @@ the complete autonomous learning stack.
    and channel birth/death remain later stages.
 4. The bAbI answer readout is called through `DigitalRuntime.evaluate`, so prediction is explicitly phase-accounted. EVALUATE can be entered by the scheduler or temporarily around a task callback. PRUNE and GROW are observable, non-mutating maintenance phases. PRUNE/GROW do not
    change the channel count; those mutations belong to F4.
-5. Prediction error in F0 is a transparent last-state predictor diagnostic.
+5. The optional spine audit is separate from model training and held-out scoring. For each seed it explicitly exercises all six phases, verifies proposal-only maintenance leaves the kernel unchanged, samples a continuity-safe trace window after a memory reset, round-trips a checkpoint, and checks deterministic continuation. Its component evidence is stored under each seed's `spine_exercise` field.
+6. Prediction error in F0 is a transparent last-state predictor diagnostic.
    It is not presented as a trained predictive-coding head.
 
 ## Numerical and stability contract
@@ -62,6 +63,7 @@ Existing valid files are reused; pass `--force` to replace them. The downloader 
 With the bAbI JSONL splits available:
 
     PYTHONPATH=code/python python -m d2c.experiments.babi_f0 --quick
+    PYTHONPATH=code/python python -m d2c.experiments.babi_f0 --task 1 --dim 64 --seeds 3 --epochs 5 --mode isolated --exercise-spine
     PYTHONPATH=code/python python -m d2c.experiments.babi_f0 --task 2 --dim 64 --seeds 20
     PYTHONPATH=code/python python -m d2c.experiments.babi_f0 --task 3 --mode continuous
 
