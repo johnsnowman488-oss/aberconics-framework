@@ -643,3 +643,48 @@ so CI does not depend on the external dataset host.
   be treated as CI-validated.
 - Do not merge on the basis of these code additions alone. Require the full
   C++/Python/Julia workflow to complete successfully first.
+
+
+---
+
+## 2026-11-03 — QA2 (Two Supporting Facts) selected; Experiment Lab updated
+
+### Why QA2
+
+The next workload is bAbI Task 2, Two Supporting Facts. Unlike QA1's
+single-supporting-fact retrieval, QA2 requires linking two relevant facts in
+a story that can contain intervening statements. It is the next natural
+reasoning step before QA3's three supporting facts.
+
+### Experiment protocol
+
+- Primary comparison: E0 baseline vs E-F0 runtime-integrated.
+- Task: QA2; full SOE kernel; dimension 64; seeds 0, 1, 2; five epochs;
+  linear readout; isolated story protocol.
+- E-F0 deterministic spine audit enabled for every seed, separate from
+  scored QA2 episodes.
+- Continuous mode remains a separate stress test, not mixed into the
+  independent-story accuracy result.
+- No runtime ablation and no F1-F5 activation in this pass.
+
+### Experiment Lab updates
+
+- Task selector now names QA1, QA2, QA3, QA5, QA6, QA11 and QA14.
+- QA2 is the default selected task; E-F0 is the default experiment.
+- F0 spine audit control is exposed in the UI and passed safely through the
+  allow-listed local API.
+- Results explorer now shows per-seed six-phase coverage, kernel-preservation,
+  trace-window, checkpoint-restore and stability evidence.
+- GitHub benchmark workflow default changed to task 2 and artifact name
+  identifies QA2 results.
+
+### Interpretation gates
+
+1. Verify matching E0/E-F0 task, splits, dimensions, seeds, readout and epochs.
+2. Verify every F0 audit passes independently of QA2 accuracy.
+3. Report accuracy and uncertainty, per-seed outcomes, class counts and
+   runtime/stability diagnostics.
+4. Inspect failure examples for broken two-fact chains, distractor interference,
+   entity binding and answer-class imbalance.
+5. Do not interpret a component audit pass as evidence of a reasoning gain.
+   Runtime ablation remains a later stage.
