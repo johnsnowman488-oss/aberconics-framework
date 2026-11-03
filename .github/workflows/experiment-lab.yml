@@ -1,4 +1,5 @@
 name: E0 and E-F0 Experiment Lab Benchmark
+# Explicit benchmark workflow; separate from fast PR CI.
 
 on:
   workflow_dispatch:
