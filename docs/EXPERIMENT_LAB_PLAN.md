@@ -153,3 +153,18 @@ Add later experiments through the same registry and result contract. Add charts 
 1. Inspect the E0 and E-F0 runner CLIs and agree on the first parameter contract.
 2. Define and test the versioned result bundle.
 3. Implement Phase A before charts, so the UI and LLM analysis consume the same trustworthy data.
+## LLM analysis handoff
+
+Local files are not automatically visible to a remote LLM or GitHub-connected analysis session. Therefore every completed run should have an explicit export/share action that creates a compact analysis bundle containing metadata.json, metrics.json, per_seed.csv, summary.md, and selected logs. Keep large datasets and bulky traces out of the bundle unless specifically requested.
+
+For a later integration, allow the user to publish a run bundle as a GitHub Actions artifact or attach it to a GitHub release/issue after explicit confirmation. The UI should display the resulting artifact or repository link. An LLM can then inspect the same immutable bundle that the researcher sees in the dashboard. Local-only runs remain private until the user chooses to share them.
+
+## LLM analysis workflow
+
+1. The researcher selects and runs an experiment in the browser.
+2. The service saves the complete result bundle and displays the charts/tables.
+3. The researcher exports or explicitly publishes the bundle.
+4. An LLM reads the metadata, metrics, per-seed table, and logs; it checks protocol comparability before interpreting results.
+5. The LLM returns an analysis tied to the run ID and code revision, not a free-floating claim.
+
+Do not give the LLM an unrestricted endpoint to start arbitrary commands. If remote run triggering is added later, it must use the same allow-listed experiment registry, validated parameter schema, and explicit user authorization.
