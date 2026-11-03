@@ -52,6 +52,7 @@ class BabiF0Config:
     mode: Literal["isolated", "continuous"] = "isolated"
     silence_steps_between_statements: int = 0
     runtime: DigitalRuntimeConfig = field(default_factory=DigitalRuntimeConfig)
+    exercise_spine: bool = False
 
     def __post_init__(self) -> None:
         if self.task <= 0 or self.dim <= 0 or self.seeds <= 0 or self.epochs <= 0:
@@ -73,6 +74,166 @@ def _make_runtime(config: BabiF0Config, memory_config, *, session_id: str) -> Di
         config=config.runtime,
         session_id=session_id,
     )
+
+
+def exercise_f0_spine(
+    config: BabiF0Config,
+    memory_config,
+    *,
+    seed: int = 0,
+) -> dict[str, object]:
+    """Exercise every F0 runtime component without touching benchmark readouts."""
+    runtime = _make_runtime(
+        config, memory_config, session_id=f"f0-spine-audit-seed{seed}"
+    )
+    kernel_before = runtime.memory_config.to_mapping()
+    audit_step = 0
+
+    def advance() -> str:
+        nonlocal audit_step
+        forcing = [0.0] * config.dim
+        forcing[(audit_step * 7 + seed) % config.dim] = 0.25
+        record = runtime.step(
+            forcing,
+            token=f"spine-audit-{audit_step}",
+            episode_id=f"spine-audit-seed{seed}",
+            metadata={"audit": "f0_spine"},
+        )
+        audit_step += 1
+        return record.phase
+
+    # Exercise the configured WARMUP path before scheduling maintenance.
+    while runtime.phase.value != "EXPLORE":
+        advance()
+
+    runtime.request_prune(reason="F0 audit: non-mutating prune proposal")
+    advance()
+    if runtime.phase.value != "PRUNE":
+        raise AssertionError("PRUNE proposal was not scheduled from EXPLORE")
+    if advance() != "PRUNE" or runtime.phase.value != "EXPLORE":
+        raise AssertionError("PRUNE proposal did not execute and resume EXPLORE")
+
+    runtime.request_grow(reason="F0 audit: non-mutating grow proposal")
+    advance()
+    if runtime.phase.value != "GROW":
+        raise AssertionError("GROW proposal was not scheduled from EXPLORE")
+    if advance() != "GROW" or runtime.phase.value != "EXPLORE":
+        raise AssertionError("GROW proposal did not execute and resume EXPLORE")
+
+    phase_config = config.runtime.phase
+    required_counts = {
+        "WARMUP": max(1, phase_config.warmup_steps),
+        "EXPLORE": phase_config.explore_steps,
+        "CONSOLIDATE": phase_config.consolidate_steps,
+    }
+    while any(
+        runtime.phase_counts.get(name, 0) < required
+        for name, required in required_counts.items()
+    ):
+        advance()
+
+    evaluated_phase = runtime.evaluate(
+        lambda: runtime.phase.value,
+        reason="F0 audit: evaluator callback",
+    )
+    if evaluated_phase != "EVALUATE":
+        raise AssertionError("evaluation callback did not execute in EVALUATE")
+    while runtime.phase.value in {"EVALUATE", "PRUNE", "GROW"}:
+        advance()
+
+    # The audit makes an explicit reset and samples only from its new
+    # continuity segment; the circular store retains earlier segments too.
+    runtime.reset_memory()
+    for _ in range(3):
+        advance()
+    windows = runtime.trace_store.build_windows(
+        3,
+        session_id=runtime.session_id,
+        continuity_id=runtime.continuity_id,
+    )
+    if not windows:
+        raise AssertionError("no continuity-valid trace window was produced")
+    sampled = runtime.trace_store.sample_contiguous(
+        3,
+        seed=seed,
+        session_id=runtime.session_id,
+        continuity_id=runtime.continuity_id,
+    )
+    sampled_steps = [row.step_index for row in sampled.records]
+    if len({row.continuity_id for row in sampled.records}) != 1:
+        raise AssertionError("sample crossed a memory-reset continuity boundary")
+    if sampled_steps != list(range(sampled_steps[0], sampled_steps[0] + 3)):
+        raise AssertionError("sampled trace window is not step-contiguous")
+
+    while runtime.phase.value in {"EVALUATE", "PRUNE", "GROW"}:
+        advance()
+    checkpoint = runtime.snapshot()
+    restored = _make_runtime(
+        config, memory_config, session_id=f"f0-spine-restore-seed{seed}"
+    )
+    restored.restore(checkpoint)
+    if restored.snapshot() != checkpoint:
+        raise AssertionError("checkpoint restore did not reproduce runtime state")
+
+    continuation_forcing = [0.0] * config.dim
+    continuation_forcing[(audit_step * 7 + seed) % config.dim] = 0.25
+    for candidate in (runtime, restored):
+        candidate.step(
+            continuation_forcing,
+            token="checkpoint-continuation",
+            episode_id=f"spine-audit-seed{seed}",
+        )
+    if runtime.memory_state.to_mapping() != restored.memory_state.to_mapping():
+        raise AssertionError("restored runtime diverged on deterministic continuation")
+    if runtime.phase_counts != restored.phase_counts or runtime.step_count != restored.step_count:
+        raise AssertionError("restored runtime counters diverged on continuation")
+
+    kernel_unchanged = runtime.memory_config.to_mapping() == kernel_before
+    if not kernel_unchanged:
+        raise AssertionError("F0 maintenance audit mutated the SOE kernel")
+    observed_phases = set(runtime.phase_counts)
+    for event in runtime.phase_controller.events:
+        observed_phases.update((event.previous, event.current))
+    required_phases = {"WARMUP", "EXPLORE", "CONSOLIDATE", "EVALUATE", "PRUNE", "GROW"}
+    missing = sorted(required_phases - observed_phases)
+    if missing:
+        raise AssertionError(f"F0 spine audit missed phases: {missing}")
+
+    return {
+        "status": "passed",
+        "seed": seed,
+        "phase_coverage": {name: name in observed_phases for name in sorted(required_phases)},
+        "phase_step_counts": dict(runtime.phase_counts),
+        "phase_events": [event.to_mapping() for event in runtime.phase_controller.events],
+        "maintenance": {
+            "prune_proposal_steps": runtime.phase_counts.get("PRUNE", 0),
+            "grow_proposal_steps": runtime.phase_counts.get("GROW", 0),
+            "kernel_unchanged": kernel_unchanged,
+            "kernel_mutation_enabled": False,
+        },
+        "evaluation": {"callback_phase": evaluated_phase},
+        "trace_store": {
+            "capacity": runtime.trace_store.capacity,
+            "records_retained": len(runtime.trace_store),
+            "continuity_id_sampled": sampled.records[0].continuity_id,
+            "window_count_in_current_continuity": len(windows),
+            "sampled_start_step": sampled.start_step,
+            "sampled_end_step": sampled.end_step,
+            "sample_is_contiguous": True,
+        },
+        "checkpoint_restore": {
+            "schema_version": checkpoint["schema_version"],
+            "snapshot_round_trip_equal": True,
+            "deterministic_continuation_equal": True,
+            "trace_history_is_separate": True,
+        },
+        "diagnostics": {
+            "prediction_error_samples": runtime.step_count,
+            "last_prediction_error": runtime.last_prediction_error,
+            "stability_checks": runtime.stability_checks,
+            "stability_violations": runtime.stability_violations,
+        },
+    }
 
 
 def run_babi_f0_experiment(
@@ -199,8 +360,13 @@ def run_babi_f0_experiment(
             })
 
         total = len(test_dataset.stories)
+        spine_exercise = (
+            exercise_f0_spine(config, memory_config, seed=seed)
+            if config.exercise_spine else None
+        )
         seed_results.append({
             "seed": seed,
+            "spine_exercise": spine_exercise,
             "correct": correct,
             "total": total,
             "accuracy": correct / total if total else 0.0,
@@ -277,6 +443,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--consolidate-steps", type=int, default=8)
     parser.add_argument("--evaluate-every", type=int, default=128)
     parser.add_argument("--trace-capacity", type=int, default=20_000)
+    parser.add_argument("--exercise-spine", action="store_true", help="run the deterministic all-component F0 spine audit for each seed")
     return parser
 
 
@@ -302,6 +469,7 @@ def main(argv: list[str] | None = None) -> dict[str, str]:
         mode=args.mode,
         silence_steps_between_statements=args.silence_steps,
         runtime=runtime_config,
+        exercise_spine=args.exercise_spine,
     )
     result = run_babi_f0_experiment(
         config,
@@ -315,6 +483,9 @@ def main(argv: list[str] | None = None) -> dict[str, str]:
         f"mode={result['mode']}"
     )
     print(f"accuracy={result['mean_accuracy']:.3f} +/- {result['standard_error']:.3f}")
+    if args.exercise_spine:
+        passed = all(row["spine_exercise"]["status"] == "passed" for row in result["seed_results"])
+        print(f"f0_spine_exercise={'passed' if passed else 'failed'} seeds={len(result['seed_results'])}")
     for row in result["seed_results"]:
         print(
             f"seed={row['seed']} accuracy={row['accuracy']:.3f} "
