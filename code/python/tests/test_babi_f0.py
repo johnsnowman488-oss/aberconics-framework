@@ -94,3 +94,59 @@ def test_continuous_mode_keeps_one_test_memory_continuity(tmp_path) -> None:
     test_runtime = result["seed_results"][0]["test_runtime"]
     assert test_runtime["episode_count"] == 2
     assert test_runtime["continuity_id"] == 0
+
+
+def test_isolated_f0_runner_reproduces_legacy_e0_accuracy_on_same_fixture(tmp_path) -> None:
+    """F0 orchestration must not change the frozen E0 numerical baseline."""
+    from d2c.experiments.babi_qa import BabiQAConfig, run_babi_qa_experiment
+
+    train = [
+        {"passage": "Mary moved to the kitchen.\\n", "question": "Where is Mary?", "answer": "kitchen", "task": 1},
+        {"passage": "John moved to the hallway.\\n", "question": "Where is John?", "answer": "hallway", "task": 1},
+        {"passage": "Mary moved to the garden.\\n", "question": "Where is Mary?", "answer": "garden", "task": 1},
+        {"passage": "John moved to the office.\\n", "question": "Where is John?", "answer": "office", "task": 1},
+    ]
+    test = [
+        {"passage": "Mary moved to the garden.\\n", "question": "Where is Mary?", "answer": "garden", "task": 1},
+        {"passage": "John moved to the hallway.\\n", "question": "Where is John?", "answer": "hallway", "task": 1},
+    ]
+    write_split(tmp_path / "babi_train.jsonl", train)
+    write_split(tmp_path / "babi_test.jsonl", test)
+
+    baseline = run_babi_qa_experiment(
+        BabiQAConfig(
+            task=1,
+            variant="full",
+            dim=8,
+            seeds=1,
+            learning_rate=0.001,
+            readout_type="linear",
+        ),
+        data_dir=tmp_path,
+        quick=True,
+    )
+    f0 = run_babi_f0_experiment(
+        BabiF0Config(
+            task=1,
+            variant="full",
+            dim=8,
+            seeds=1,
+            epochs=5,
+            learning_rate=0.001,
+            readout_type="linear",
+            mode="isolated",
+            runtime=DigitalRuntimeConfig(
+                trace_capacity=64,
+                phase=DigitalPhaseConfig(
+                    warmup_steps=2,
+                    explore_steps=4,
+                    consolidate_steps=2,
+                    evaluation_interval=8,
+                ),
+            ),
+        ),
+        data_dir=tmp_path,
+        quick=True,
+    )
+    assert f0["mean_accuracy"] == baseline["mean_accuracy"]
+    assert f0["seed_results"][0]["correct"] == baseline["seed_results"][0]["correct"]

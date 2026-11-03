@@ -12,6 +12,8 @@ from dataclasses import asdict, dataclass, field
 import math
 from typing import Mapping, Sequence
 
+import numpy as np
+
 from ..digital.bridge import (
     DigitalMemoryConfig,
     DigitalMemoryState,
@@ -89,31 +91,43 @@ class DigitalStabilityMonitor:
         state: DigitalMemoryState,
         config: DigitalMemoryConfig,
     ) -> DigitalStabilityAssessment:
-        numeric = list(state.u)
+        numeric = [state.t, *state.u]
         numeric.extend(value for channel in state.chi for value in channel)
         finite = all(math.isfinite(float(value)) for value in numeric)
         positive_kernel = all(rate > 0.0 for rate in config.gamma) and all(
             weight >= 0.0 for weight in config.w
         )
-        euler_stable = (
-            config.dt * config.leak_rate < 2.0
-            and all(config.dt * rate < 2.0 for rate in config.gamma)
-        )
+
+        # Test the actual explicit-Euler amplification matrix. For the
+        # input-driven form the matrix is triangular; for negative feedback
+        # the coupling shifts eigenvalues, so per-rate dt checks alone are
+        # not a sufficient discrete-time stability test.
+        channel_count = config.channel_count
+        jacobian = np.zeros((channel_count + 1, channel_count + 1), dtype=np.float64)
+        jacobian[0, 0] = -config.leak_rate
+        for index, (weight, rate) in enumerate(zip(config.w, config.gamma), start=1):
+            jacobian[index, index] = -rate
+            jacobian[0, index] = weight if config.form == "input_driven" else -weight
+            if config.form == "negative_feedback":
+                jacobian[index, 0] = 1.0
+        amplification = np.eye(channel_count + 1) + config.dt * jacobian
+        eigenvalues = np.linalg.eigvals(amplification)
+        euler_stable = bool(np.all(np.isfinite(eigenvalues)) and np.max(np.abs(eigenvalues)) < 1.0)
         ratio = config.stability_ratio()
         margin_applicable = config.form == "negative_feedback"
         notes: list[str] = []
         passed = finite and positive_kernel and euler_stable
         if not finite:
-            notes.append("non-finite memory state")
+            notes.append("non-finite memory state or time")
         if not positive_kernel:
             notes.append("kernel weights must be non-negative and decay rates positive")
         if not euler_stable:
-            notes.append("explicit Euler step exceeds the stable decay-step bound")
+            notes.append("explicit Euler amplification matrix has spectral radius >= 1")
         if margin_applicable and ratio > self.stability_margin + self.tolerance:
             passed = False
-            notes.append("negative-feedback kernel exceeds the configured stability margin")
+            notes.append("negative-feedback kernel exceeds the configured analytical stability margin")
         elif not margin_applicable:
-            notes.append("input-driven triangular stability checked using decay and Euler bounds")
+            notes.append("input-driven triangular dynamics checked with the Euler amplification matrix")
         return DigitalStabilityAssessment(
             passed=passed,
             form=config.form,
@@ -290,6 +304,8 @@ class DigitalRuntime:
         """Run one task episode, optionally carrying memory from its predecessor."""
         if reset_memory:
             self.reset_memory()
+        checks_before = self.stability_checks
+        violations_before = self.stability_violations
         self.episode_count += 1
         active_episode_id = episode_id or f"episode-{self.episode_count}"
         first_step = self.step_count
@@ -343,8 +359,8 @@ class DigitalRuntime:
             last_step=last_step,
             phase_counts=local_phase_counts,
             mean_prediction_error=(sum(local_errors) / len(local_errors) if local_errors else 0.0),
-            stability_checks=len(local_errors),
-            stability_violations=0,
+            stability_checks=self.stability_checks - checks_before,
+            stability_violations=self.stability_violations - violations_before,
         )
 
     def runtime_summary(self) -> dict[str, object]:
@@ -382,6 +398,10 @@ class DigitalRuntime:
             "stability_violations": self.stability_violations,
             "phase_counts": dict(self.phase_counts),
             "phase_controller": self.phase_controller.to_mapping(),
+            "monitor": {
+                "stability_margin": self.monitor.stability_margin,
+                "tolerance": self.monitor.tolerance,
+            },
         }
 
     def restore(self, snapshot: Mapping[str, object]) -> None:
@@ -391,6 +411,19 @@ class DigitalRuntime:
         if int(snapshot["state_dim"]) != self.state_dim:
             raise ValueError("checkpoint state_dim does not match runtime")
         memory_config = DigitalMemoryConfig.from_mapping(dict(snapshot["memory_config"]))
+        runtime_data = dict(snapshot["runtime_config"])
+        phase_data = dict(runtime_data["phase"])
+        restored_config = DigitalRuntimeConfig(
+            trace_capacity=int(runtime_data["trace_capacity"]),
+            prediction_error_alpha=float(runtime_data["prediction_error_alpha"]),
+            phase=DigitalPhaseConfig(**phase_data),
+            fail_on_stability_violation=bool(runtime_data["fail_on_stability_violation"]),
+        )
+        monitor_data = dict(snapshot.get("monitor", {}))
+        restored_monitor = DigitalStabilityMonitor(
+            stability_margin=float(monitor_data.get("stability_margin", 0.9)),
+            tolerance=float(monitor_data.get("tolerance", 1e-12)),
+        )
         state_data = dict(snapshot["memory_state"])
         state = DigitalMemoryState(
             u=[float(value) for value in state_data["u"]],
@@ -401,9 +434,18 @@ class DigitalRuntime:
             raise ValueError("checkpoint memory-state dimensions are invalid")
         if any(len(channel) != self.state_dim for channel in state.chi):
             raise ValueError("checkpoint channel dimensions are invalid")
-        assessment = self.monitor.assess(state, memory_config)
+        assessment = restored_monitor.assess(state, memory_config)
         if not assessment.passed:
             raise ValueError("checkpoint state/configuration fails stability checks")
+        restored_controller = DigitalPhaseController.from_mapping(
+            dict(snapshot["phase_controller"])
+        )
+        if restored_controller.total_steps != int(snapshot["step_count"]):
+            raise ValueError("checkpoint step counters are inconsistent")
+        self.config = restored_config
+        self.monitor = restored_monitor
+        self.trace_store = DigitalTraceStore(capacity=restored_config.trace_capacity)
+        self.phase_controller = restored_controller
         self.memory_config = memory_config
         self.memory_state = state
         self.session_id = str(snapshot["session_id"])
@@ -418,9 +460,4 @@ class DigitalRuntime:
         self.phase_counts = {
             str(key): int(value) for key, value in dict(snapshot["phase_counts"]).items()
         }
-        self.phase_controller = DigitalPhaseController.from_mapping(
-            dict(snapshot["phase_controller"])
-        )
-        if self.phase_controller.total_steps != self.step_count:
-            raise ValueError("checkpoint step counters are inconsistent")
         self._previous_u = list(state.u)

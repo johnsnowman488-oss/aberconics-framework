@@ -47,7 +47,7 @@ class BabiF0Config:
     seeds: int = 3
     epochs: int = 5
     hidden_dim: int = 32
-    learning_rate: float = 0.005
+    learning_rate: float = 0.05
     readout_type: Literal["linear", "mlp"] = "linear"
     mode: Literal["isolated", "continuous"] = "isolated"
     silence_steps_between_statements: int = 0
@@ -102,7 +102,7 @@ def run_babi_f0_experiment(
         raise ValueError("the selected task must have at least two training answer classes")
     bridge = build_babi_bridge(vocabulary, dim=config.dim)
     memory_config = build_babi_memory_config(variant=config.variant)
-    epochs = 1 if quick else config.epochs
+    epochs = 2 if quick else config.epochs
 
     seed_results: list[dict[str, object]] = []
     for seed in range(config.seeds):
@@ -261,7 +261,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dim", type=int, default=64)
     parser.add_argument("--seeds", type=int, default=3)
     parser.add_argument("--epochs", type=int, default=5)
-    parser.add_argument("--lr", type=float, default=0.005)
+    parser.add_argument("--lr", type=float, default=0.05)
     parser.add_argument("--readout", choices=["linear", "mlp"], default="linear")
     parser.add_argument("--mode", choices=["isolated", "continuous"], default="isolated")
     parser.add_argument("--silence-steps", type=int, default=0)
