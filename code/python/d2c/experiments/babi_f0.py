@@ -182,7 +182,10 @@ def run_babi_f0_experiment(
                 test_runtime.memory_config,
                 result.query,
             )
-            prediction_index, confidence = readout.predict(features)
+            prediction_index, confidence = test_runtime.evaluate(
+                lambda: readout.predict(features),
+                reason=f"held-out prediction for {result.episode_id}",
+            )
             predicted_answer = answer_set[prediction_index]
             is_correct = predicted_answer == result.target
             correct += int(is_correct)
