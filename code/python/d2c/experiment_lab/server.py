@@ -152,6 +152,11 @@ class Handler(BaseHTTPRequestHandler):
                     learning_rate=float(data.get("learning_rate",0.05)); feature_scale=float(data.get("feature_scale",100.0))
                     stage=data.get("stage","pilot")
                     train_limit=int(data.get("train_limit",200)); eval_limit=int(data.get("eval_limit",100))
+                    raw_g2_tasks=data.get("g2_tasks","3,5")
+                    if isinstance(raw_g2_tasks,str):
+                        g2_tasks=tuple(int(value.strip()) for value in raw_g2_tasks.split(",") if value.strip())
+                    else:
+                        g2_tasks=tuple(int(value) for value in raw_g2_tasks)
                 except (TypeError,ValueError): return self.send(400,{"error":"numeric settings are invalid"})
                 if not isinstance(exercise_spine,bool):
                     return self.send(400,{"error":"exercise_spine must be boolean"})
