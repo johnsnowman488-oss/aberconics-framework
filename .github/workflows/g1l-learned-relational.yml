@@ -45,6 +45,11 @@ jobs:
       PILOT_VALIDATION: ${{ github.event.inputs.pilot_validation || '100' }}
       EPOCHS: ${{ github.event.inputs.epochs || '3' }}
       CONFIRM_SEEDS: ${{ github.event.inputs.confirm_seeds || '3' }}
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      VECLIB_MAXIMUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
       RUNS: runs/experiment-lab/g1l
     steps:
       - name: Checkout
@@ -63,7 +68,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install numpy matplotlib pytest
+          python -m pip install "numpy==2.4.6" matplotlib pytest
 
       - name: Download and validate bAbI splits
         run: python -m d2c.digital.download_babi
