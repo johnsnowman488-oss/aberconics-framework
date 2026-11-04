@@ -45,6 +45,8 @@ def test_g2_config_restricts_tasks_and_requires_multiple_seeds() -> None:
         G2Config(tasks=(2,))
     with pytest.raises(ValueError, match="seed count"):
         G2Config(seeds=1)
+    with pytest.raises(ValueError, match="bootstrap_samples"):
+        G2Config(bootstrap_samples=100)
 
 
 def test_paired_interval_reports_between_seed_uncertainty() -> None:
@@ -54,6 +56,8 @@ def test_paired_interval_reports_between_seed_uncertainty() -> None:
     assert report["ci95_two_sided_t"][0] < report["mean"] < report["ci95_two_sided_t"][1]
     assert report["positive_seed_differences"] == 3
     assert report["negative_seed_differences"] == 1
+    assert report["exact_two_sided_sign_test_p"] == pytest.approx(0.625)
+    assert report["sign_test_nonzero_pairs"] == 4
 
 
 def test_confidence_metrics_report_proper_scores_calibration_and_selective_risk() -> None:
