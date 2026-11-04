@@ -35,6 +35,7 @@ from ..digital.babi import (
 )
 from ..digital.relational import RelationalEvent, parse_babi_question, parse_babi_statement
 from ..runtime.digital_runtime import DigitalRuntime, DigitalRuntimeConfig
+from .confidence_metrics import summarize_confidence
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _DATA_DIR = _REPO_ROOT / "code" / "python" / "d2c" / "progress" / "babi_data"
@@ -512,6 +513,8 @@ def _run_l0(dim: int, learning_rate: float) -> dict[str, Any]:
 def _evaluate(
     model: LearnedRelationalBinder,
     stories: list[ParsedStory],
+    *,
+    bootstrap_seed: int = 0,
 ) -> dict[str, Any]:
     correct = 0
     holder_correct = holder_total = 0
@@ -548,6 +551,11 @@ def _evaluate(
             "holder_correct": output["holder_correct"],
             "holder_attention": output["attention"],
             "confidence": float(np.max(output["probabilities"])),
+            "probability_vector": [float(value) for value in output["probabilities"]],
+            "probabilities": {
+                label: float(output["probabilities"][index])
+                for index, label in enumerate(model.answers)
+            },
         })
     total = len(stories)
     for values in relation_metrics.values():
@@ -571,6 +579,10 @@ def _evaluate(
         "holder_retrieval_total": holder_total,
         "holder_retrieval_accuracy": holder_correct / holder_total if holder_total else None,
         "holder_random_baseline": holder_chance_total / holder_total if holder_total else None,
+        "confidence_diagnostics": summarize_confidence(
+            predictions, model.answers, calibration_bins=10,
+            bootstrap_samples=200, bootstrap_seed=bootstrap_seed,
+        ),
         "predictions": predictions,
     }
 
@@ -665,12 +677,12 @@ def run_g1l_experiment(
         people=people, objects=objects, locations=locations,
         answers=answers, dim=cfg.dim, seed=cfg.seed,
     )
-    before = _evaluate(pilot, valid_pilot)
+    before = _evaluate(pilot, valid_pilot, bootstrap_seed=cfg.seed)
     training = _train(
         pilot, train_pilot, epochs=cfg.epochs,
         learning_rate=cfg.learning_rate, seed=cfg.seed,
     )
-    after = _evaluate(pilot, valid_pilot)
+    after = _evaluate(pilot, valid_pilot, bootstrap_seed=cfg.seed + 1)
     random_holder_baseline = after["holder_random_baseline"]
     holder_gate = (
         after["holder_retrieval_accuracy"] is not None
@@ -695,6 +707,7 @@ def run_g1l_experiment(
             key: after[key] for key in ("accuracy", "holder_retrieval_accuracy", "holder_retrieval_correct", "holder_retrieval_total", "correct", "total", "relation_metrics", "held_query_accuracy", "fixed_location_accuracy")
         },
         "random_holder_baseline": random_holder_baseline,
+        "validation_confidence_diagnostics": after["confidence_diagnostics"],
         "validation_predictions": after["predictions"],
         "duration_seconds": time.perf_counter() - l1_started,
         "gate_definition": "L0 passes; pilot training loss falls; validation answer accuracy improves over initialization; holder retrieval exceeds chance by 5 percentage points.",
@@ -719,7 +732,7 @@ def run_g1l_experiment(
                 model, train_all, epochs=cfg.epochs,
                 learning_rate=cfg.learning_rate, seed=seed,
             )
-            evaluation = _evaluate(model, test_all)
+            evaluation = _evaluate(model, test_all, bootstrap_seed=seed + 100)
             seed_results.append({
                 "seed": seed,
                 "training": train_stats,
@@ -732,6 +745,7 @@ def run_g1l_experiment(
                 "held_query_accuracy": evaluation["held_query_accuracy"],
                 "fixed_location_accuracy": evaluation["fixed_location_accuracy"],
                 "relation_metrics": evaluation["relation_metrics"],
+                "confidence_diagnostics": evaluation["confidence_diagnostics"],
                 "predictions": evaluation["predictions"],
             })
         accuracies = [row["accuracy"] for row in seed_results]
@@ -821,7 +835,7 @@ def save_g1l_bundle(result: dict[str, Any], *, output_dir: Path) -> dict[str, st
     fields = [
         "seed", "example_index", "question", "query_object", "target",
         "prediction", "correct", "query_relation", "target_holder",
-        "predicted_holder", "holder_correct", "confidence",
+        "predicted_holder", "holder_correct", "confidence", "probability_vector",
     ]
     with (bundle / "per_example.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
@@ -839,6 +853,7 @@ def save_g1l_bundle(result: dict[str, Any], *, output_dir: Path) -> dict[str, st
         f"- L1 pilot: {l1['status']}",
         f"- L1 validation accuracy: {l1['validation_after_training']['accuracy']:.4f}",
         f"- L1 holder retrieval accuracy: {l1['validation_after_training']['holder_retrieval_accuracy']}",
+        f"- L1 confidence diagnostics: {json.dumps(l1.get('validation_confidence_diagnostics', {}), sort_keys=True)}",
         f"- L2 confirmation: {l2['status']} — {l2.get('reason') or 'completed'}",
         f"- L2 per-seed accuracy: {l2.get('per_seed_accuracy')}",
         f"- L2 mean accuracy: {l2.get('mean_accuracy')}",
