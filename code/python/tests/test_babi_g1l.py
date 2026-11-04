@@ -48,6 +48,19 @@ def test_holder_attention_is_normalized_and_names_target_holder() -> None:
     assert abs(sum(result["attention"].values()) - 1.0) < 1e-10
 
 
+def test_release_without_known_actor_location_uses_unknown_state() -> None:
+    model = LearnedRelationalBinder(**_vocabulary(), dim=16, seed=13)
+    story = ParsedStory((
+        RelationalEvent("move", "John", location="office"),
+        RelationalEvent("pickup", "John", object="football"),
+        RelationalEvent("release", "Mary", object="football"),
+    ), "Where is the football?", "football", "office")
+    result = model._forward(story)
+    assert result["is_held"] is False
+    assert result["attention"] == {}
+    assert np.isfinite(result["probabilities"]).all()
+
+
 def test_release_changes_query_to_fixed_location_memory() -> None:
     model = LearnedRelationalBinder(**_vocabulary(), dim=16, seed=7)
     story = ParsedStory((

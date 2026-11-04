@@ -177,13 +177,18 @@ class LearnedRelationalBinder:
             elif event.kind == "release":
                 if event.object is None:
                     raise ValueError("release event is missing its object")
-                if event.actor not in person_state:
-                    raise ValueError(f"release actor {event.actor!r} has no known location")
-                person_value = person_state[event.actor]
-                x = self.p["W_object_location"] @ person_value + self.p["b_object_location"]
-                object_location[event.object] = np.tanh(x)
-                li, source_value = person_state_source[event.actor]
-                object_location_source[event.object] = (event.actor, li, source_value)
+                if event.actor in person_state:
+                    person_value = person_state[event.actor]
+                    x = self.p["W_object_location"] @ person_value + self.p["b_object_location"]
+                    object_location[event.object] = np.tanh(x)
+                    li, source_value = person_state_source[event.actor]
+                    object_location_source[event.object] = (event.actor, li, source_value)
+                else:
+                    # G1 can observe a release before this actor's location is
+                    # established in the current story. Preserve an explicit
+                    # unknown-location state instead of aborting the episode.
+                    object_location[event.object] = np.tanh(self.p["b_object_location"])
+                    object_location_source[event.object] = None
                 holder_state.pop(event.object, None)
                 holder_source.pop(event.object, None)
                 held[event.object] = False
@@ -344,16 +349,20 @@ class LearnedRelationalBinder:
         else:
             object_location = cache["object_location"]
             object_location_pre = dz * (1.0 - object_location ** 2)
-            grad["W_object_location"] += np.outer(
-                object_location_pre, cache["object_location_source"][2]
-            )
-            grad["b_object_location"] += object_location_pre
-            actor, li, person_value = cache["object_location_source"]
-            dperson = self.p["W_object_location"].T @ object_location_pre
-            dperson_pre = dperson * (1.0 - person_value ** 2)
-            grad["W_person_location"] += np.outer(dperson_pre, self.p["E_location"][li])
-            grad["b_person_location"] += dperson_pre
-            grad["E_location"][li] += self.p["W_person_location"].T @ dperson_pre
+            source = cache["object_location_source"]
+            if source is None:
+                # Unknown release location: learn a stable unknown-state bias.
+                grad["W_object_location"] += np.zeros_like(self.p["W_object_location"])
+                grad["b_object_location"] += object_location_pre
+            else:
+                _actor, li, person_value = source
+                grad["W_object_location"] += np.outer(object_location_pre, person_value)
+                grad["b_object_location"] += object_location_pre
+                dperson = self.p["W_object_location"].T @ object_location_pre
+                dperson_pre = dperson * (1.0 - person_value ** 2)
+                grad["W_person_location"] += np.outer(dperson_pre, self.p["E_location"][li])
+                grad["b_person_location"] += dperson_pre
+                grad["E_location"][li] += self.p["W_person_location"].T @ dperson_pre
 
         # Adam keeps the small pilot stable without a costly framework dependency.
         self.adam_step += 1
