@@ -40,18 +40,22 @@ if(job.experiment==="g1l"){
 const stages=r.stages||{},l1=stages.L1||{},l2=stages.L2||{},v=l1.validation_after_training||{};
 const finalRows=l2.status==="completed"?(l2.per_example||[]):(l1.validation_predictions||[]);
 const accuracy=l2.status==="completed"?l2.mean_accuracy:v.accuracy;
+const mean=xs=>xs.length?xs.reduce((a,b)=>a+b,0)/xs.length:null;
+const seedRows=l2.status==="completed"?(l2.seed_results||[]).map(x=>{
+const p=x.predictions||[],held=p.filter(y=>y.query_relation==="object_holder_to_person_location"),fixed=p.filter(y=>y.query_relation==="fixed_object_location"),holders=held.filter(y=>y.holder_correct!==null);
+return {...x,held_query_accuracy:x.held_query_accuracy??mean(held.map(y=>y.correct?1:0)),fixed_location_accuracy:x.fixed_location_accuracy??mean(fixed.map(y=>y.correct?1:0)),holder_retrieval_accuracy:x.holder_retrieval_accuracy??mean(holders.map(y=>y.holder_correct?1:0))};
+}):[];
 const relationMetrics=l2.status==="completed"?{
-held_query_accuracy:l2.mean_held_query_accuracy,
-fixed_location_accuracy:l2.mean_fixed_location_accuracy,
-holder_retrieval_accuracy:l2.mean_holder_retrieval_accuracy
+held_query_accuracy:l2.mean_held_query_accuracy??mean(seedRows.map(x=>x.held_query_accuracy).filter(x=>x!=null)),
+fixed_location_accuracy:l2.mean_fixed_location_accuracy??mean(seedRows.map(x=>x.fixed_location_accuracy).filter(x=>x!=null)),
+holder_retrieval_accuracy:l2.mean_holder_retrieval_accuracy??mean(seedRows.map(x=>x.holder_retrieval_accuracy).filter(x=>x!=null))
 }:(v.relation_metrics||{});
 $("accuracy").textContent=accuracy==null?"—":(100*accuracy).toFixed(1)+"%";
 $("error").textContent=l2.status==="completed"?(100*(l2.standard_error||0)).toFixed(2)+" pp":"pilot";
 $("stories").textContent=l2.status==="completed"?((l2.seed_results?.[0]?.total??"—")+" per seed × "+(l2.seed_results?.length??0)+" seeds"):(v.total??"—");
-const seedRows=l2.status==="completed"?(l2.seed_results||[]):[];
 $("rows").innerHTML=seedRows.length?seedRows.map(x=>'<tr><td>'+x.seed+'</td><td>'+x.correct+'</td><td>'+x.total+'</td><td>'+(100*x.accuracy).toFixed(1)+'%</td><td>'+(x.holder_retrieval_accuracy==null?"—":(100*x.holder_retrieval_accuracy).toFixed(1)+'%')+'</td></tr>').join(""):'<tr><td>L1 pilot</td><td>'+v.correct+'</td><td>'+v.total+'</td><td>'+(100*(v.accuracy||0)).toFixed(1)+'%</td><td>'+(v.holder_retrieval_accuracy==null?"—":(100*v.holder_retrieval_accuracy).toFixed(1)+'%')+'</td></tr>';
 draw(seedRows.length?seedRows:[{seed:"L1",accuracy:v.accuracy||0}]);
-$("calibration").textContent=JSON.stringify({L0:stages.L0,L1:{status:l1.status,training:l1.training,before:l1.validation_before_training,after:v,random_holder_baseline:l1.random_holder_baseline},L2:{status:l2.status,reason:l2.reason,per_seed_accuracy:l2.per_seed_accuracy,mean_held_query_accuracy:l2.mean_held_query_accuracy,mean_fixed_location_accuracy:l2.mean_fixed_location_accuracy,mean_holder_retrieval_accuracy:l2.mean_holder_retrieval_accuracy,per_seed_holder_retrieval:(l2.seed_results||[]).map(x=>({seed:x.seed,holder_retrieval_accuracy:x.holder_retrieval_accuracy,held_query_accuracy:x.held_query_accuracy}))}},null,2);
+$("calibration").textContent=JSON.stringify({L0:stages.L0,L1:{status:l1.status,training:l1.training,before:l1.validation_before_training,after:v,random_holder_baseline:l1.random_holder_baseline},L2:{status:l2.status,reason:l2.reason,per_seed_accuracy:l2.per_seed_accuracy,mean_held_query_accuracy:l2.mean_held_query_accuracy,mean_fixed_location_accuracy:l2.mean_fixed_location_accuracy,mean_holder_retrieval_accuracy:l2.mean_holder_retrieval_accuracy,per_seed_holder_retrieval:seedRows.map(x=>({seed:x.seed,holder_retrieval_accuracy:x.holder_retrieval_accuracy,held_query_accuracy:x.held_query_accuracy,fixed_location_accuracy:x.fixed_location_accuracy}))}},null,2);
 $("distributions").textContent=JSON.stringify({entity_vocabulary:r.entity_vocabulary,preprocessing:r.preprocessing,relation_metrics:relationMetrics,f0_companion:r.f0_companion},null,2);
 const failures=finalRows.filter(x=>!x.correct||x.holder_correct===false).slice(0,20);
 $("evidence").textContent=JSON.stringify(failures,null,2);
