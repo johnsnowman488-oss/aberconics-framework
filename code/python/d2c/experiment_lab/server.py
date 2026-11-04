@@ -38,7 +38,7 @@ class Handler(BaseHTTPRequestHandler):
             files={s:(DATA/f"babi_{s}.jsonl").exists() for s in ("train","test","valid")}
             return self.send(200,{"files":files,"ready":files["train"] and files["test"]})
         if path=="/api/runs": return self.send(200,{"runs":[public_job(x) for x in sorted(JOBS.values(),key=lambda j:j["created_at"],reverse=True)]})
-        file_match=re.fullmatch(r"/api/runs/([a-f0-9-]+)/files/(summary\\.json|summary\\.md|per_example\\.csv|per_example\\.jsonl)",path)
+        file_match=re.fullmatch(r"/api/runs/([a-f0-9-]+)/files/(summary\.json|summary\.md|per_example\.csv|per_example\.jsonl)",path)
         if file_match:
             rid,filename=file_match.groups(); job=JOBS.get(rid)
             if not job: return self.send(404,{"error":"run not found"})
