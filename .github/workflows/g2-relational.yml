@@ -118,7 +118,8 @@ jobs:
           report = json.loads(summaries[-1].read_text())
           acceptance = report["acceptance"]
           required = ("fixture_suite", "qa3_qa5_benchmark_coverage",
-                      "matched_seed_and_example_controls", "confidence_evidence")
+                      "matched_seed_and_example_controls", "f0_spine_audit",
+                      "confidence_evidence")
           failed = [key for key in required if not acceptance[key]["passed"]]
           print(json.dumps({
               "fixture_control": report["fixture_control"]["passed"],
