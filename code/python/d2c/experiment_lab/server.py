@@ -115,10 +115,18 @@ class Handler(BaseHTTPRequestHandler):
                         if l2.get("status") == "completed"
                         else l1_validation.get("fixed_location_accuracy")
                     ),
+                    "g2_task_summary":{
+                        task_key:{
+                            "e0_mean_accuracy":task_row["arms"]["e0"]["mean_accuracy_over_seeds"],
+                            "ef0_mean_accuracy":task_row["arms"]["ef0"]["mean_accuracy_over_seeds"],
+                            "paired_delta":task_row["paired_accuracy_difference_ef0_minus_e0"]["mean"],
+                            "paired_ci95":task_row["paired_accuracy_difference_ef0_minus_e0"]["ci95_two_sided_t"],
+                        } for task_key,task_row in result.get("tasks",{}).items()
+                    } if result.get("experiment")=="g2_relational_composition" else None,
                     "dataset":result.get("dataset"),
                 })
             return self.send(200,{"runs":rows})
-        file_match=re.fullmatch(r"/api/runs/([a-f0-9-]+)/files/(summary\.json|summary\.md|per_example\.csv|per_example\.jsonl|manifest\.json|config\.json|experiment_lab_register\.json)",path)
+        file_match=re.fullmatch(r"/api/runs/([a-f0-9-]+)/files/(summary\.json|summary\.md|per_example\.csv|per_example\.jsonl|per_seed_metrics\.csv|fixtures\.jsonl|manifest\.json|config\.json|experiment_lab_register\.json)",path)
         if file_match:
             rid,filename=file_match.groups(); job=JOBS.get(rid)
             if not job: return self.send(404,{"error":"run not found"})
