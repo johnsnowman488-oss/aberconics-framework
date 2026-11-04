@@ -24,6 +24,7 @@ def code_revision():
     result = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True)
     return result.stdout.strip() if result.returncode == 0 else "unknown"
 def write_manifest(job):
+    directory = Path(job["directory"])
     payload = public_job(job)
     payload.update({
         "manifest_version": 1,
@@ -37,7 +38,6 @@ def write_manifest(job):
             if p.is_file() and p.name not in {"metadata.json", "manifest.json"}
         ),
     })
-    directory = Path(job["directory"])
     (directory / "metadata.json").write_text(json.dumps(payload, indent=2))
     (directory / "manifest.json").write_text(json.dumps(payload, indent=2))
 def load_history():
@@ -75,6 +75,10 @@ class Handler(BaseHTTPRequestHandler):
                 if not job: return self.send(404,{"error":f"run not found: {rid}"})
                 summaries=list(Path(job["directory"]).glob("**/summary.json"))
                 result=json.loads(summaries[0].read_text()) if summaries else {}
+                stages = result.get("stages", {})
+                l1 = stages.get("L1", {})
+                l2 = stages.get("L2", {})
+                l1_validation = l1.get("validation_after_training", {})
                 rows.append({
                     "run_id":rid,"experiment":job.get("experiment"),
                     "status":job.get("status"),"created_at":job.get("created_at"),
@@ -94,8 +98,23 @@ class Handler(BaseHTTPRequestHandler):
                     ),
                     "standard_error":result.get("standard_error",result.get("se_accuracy",result.get("stages",{}).get("L2",{}).get("standard_error"))),
                     "per_seed_accuracy":result.get("per_seed_accuracy",result.get("stages",{}).get("L2",{}).get("per_seed_accuracy")),
-                    "l1_status":result.get("stages",{}).get("L1",{}).get("status"),
-                    "l2_status":result.get("stages",{}).get("L2",{}).get("status"),
+                    "l1_status":l1.get("status"),
+                    "l2_status":l2.get("status"),
+                    "held_query_accuracy":(
+                        l2.get("mean_held_query_accuracy")
+                        if l2.get("status") == "completed"
+                        else l1_validation.get("held_query_accuracy")
+                    ),
+                    "holder_retrieval_accuracy":(
+                        l2.get("mean_holder_retrieval_accuracy")
+                        if l2.get("status") == "completed"
+                        else l1_validation.get("holder_retrieval_accuracy")
+                    ),
+                    "fixed_location_accuracy":(
+                        l2.get("mean_fixed_location_accuracy")
+                        if l2.get("status") == "completed"
+                        else l1_validation.get("fixed_location_accuracy")
+                    ),
                     "dataset":result.get("dataset"),
                 })
             return self.send(200,{"runs":rows})
