@@ -853,7 +853,7 @@ def save_g1l_bundle(result: dict[str, Any], *, output_dir: Path) -> dict[str, st
         f"- L1 pilot: {l1['status']}",
         f"- L1 validation accuracy: {l1['validation_after_training']['accuracy']:.4f}",
         f"- L1 holder retrieval accuracy: {l1['validation_after_training']['holder_retrieval_accuracy']}",
-        f"- L1 confidence diagnostics: {json.dumps(l1.get('validation_confidence_diagnostics', {}), sort_keys=True)}",
+        f"- L1 validation confidence (QA2): NLL={l1.get('validation_confidence_diagnostics', {}).get('negative_log_likelihood')}; Brier={l1.get('validation_confidence_diagnostics', {}).get('multiclass_brier_score')}; fixed ECE={l1.get('validation_confidence_diagnostics', {}).get('calibration', {}).get('fixed_bin_top_label_ece')}; adaptive ECE={l1.get('validation_confidence_diagnostics', {}).get('calibration', {}).get('adaptive_equal_mass_top_label_ece')}; overconfident error fraction ≥0.90={l1.get('validation_confidence_diagnostics', {}).get('overconfident_error_fraction', {}).get('0.9')}",
         f"- L2 confirmation: {l2['status']} — {l2.get('reason') or 'completed'}",
         f"- L2 per-seed accuracy: {l2.get('per_seed_accuracy')}",
         f"- L2 mean accuracy: {l2.get('mean_accuracy')}",
@@ -906,6 +906,7 @@ def save_g1l_bundle(result: dict[str, Any], *, output_dir: Path) -> dict[str, st
                 "status": l1["status"], "gate_passed": l1["gate_passed"],
                 "validation_before": l1["validation_before_training"],
                 "validation_after": l1["validation_after_training"],
+                "confidence_diagnostics": l1.get("validation_confidence_diagnostics"),
                 "training": l1["training"],
             },
             "L2": {
@@ -916,6 +917,10 @@ def save_g1l_bundle(result: dict[str, Any], *, output_dir: Path) -> dict[str, st
                 "mean_held_query_accuracy": l2.get("mean_held_query_accuracy"),
                 "mean_fixed_location_accuracy": l2.get("mean_fixed_location_accuracy"),
                 "mean_holder_retrieval_accuracy": l2.get("mean_holder_retrieval_accuracy"),
+                "per_seed_confidence_diagnostics": [
+                    {"seed": row["seed"], "diagnostics": row.get("confidence_diagnostics")}
+                    for row in l2.get("seed_results", [])
+                ],
             },
         },
         "f0_companion": result.get("f0_companion"),
