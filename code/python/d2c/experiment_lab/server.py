@@ -33,11 +33,19 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path=urlparse(self.path).path
         if path=="/": return self.send(200,(ROOT/"code/python/d2c/experiment_lab/index.html").read_bytes(),"text/html")
-        if path=="/api/experiments": return self.send(200,{"experiments":[{"id":"e0","name":"E0 bAbI baseline","modes":["isolated"]},{"id":"ef0","name":"E-F0 runtime-integrated bAbI","modes":["isolated","continuous"]}]})
+        if path=="/api/experiments": return self.send(200,{"experiments":[{"id":"e0","name":"E0 bAbI baseline","modes":["isolated"],"learned":true},{"id":"ef0","name":"E-F0 runtime-integrated bAbI","modes":["isolated","continuous"],"learned":true},{"id":"g1","name":"G1 explicit relational-state QA2 diagnostic","modes":["isolated"],"task":2,"learned":false}]})
         if path=="/api/datasets":
             files={s:(DATA/f"babi_{s}.jsonl").exists() for s in ("train","test","valid")}
             return self.send(200,{"files":files,"ready":files["train"] and files["test"]})
         if path=="/api/runs": return self.send(200,{"runs":[public_job(x) for x in sorted(JOBS.values(),key=lambda j:j["created_at"],reverse=True)]})
+        file_match=re.fullmatch(r"/api/runs/([a-f0-9-]+)/files/(summary\.json|summary\.md|per_example\.csv|per_example\.jsonl)",path)
+        if file_match:
+            rid,filename=file_match.groups(); job=JOBS.get(rid)
+            if not job: return self.send(404,{"error":"run not found"})
+            matches=[p for p in Path(job["directory"]).glob(f"**/{filename}") if p.is_file()]
+            if not matches: return self.send(404,{"error":"result file not found"})
+            types={"summary.json":"application/json","summary.md":"text/markdown","per_example.csv":"text/csv","per_example.jsonl":"application/x-ndjson"}
+            return self.send(200,matches[0].read_bytes(),types[filename])
         m=re.fullmatch(r"/api/runs/([a-f0-9-]+)(?:/(results|logs))?",path)
         if m:
             job=JOBS.get(m.group(1))
@@ -73,12 +81,16 @@ class Handler(BaseHTTPRequestHandler):
                     or not (1<=task<=20 and 4<=dim<=512 and 1<=seeds<=100 and 1<=epochs<=100)):
                     return self.send(400,{"error":"invalid experiment configuration"})
                 rid=str(uuid.uuid4()); directory=RUNS/rid; directory.mkdir(parents=True)
-                module="d2c.experiments.babi_qa" if exp=="e0" else "d2c.experiments.babi_f0"
-                args=[sys.executable,"-m",module,"--task",str(task),"--dim",str(dim),"--seeds",str(seeds),"--output-dir",str(directory),"--variant","full","--readout",readout,"--lr",str(learning_rate),"--feature-scale",str(feature_scale),"--epochs",str(epochs),"--eval-split","test"]
+                module={"e0":"d2c.experiments.babi_qa","ef0":"d2c.experiments.babi_f0","g1":"d2c.experiments.babi_g1"}[exp]
+                args=[sys.executable,"-m",module,"--task",str(task),"--dim",str(dim),"--output-dir",str(directory),"--variant","full"]
+                if exp=="g1":
+                    args += ["--trace-capacity","20000"]
+                else:
+                    args += ["--seeds",str(seeds),"--readout",readout,"--lr",str(learning_rate),"--feature-scale",str(feature_scale),"--epochs",str(epochs),"--eval-split","test"]
                 if exp=="ef0":
                     args += ["--mode",mode]
                     if exercise_spine: args.append("--exercise-spine")
-                cfg={"experiment":exp,"task":task,"dim":dim,"seeds":seeds,"epochs":epochs,"mode":mode,"variant":"full","readout":readout,"learning_rate":learning_rate,"feature_scale":feature_scale,"evaluation_split":"test","exercise_spine":bool(exercise_spine and exp=="ef0")}
+                cfg={"experiment":exp,"task":task,"dim":dim,"seeds":None if exp=="g1" else seeds,"epochs":None if exp=="g1" else epochs,"mode":mode,"variant":"full","readout":"relational_state_resolution" if exp=="g1" else readout,"learning_rate":None if exp=="g1" else learning_rate,"feature_scale":None if exp=="g1" else feature_scale,"evaluation_split":"test","exercise_spine":bool(exercise_spine and exp=="ef0"),"learning_performed":False if exp=="g1" else None}
                 (directory/"config.json").write_text(json.dumps(cfg,indent=2))
                 job={"run_id":rid,"experiment":exp,"config":cfg,"status":"running","created_at":utc(),"directory":str(directory),"command":args}
                 (directory/"metadata.json").write_text(json.dumps(public_job(job),indent=2))
