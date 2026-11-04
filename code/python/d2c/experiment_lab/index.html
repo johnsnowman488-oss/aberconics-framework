@@ -24,7 +24,7 @@
 <section class="panel"><h2>Results explorer</h2><div id="empty" class="muted">Launch or select a completed run to inspect its results.</div><div id="results" hidden>
 <div class="cards"><div class="metric"><small>Mean accuracy</small><strong id="accuracy">—</strong></div><div class="metric"><small>Standard error</small><strong id="error">—</strong></div><div class="metric"><small>Evaluation stories</small><strong id="stories">—</strong></div></div>
 <h2>Per-seed accuracy</h2><svg id="chart" class="chart" viewBox="0 0 700 240"></svg>
-<h2 style="margin-top:20px">Seed results</h2><div class="tablewrap"><table><thead><tr><th>Seed</th><th>Correct</th><th>Total</th><th>Accuracy</th><th>Stability violations</th></tr></thead><tbody id="rows"></tbody></table></div>
+<h2 style="margin-top:20px">Seed results</h2><div class="tablewrap"><table><thead><tr><th>Seed</th><th>Correct</th><th>Total</th><th>Accuracy</th><th>Holder retrieval / stability</th></tr></thead><tbody id="rows"></tbody></table></div>
 <h2 style="margin-top:20px">Calibration and failure profile</h2><pre id="calibration"></pre>
 <h2>Answer distributions and per-class scores</h2><pre id="distributions"></pre>
 <h2>Per-example failure evidence (first 20)</h2><pre id="evidence"></pre>
@@ -40,15 +40,21 @@ if(job.experiment==="g1l"){
 const stages=r.stages||{},l1=stages.L1||{},l2=stages.L2||{},v=l1.validation_after_training||{};
 const finalRows=l2.status==="completed"?(l2.per_example||[]):(l1.validation_predictions||[]);
 const accuracy=l2.status==="completed"?l2.mean_accuracy:v.accuracy;
+const relationMetrics=l2.status==="completed"?{
+held_query_accuracy:l2.mean_held_query_accuracy,
+fixed_location_accuracy:l2.mean_fixed_location_accuracy,
+holder_retrieval_accuracy:l2.mean_holder_retrieval_accuracy
+}:(v.relation_metrics||{});
 $("accuracy").textContent=accuracy==null?"—":(100*accuracy).toFixed(1)+"%";
 $("error").textContent=l2.status==="completed"?(100*(l2.standard_error||0)).toFixed(2)+" pp":"pilot";
-$("stories").textContent=l2.status==="completed"?(l2.seed_results?.[0]?.total??"—"):(v.total??"—");
+$("stories").textContent=l2.status==="completed"?((l2.seed_results?.[0]?.total??"—")+" per seed × "+(l2.seed_results?.length??0)+" seeds"):(v.total??"—");
 const seedRows=l2.status==="completed"?(l2.seed_results||[]):[];
-$("rows").innerHTML=seedRows.length?seedRows.map(x=>'<tr><td>'+x.seed+'</td><td>'+x.correct+'</td><td>'+x.total+'</td><td>'+(100*x.accuracy).toFixed(1)+'%</td><td>—</td></tr>').join(""):'<tr><td>L1 pilot</td><td>'+v.correct+'</td><td>'+v.total+'</td><td>'+(100*(v.accuracy||0)).toFixed(1)+'%</td><td>—</td></tr>';
+$("rows").innerHTML=seedRows.length?seedRows.map(x=>'<tr><td>'+x.seed+'</td><td>'+x.correct+'</td><td>'+x.total+'</td><td>'+(100*x.accuracy).toFixed(1)+'%</td><td>'+(x.holder_retrieval_accuracy==null?"—":(100*x.holder_retrieval_accuracy).toFixed(1)+'%')+'</td></tr>').join(""):'<tr><td>L1 pilot</td><td>'+v.correct+'</td><td>'+v.total+'</td><td>'+(100*(v.accuracy||0)).toFixed(1)+'%</td><td>'+(v.holder_retrieval_accuracy==null?"—":(100*v.holder_retrieval_accuracy).toFixed(1)+'%')+'</td></tr>';
 draw(seedRows.length?seedRows:[{seed:"L1",accuracy:v.accuracy||0}]);
-$("calibration").textContent=JSON.stringify({L0:stages.L0,L1:{status:l1.status,training:l1.training,before:l1.validation_before_training,after:v,random_holder_baseline:l1.random_holder_baseline},L2:{status:l2.status,reason:l2.reason,per_seed_accuracy:l2.per_seed_accuracy}},null,2);
-$("distributions").textContent=JSON.stringify({entity_vocabulary:r.entity_vocabulary,preprocessing:r.preprocessing,f0_companion:r.f0_companion},null,2);
-$("evidence").textContent=JSON.stringify(finalRows.slice(0,20),null,2);
+$("calibration").textContent=JSON.stringify({L0:stages.L0,L1:{status:l1.status,training:l1.training,before:l1.validation_before_training,after:v,random_holder_baseline:l1.random_holder_baseline},L2:{status:l2.status,reason:l2.reason,per_seed_accuracy:l2.per_seed_accuracy,mean_held_query_accuracy:l2.mean_held_query_accuracy,mean_fixed_location_accuracy:l2.mean_fixed_location_accuracy,mean_holder_retrieval_accuracy:l2.mean_holder_retrieval_accuracy,per_seed_holder_retrieval:(l2.seed_results||[]).map(x=>({seed:x.seed,holder_retrieval_accuracy:x.holder_retrieval_accuracy,held_query_accuracy:x.held_query_accuracy}))}},null,2);
+$("distributions").textContent=JSON.stringify({entity_vocabulary:r.entity_vocabulary,preprocessing:r.preprocessing,relation_metrics:relationMetrics,f0_companion:r.f0_companion},null,2);
+const failures=finalRows.filter(x=>!x.correct||x.holder_correct===false).slice(0,20);
+$("evidence").textContent=JSON.stringify(failures,null,2);
 $("spine-results").textContent="Full F0/SOE sidecar: "+JSON.stringify({stories:r.f0_companion?.stories_exercised,stability_checks:r.f0_companion?.stability_checks,stability_violations:r.f0_companion?.stability_violations,trace_records:r.f0_companion?.trace_records,learned_path_uses_F0_vectors:r.f0_companion?.learning_path_uses_f0_features},null,2);
 $("details").textContent=JSON.stringify({experiment:job.experiment,config:job.config,method:r.method,claim_boundary:r.claim_boundary,dataset:r.dataset,stages:{L0:stages.L0?.passed,L1:l1.status,L2:l2.status},duration_seconds:r.duration_seconds},null,2);
 const l=await api("/api/runs/"+id+"/logs");$("logs").textContent=l.stdout+"\n"+l.stderr;
@@ -83,6 +89,6 @@ $("task").disabled=g1||g1l;if(g1||g1l){$("task").value="2";$("task").closest("la
 if(e0){$("spine").checked=false;}else if(exp==="ef0"){$("spine").checked=true;}
 };$("experiment").onchange();
 $("launch").onclick=async()=>{try{$("launch").disabled=true;$("status").textContent="Launching…";const j=await api("/api/runs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({experiment:$("experiment").value,task:+$("task").value,dim:+$("dim").value,seeds:+$("seeds").value,epochs:+$("epochs").value,mode:$("mode").value,readout:$("readout").value,learning_rate:+$("learning-rate").value,feature_scale:+$("feature-scale").value,exercise_spine:$("spine").checked,stage:$("g1l-stage").value,train_limit:+$("train-limit").value,eval_limit:+$("eval-limit").value})});selected=j.run_id;$("status").textContent="Running · "+j.run_id;await refresh();if(timer)clearInterval(timer);timer=setInterval(async()=>{try{await show(selected);const x=await api("/api/runs/"+selected);if(x.status!=="running"){clearInterval(timer);timer=null;$("launch").disabled=false;await refresh()}}catch(e){$("status").textContent=e.message}},2000)}catch(e){$("status").textContent=e.message;$("launch").disabled=false}};
-$("compare-button").onclick=async()=>{try{const ids=[...document.querySelectorAll(".compare-run:checked")].map(x=>x.value);if(ids.length<2||ids.length>5)throw Error("Select two to five runs.");const c=await api("/api/compare?ids="+encodeURIComponent(ids.join(",")));$("comparison").innerHTML='<div class="tablewrap"><table><thead><tr><th>Run</th><th>Experiment</th><th>Accuracy / split</th><th>L1</th><th>L2</th></tr></thead><tbody>'+c.runs.map(x=>'<tr><td>'+x.run_id.slice(0,8)+'</td><td>'+x.experiment+'</td><td>'+(x.mean_accuracy==null?"—":(100*x.mean_accuracy).toFixed(1)+"%")+'</td><td>'+(x.l1_status||"—")+'</td><td>'+(x.l2_status||"—")+'</td></tr>').join("")+'</tbody></table></div>'}catch(e){$("comparison").textContent=e.message}};
+$("compare-button").onclick=async()=>{try{const ids=[...document.querySelectorAll(".compare-run:checked")].map(x=>x.value);if(ids.length<2||ids.length>5)throw Error("Select two to five runs.");const c=await api("/api/compare?ids="+encodeURIComponent(ids.join(",")));$("comparison").innerHTML='<div class="tablewrap"><table><thead><tr><th>Run</th><th>Experiment</th><th>Accuracy / split</th><th>Held-query</th><th>Holder retrieval</th><th>Fixed-location</th><th>L1</th><th>L2</th></tr></thead><tbody>'+c.runs.map(x=>'<tr><td>'+x.run_id.slice(0,8)+'</td><td>'+x.experiment+'</td><td>'+(x.mean_accuracy==null?"—":(100*x.mean_accuracy).toFixed(1)+"%")+'</td><td>'+(x.held_query_accuracy==null?"—":(100*x.held_query_accuracy).toFixed(1)+"%")+'</td><td>'+(x.holder_retrieval_accuracy==null?"—":(100*x.holder_retrieval_accuracy).toFixed(1)+"%")+'</td><td>'+(x.fixed_location_accuracy==null?"—":(100*x.fixed_location_accuracy).toFixed(1)+"%")+'</td><td>'+(x.l1_status||"—")+'</td><td>'+(x.l2_status||"—")+'</td></tr>').join("")+'</tbody></table></div>'}catch(e){$("comparison").textContent=e.message}};
 refresh().catch(e=>$("dataset").textContent=e.message);
 </script></body></html>
