@@ -224,8 +224,16 @@ def _paired_interval(differences: list[float]) -> dict[str, Any]:
     }
 
 
-def _prediction_identity(rows: list[dict[str, Any]]) -> list[tuple[str, str]]:
-    return [(str(row.get("question")), str(row.get("target"))) for row in rows]
+def _prediction_identity(rows: list[dict[str, Any]]) -> list[tuple[Any, ...]]:
+    return [
+        (
+            int(row.get("story_index", -1)),
+            str(row.get("raw_passage", "")),
+            str(row.get("question")),
+            str(row.get("target")),
+        )
+        for row in rows
+    ]
 
 
 def _confidence_for_seed(seed_row: dict[str, Any], *, labels: list[str], bootstrap_samples: int, bootstrap_seed: int) -> dict[str, Any]:
@@ -364,7 +372,13 @@ def run_g2_experiment(
 
         e0_seeds = [row["seed"] for row in e0["seed_results"]]
         ef0_seeds = [row["seed"] for row in ef0["seed_results"]]
-        paired_ok = e0_seeds == ef0_seeds == list(range(cfg.seeds))
+        e0_labels = list(e0_result["seed_results"][0]["predictions"][0]["probabilities"])
+        ef0_labels = list(ef0_result["seed_results"][0]["predictions"][0]["probabilities"])
+        paired_ok = (
+            e0_seeds == ef0_seeds == list(range(cfg.seeds))
+            and e0_labels == ef0_labels
+            and e0_result["evaluation_stories"] == ef0_result["evaluation_stories"]
+        )
         for e0_row, ef0_row in zip(e0_result["seed_results"], ef0_result["seed_results"]):
             if _prediction_identity(e0_row["predictions"]) != _prediction_identity(ef0_row["predictions"]):
                 paired_ok = False
@@ -408,7 +422,7 @@ def run_g2_experiment(
         "fixture_control": fixtures,
         "tasks": task_results,
         "acceptance": {
-            "fixture_suite": {"passed": fixtures["failed"] == 0, "passed": fixtures["passed"], "total": fixtures["total"]},
+            "fixture_suite": {"passed": fixtures["failed"] == 0 and fixtures["total"] >= 12, "passed": fixtures["passed"], "total": fixtures["total"], "minimum_required": 12},
             "qa3_qa5_benchmark_coverage": {
                 "passed": set(cfg.tasks) == {3, 5},
                 "tasks_requested": list(cfg.tasks),
@@ -420,7 +434,12 @@ def run_g2_experiment(
             },
             "confidence_evidence": {
                 "passed": all(
-                    all(seed["confidence"].get("status") == "ok" for arm in task_row["arms"].values() for seed in arm["seed_results"])
+                    all(
+                        seed["confidence"].get("status") == "ok"
+                        and seed["confidence"].get("bootstrap", {}).get("replicates_completed", 0) >= 200
+                        and seed["confidence"].get("accuracy_wilson_95_ci") is not None
+                        for arm in task_row["arms"].values() for seed in arm["seed_results"]
+                    )
                     for task_row in task_results.values()
                 ),
                 "required_metrics": [
