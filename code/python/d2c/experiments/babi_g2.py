@@ -544,6 +544,7 @@ def save_g2_bundle(result: dict[str, Any], *, output_dir: Path) -> dict[str, str
             f"- E0 mean accuracy across seeds: {task['arms']['e0']['mean_accuracy_over_seeds']:.4f}",
             f"- E-F0 mean accuracy across seeds: {task['arms']['ef0']['mean_accuracy_over_seeds']:.4f}",
             f"- Paired E-F0 − E0 accuracy: {delta['mean']:.4f}; 95% t interval: {delta['ci95_two_sided_t']}",
+            f"- Exact paired sign-test p: {delta['exact_two_sided_sign_test_p']:.4f}; positive/negative/zero seeds: {delta['positive_seed_differences']}/{delta['negative_seed_differences']}/{delta['zero_seed_differences']}",
             f"- E0 mean fixed/adaptive ECE: {task['arms']['e0']['confidence_summary']['mean_fixed_bin_top_label_ece_over_seeds']:.4f} / {task['arms']['e0']['confidence_summary']['mean_adaptive_top_label_ece_over_seeds']:.4f}",
             f"- E-F0 mean fixed/adaptive ECE: {task['arms']['ef0']['confidence_summary']['mean_fixed_bin_top_label_ece_over_seeds']:.4f} / {task['arms']['ef0']['confidence_summary']['mean_adaptive_top_label_ece_over_seeds']:.4f}",
             "",
