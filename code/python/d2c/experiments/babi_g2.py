@@ -428,6 +428,7 @@ def run_g2_experiment(
             "test_split_used_for_selection": False,
             "soe_kernel_modified": False,
             "runtime_ablation": "deferred",
+            "f0_spine_exercise": "all_components_audited_per_task_seed",
             "hierarchy": "held_fixed_for_G2",
         },
         "dataset": {"fingerprints": dataset, "task_story_counts": counts},
@@ -517,6 +518,8 @@ def save_g2_bundle(result: dict[str, Any], *, output_dir: Path) -> dict[str, str
                     "fixed_ece": seed["confidence"]["calibration"]["fixed_bin_top_label_ece"],
                     "adaptive_ece": seed["confidence"]["calibration"]["adaptive_equal_mass_top_label_ece"],
                     "aurc": seed["confidence"]["selective_prediction"]["area_under_risk_coverage_curve"],
+                    "f0_spine_status": (seed.get("spine_exercise") or {}).get("status"),
+                    "f0_spine_stability_violations": (seed.get("spine_exercise") or {}).get("diagnostics", {}).get("stability_violations"),
                 })
     fields = list(rows[0]) if rows else ["task", "arm", "seed", "correct", "total", "accuracy", "nll", "brier", "fixed_ece", "adaptive_ece", "aurc"]
     with (bundle / "per_seed_metrics.csv").open("w", newline="", encoding="utf-8") as handle:
@@ -555,6 +558,7 @@ def save_g2_bundle(result: dict[str, Any], *, output_dir: Path) -> dict[str, str
         f"- Fixture control: {result['fixture_control']['passed']}/{result['fixture_control']['total']} passed",
         f"- Full QA3 + QA5 coverage: {result['acceptance']['qa3_qa5_benchmark_coverage']['passed']}",
         f"- Matched controls: {result['acceptance']['matched_seed_and_example_controls']['passed']}",
+        f"- F0 spine audits: {result['acceptance']['f0_spine_audit']['passed']} ({result['acceptance']['f0_spine_audit']['audits_required']} audits)",
         f"- Confidence evidence complete: {result['acceptance']['confidence_evidence']['passed']}",
         "",
         "## Paired benchmark comparisons",
