@@ -59,10 +59,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path=urlparse(self.path).path
         if path=="/": return self.send(200,(ROOT/"code/python/d2c/experiment_lab/index.html").read_bytes(),"text/html")
-        if path=="/api/experiments": return self.send(200,{"experiments":[{"id":"e0","name":"E0 bAbI baseline","modes":["isolated"],"learned":true},{"id":"ef0","name":"E-F0 runtime-integrated bAbI","modes":["isolated","continuous"],"learned":true},{"id":"g1","name":"G1 explicit relational-state QA2 diagnostic","modes":["isolated"],"task":2,"learned":false},{"id":"g1l","name":"G1-L learned relational binding","modes":["isolated"],"task":2,"learned":true,"stages":["L0","L1","L2"]}]})
+        if path=="/api/experiments": return self.send(200,{"experiments":[{"id":"e0","name":"E0 bAbI baseline","modes":["isolated"],"learned":true},{"id":"ef0","name":"E-F0 runtime-integrated bAbI","modes":["isolated","continuous"],"learned":true},{"id":"g1","name":"G1 explicit relational-state QA2 diagnostic","modes":["isolated"],"task":2,"learned":false},{"id":"g1l","name":"G1-L learned relational binding","modes":["isolated"],"task":2,"learned":true,"stages":["L0","L1","L2"]},{"id":"g2","name":"G2 relational composition QA3/QA5","modes":["isolated"],"tasks":[3,5],"learned":true,"arms":["e0","ef0"],"controls":["structured_relational_fixtures"]}]})
         if path=="/api/datasets":
             files={s:(DATA/f"babi_{s}.jsonl").exists() for s in ("train","test","valid")}
-            return self.send(200,{"files":files,"ready":files["train"] and files["test"],"ready_for_g1l":all(files.values())})
+            return self.send(200,{"files":files,"ready":files["train"] and files["test"],"ready_for_g1l":all(files.values()),"ready_for_g2":files["train"] and files["test"]})
         if path=="/api/runs": return self.send(200,{"runs":[public_job(x) for x in sorted(JOBS.values(),key=lambda j:j["created_at"],reverse=True)]})
         if path=="/api/compare":
             ids=parse_qs(urlparse(self.path).query).get("ids",[""])[0].split(",")
@@ -124,7 +124,7 @@ class Handler(BaseHTTPRequestHandler):
             if not job: return self.send(404,{"error":"run not found"})
             matches=[p for p in Path(job["directory"]).glob(f"**/{filename}") if p.is_file()]
             if not matches: return self.send(404,{"error":"result file not found"})
-            types={"summary.json":"application/json","summary.md":"text/markdown","per_example.csv":"text/csv","per_example.jsonl":"application/x-ndjson","manifest.json":"application/json","config.json":"application/json","experiment_lab_register.json":"application/json"}
+            types={"summary.json":"application/json","summary.md":"text/markdown","per_example.csv":"text/csv","per_example.jsonl":"application/x-ndjson","per_seed_metrics.csv":"text/csv","fixtures.jsonl":"application/x-ndjson","manifest.json":"application/json","config.json":"application/json","experiment_lab_register.json":"application/json"}
             return self.send(200,matches[0].read_bytes(),types[filename])
         m=re.fullmatch(r"/api/runs/([a-f0-9-]+)(?:/(results|logs))?",path)
         if m:
@@ -155,9 +155,10 @@ class Handler(BaseHTTPRequestHandler):
                 except (TypeError,ValueError): return self.send(400,{"error":"numeric settings are invalid"})
                 if not isinstance(exercise_spine,bool):
                     return self.send(400,{"error":"exercise_spine must be boolean"})
-                if (exp not in {"e0","ef0","g1","g1l"} or mode not in {"isolated","continuous"}
+                if (exp not in {"e0","ef0","g1","g1l","g2"} or mode not in {"isolated","continuous"}
                     or (exp in {"e0","g1","g1l"} and mode!="isolated")
                     or (exp in {"g1","g1l"} and task!=2)
+                    or (exp=="g2" and (mode!="isolated" or seeds<3 or seeds>20 or dim<4))
                     or (exp=="g1l" and (stage not in {"pilot","all"} or seeds>10 or dim<8))
                     or not (1<=train_limit<=900 and 1<=eval_limit<=1000)
                     or readout not in {"linear","mlp"}
@@ -166,9 +167,9 @@ class Handler(BaseHTTPRequestHandler):
                     or not (1<=task<=20 and 4<=dim<=512 and 1<=seeds<=100 and 1<=epochs<=100)):
                     return self.send(400,{"error":"invalid experiment configuration"})
                 rid=str(uuid.uuid4()); directory=RUNS/rid; directory.mkdir(parents=True)
-                module={"e0":"d2c.experiments.babi_qa","ef0":"d2c.experiments.babi_f0","g1":"d2c.experiments.babi_g1","g1l":"d2c.experiments.babi_g1l"}[exp]
+                module={"e0":"d2c.experiments.babi_qa","ef0":"d2c.experiments.babi_f0","g1":"d2c.experiments.babi_g1","g1l":"d2c.experiments.babi_g1l","g2":"d2c.experiments.babi_g2"}[exp]
                 args=[sys.executable,"-m",module,"--task",str(task),"--dim",str(dim),"--output-dir",str(directory)]
-                if exp!="g1l": args += ["--variant","full"]
+                if exp not in {"g1l","g2"}: args += ["--variant","full"]
                 if exp=="g1":
                     args += ["--trace-capacity","20000"]
                 elif exp=="g1l":
@@ -180,7 +181,7 @@ class Handler(BaseHTTPRequestHandler):
                 if exp=="ef0":
                     args += ["--mode",mode]
                     if exercise_spine: args.append("--exercise-spine")
-                cfg={"experiment":exp,"task":task,"dim":dim,"seeds":None if exp=="g1" else seeds,"epochs":None if exp=="g1" else epochs,"mode":mode,"variant":"full","readout":"relational_state_resolution" if exp=="g1" else ("learned_relational_binding" if exp=="g1l" else readout),"learning_rate":None if exp=="g1" else learning_rate,"feature_scale":None if exp=="g1" else feature_scale,"evaluation_split":"validation_then_test" if exp=="g1l" else "test","exercise_spine":bool(exercise_spine and exp=="ef0"),"f0_companion":exp=="g1l","learning_path_uses_f0_features":False if exp=="g1l" else None,"learning_performed":False if exp=="g1" else (True if exp=="g1l" else None),"stage":stage if exp=="g1l" else None,"train_limit":train_limit if exp=="g1l" else None,"eval_limit":eval_limit if exp=="g1l" else None}
+                cfg={"experiment":exp,"task":None if exp=="g2" else task,"tasks":list(g2_tasks) if exp=="g2" else None,"dim":dim,"seeds":None if exp=="g1" else seeds,"epochs":None if exp=="g1" else epochs,"mode":"isolated" if exp=="g2" else mode,"variant":"full","readout":"relational_state_resolution" if exp=="g1" else ("learned_relational_binding" if exp=="g1l" else readout),"learning_rate":None if exp=="g1" else learning_rate,"feature_scale":None if exp=="g1" else feature_scale,"evaluation_split":"validation_then_test" if exp=="g1l" else "test","exercise_spine":bool(exercise_spine and exp=="ef0"),"f0_companion":exp=="g1l","learning_path_uses_f0_features":False if exp=="g1l" else None,"learning_performed":False if exp=="g1" else (True if exp in {"g1l","g2"} else None),"stage":stage if exp=="g1l" else None,"train_limit":train_limit if exp=="g1l" else None,"eval_limit":eval_limit if exp=="g1l" else None,"confidence_metrics":"full_probability+NLL+Brier+fixed/adaptive/classwise ECE+selective risk+story bootstrap" if exp=="g2" else None}
                 (directory/"config.json").write_text(json.dumps(cfg,indent=2))
                 dataset_fingerprints={}
                 for split in ("train","valid","test"):
