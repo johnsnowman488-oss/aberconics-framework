@@ -42,7 +42,7 @@ G1-L is not a third arm on QA3/QA5 because its current parser only supports QA2.
 
 ### Predictive performance and sampling uncertainty
 
-Each arm records overall and per-seed accuracy, correct/total counts, and the per-example prediction record. Per-seed accuracy has a Wilson 95% interval. E-F0 minus E0 is computed as a paired difference for the same seed and task; the report includes the number of paired seeds, mean difference, sample standard deviation, standard error, sign counts, and a two-sided 95% Student-t interval. The seed-level interval is the principal uncertainty summary for comparing training initializations.
+Each arm records overall and per-seed accuracy, correct/total counts, and the per-example prediction record. Per-seed accuracy has a Wilson 95% interval. E-F0 minus E0 is computed as a paired difference for the same seed and task; the report includes the number of paired seeds, mean difference, sample standard deviation, standard error, sign counts, and a two-sided 95% Student-t interval. It also reports an exact two-sided paired sign-test p-value, which does not depend on the size of the seed-level differences and is therefore a useful low-power robustness check with few seeds. The seed-level interval is the principal uncertainty summary for comparing training initializations; with five seeds, treat all inferential results as preliminary and inspect the per-seed differences rather than relying on a single p-value.
 
 ### Stronger confidence and calibration evidence
 
