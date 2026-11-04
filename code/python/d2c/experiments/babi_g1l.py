@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 import os
+import subprocess
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -29,6 +30,19 @@ from ..runtime.digital_runtime import DigitalRuntime, DigitalRuntimeConfig
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _DATA_DIR = _REPO_ROOT / "code" / "python" / "d2c" / "progress" / "babi_data"
+
+
+def _git_revision() -> str:
+    if os.environ.get("GITHUB_SHA"):
+        return os.environ["GITHUB_SHA"]
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=_REPO_ROOT,
+            capture_output=True, text=True, check=True,
+        )
+        return result.stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
 
 
 @dataclass(frozen=True, slots=True)
@@ -595,6 +609,7 @@ def run_g1l_experiment(
     if stage not in {"all", "pilot"}:
         raise ValueError("stage must be 'all' or 'pilot'")
     started = time.perf_counter()
+    started_at_utc = datetime.now(timezone.utc).isoformat()
     data_dir = Path(data_dir)
     train_path = data_dir / "babi_train.jsonl"
     valid_path = data_dir / "babi_valid.jsonl"
@@ -741,8 +756,11 @@ def run_g1l_experiment(
     elif stage == "pilot":
         l2["reason"] = "Pilot mode requested; test-set confirmation is intentionally disabled."
 
+    completed_at_utc = datetime.now(timezone.utc).isoformat()
     return {
         "schema_version": 1,
+        "started_at_utc": started_at_utc,
+        "completed_at_utc": completed_at_utc,
         "experiment": "babi_g1l_learned_relational_binding",
         "task": 2,
         "method": "learned identity embeddings + role-specific relation encoders + soft holder-to-person attention + supervised location readout",
@@ -829,12 +847,15 @@ def save_g1l_bundle(result: dict[str, Any], *, output_dir: Path) -> dict[str, st
     now = datetime.now(timezone.utc).isoformat()
     metadata = {
         "schema_version": 1,
+        "manifest_version": 1,
         "run_id": run_id,
         "experiment": result["experiment"],
         "status": "completed",
-        "created_at": now,
-        "completed_at": now,
-        "code_revision": os.environ.get("GITHUB_SHA"),
+        "created_at": result.get("started_at_utc", now),
+        "completed_at": result.get("completed_at_utc", now),
+        "code_revision": _git_revision(),
+        "python_version": __import__("platform").python_version(),
+        "dataset_fingerprints": result["dataset"],
         "configuration": result["configuration"],
         "dataset": result["dataset"],
         "duration_seconds": result["duration_seconds"],
