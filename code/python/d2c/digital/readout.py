@@ -182,6 +182,8 @@ def query_conditioned_features(
     state: DigitalMemoryState,
     config: DigitalMemoryConfig,
     query: Sequence[float],
+    *,
+    feature_scale: float = 100.0,
 ) -> list[float]:
     """Build normalized state, query, and query-gated state features.
 
@@ -192,7 +194,9 @@ def query_conditioned_features(
 
     memory = np.array(combined_readout_vector(state, config), dtype=np.float64)
     query_arr = np.asarray(query, dtype=np.float64)
-    normalized_memory = memory * 100.0
+    if not math.isfinite(feature_scale) or feature_scale <= 0.0:
+        raise ValueError("feature_scale must be finite and positive")
+    normalized_memory = memory * float(feature_scale)
     gated = np.outer(query_arr, normalized_memory).ravel()
     return np.concatenate([normalized_memory, query_arr, gated]).tolist()
 
@@ -224,11 +228,15 @@ class LinearReadout:
         self.W = rng.uniform(-scale, scale, (self.output_dim, self.input_dim))
         self.b = np.zeros(self.output_dim)
 
-    def predict(self, features: Sequence[float]) -> tuple[int, float]:
+    def probabilities(self, features: Sequence[float]) -> list[float]:
         x = np.asarray(features, dtype=np.float64)
-        logits = self.W @ x + self.b
-        probs = _softmax(logits)
-        idx = int(np.argmax(probs))
+        if x.size != self.input_dim:
+            raise ValueError("feature dimension does not match readout input_dim")
+        return _softmax(self.W @ x + self.b).tolist()
+
+    def predict(self, features: Sequence[float]) -> tuple[int, float]:
+        probs = self.probabilities(features)
+        idx = max(range(len(probs)), key=probs.__getitem__)
         return idx, float(probs[idx])
 
     def train_step(self, features: Sequence[float], target_index: int, *, learning_rate: float = 0.05) -> float:

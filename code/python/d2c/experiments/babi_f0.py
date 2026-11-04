@@ -30,6 +30,11 @@ from ..digital.readout import (
     QueryConditionedMLPReadout,
     query_conditioned_features,
 )
+from .g0_diagnostics import (
+    build_prediction_record,
+    summarize_predictions,
+    summarize_training_losses,
+)
 from ..runtime.digital_runtime import DigitalRuntime, DigitalRuntimeConfig
 from ..runtime.phase_controller import DigitalPhaseConfig
 
@@ -49,6 +54,7 @@ class BabiF0Config:
     hidden_dim: int = 32
     learning_rate: float = 0.05
     readout_type: Literal["linear", "mlp"] = "linear"
+    feature_scale: float = 100.0
     mode: Literal["isolated", "continuous"] = "isolated"
     silence_steps_between_statements: int = 0
     runtime: DigitalRuntimeConfig = field(default_factory=DigitalRuntimeConfig)
@@ -63,6 +69,8 @@ class BabiF0Config:
             raise ValueError("mode must be isolated or continuous")
         if self.learning_rate <= 0.0:
             raise ValueError("learning_rate must be positive")
+        if not math.isfinite(self.feature_scale) or self.feature_scale <= 0.0:
+            raise ValueError("feature_scale must be finite and positive")
         if self.silence_steps_between_statements < 0:
             raise ValueError("silence_steps_between_statements must be non-negative")
 
@@ -242,22 +250,25 @@ def run_babi_f0_experiment(
     data_dir: Path = _DATA_DIR,
     quick: bool = False,
     max_train_stories: int = 0,
+    eval_split: str = "test",
 ) -> dict[str, object]:
     """Run one bAbI task through F0 and return reproducible metrics."""
     train_path = data_dir / "babi_train.jsonl"
-    test_path = data_dir / "babi_test.jsonl"
+    if eval_split not in {"valid", "test"}:
+        raise ValueError("eval_split must be 'valid' or 'test'")
+    eval_path = data_dir / f"babi_{eval_split}.jsonl"
     train_dataset = BabiDataset.from_jsonl(train_path).filter_task(config.task)
-    test_dataset = BabiDataset.from_jsonl(test_path).filter_task(config.task)
-    if not train_dataset.stories or not test_dataset.stories:
-        raise ValueError(f"bAbI task {config.task} requires non-empty train and test splits")
+    eval_dataset = BabiDataset.from_jsonl(eval_path).filter_task(config.task)
+    if not train_dataset.stories or not eval_dataset.stories:
+        raise ValueError(f"bAbI task {config.task} requires non-empty train and {eval_split} splits")
 
     if quick:
         train_dataset.stories = train_dataset.stories[:20]
-        test_dataset.stories = test_dataset.stories[:20]
+        eval_dataset.stories = eval_dataset.stories[:20]
     elif max_train_stories > 0:
         train_dataset.stories = train_dataset.stories[:max_train_stories]
 
-    vocabulary = build_babi_vocabulary(train_dataset.stories + test_dataset.stories)
+    vocabulary = build_babi_vocabulary(train_dataset.stories + eval_dataset.stories)
     answer_set = build_babi_answer_set(train_dataset.stories)
     if len(answer_set) < 2:
         raise ValueError("the selected task must have at least two training answer classes")
@@ -288,9 +299,11 @@ def run_babi_f0_experiment(
             memory_config,
             session_id=f"babi-train-task{config.task}-seed{seed}",
         )
+        training_epoch_losses: list[float] = []
         for epoch in range(epochs):
             order = list(enumerate(train_dataset.stories))
             rng.shuffle(order)
+            epoch_losses: list[float] = []
             for story_index, story in order:
                 episode = babi_story_to_episode(
                     story,
@@ -307,26 +320,31 @@ def run_babi_f0_experiment(
                     result.final_state,
                     train_runtime.memory_config,
                     result.query,
+                    feature_scale=config.feature_scale,
                 )
                 if result.target is None:
                     raise ValueError("bAbI training story is missing an answer target")
                 target_index = answer_set.index(result.target)
-                readout.train_step(
+                loss = readout.train_step(
                     features,
                     target_index,
                     learning_rate=config.learning_rate,
                 )
+                epoch_losses.append(float(loss))
+            training_epoch_losses.append(
+                sum(epoch_losses) / len(epoch_losses) if epoch_losses else 0.0
+            )
 
         # Held-out evaluation starts with a fresh runtime. In continuous mode,
         # state carries across test stories, but never from train into test.
         test_runtime = _make_runtime(
             config,
             memory_config,
-            session_id=f"babi-test-task{config.task}-seed{seed}",
+            session_id=f"babi-{eval_split}-task{config.task}-seed{seed}",
         )
         correct = 0
         predictions: list[dict[str, object]] = []
-        for story_index, story in enumerate(test_dataset.stories):
+        for story_index, story in enumerate(eval_dataset.stories):
             episode = babi_story_to_episode(
                 story,
                 bridge,
@@ -342,24 +360,25 @@ def run_babi_f0_experiment(
                 result.final_state,
                 test_runtime.memory_config,
                 result.query,
+                feature_scale=config.feature_scale,
             )
             prediction_index, confidence = test_runtime.evaluate(
                 lambda: readout.predict(features),
                 reason=f"held-out prediction for {result.episode_id}",
             )
-            predicted_answer = answer_set[prediction_index]
-            is_correct = predicted_answer == result.target
-            correct += int(is_correct)
-            predictions.append({
-                "episode_id": result.episode_id,
-                "target": result.target,
-                "prediction": predicted_answer,
-                "confidence": confidence,
-                "correct": is_correct,
-                "runtime_steps": result.last_step - result.first_step + 1,
-            })
+            probabilities = readout.probabilities(features)
+            record = build_prediction_record(
+                story, story_index, answer_set, probabilities
+            )
+            if answer_set[prediction_index] != record["prediction"]:
+                raise AssertionError("runtime evaluate and probability diagnostics disagree")
+            record["episode_id"] = result.episode_id
+            record["runtime_steps"] = result.last_step - result.first_step + 1
+            record["runtime_confidence"] = float(confidence)
+            predictions.append(record)
+            correct += int(record["correct"])
 
-        total = len(test_dataset.stories)
+        total = len(eval_dataset.stories)
         spine_exercise = (
             exercise_f0_spine(config, memory_config, seed=seed)
             if config.exercise_spine else None
@@ -373,6 +392,8 @@ def run_babi_f0_experiment(
             "train_runtime": train_runtime.runtime_summary(),
             "test_runtime": test_runtime.runtime_summary(),
             "predictions": predictions,
+            "diagnostics": summarize_predictions(predictions, answer_set),
+            "training": summarize_training_losses(training_epoch_losses),
         })
 
     accuracies = [float(row["accuracy"]) for row in seed_results]
@@ -382,17 +403,25 @@ def run_babi_f0_experiment(
         / math.sqrt(len(accuracies))
         if len(accuracies) > 1 else 0.0
     )
+    all_predictions = [
+        prediction for seed_result in seed_results
+        for prediction in seed_result["predictions"]
+    ]
     return {
         "experiment": "babi_f0_runtime_integrated",
         "task": config.task,
         "variant": config.variant,
         "dim": config.dim,
         "readout_type": config.readout_type,
+        "feature_scale": config.feature_scale,
+        "learning_rate": config.learning_rate,
         "mode": config.mode,
         "seeds": config.seeds,
         "epochs": epochs,
+        "evaluation_split": eval_split,
         "train_stories": len(train_dataset.stories),
-        "test_stories": len(test_dataset.stories),
+        "evaluation_stories": len(eval_dataset.stories),
+        "test_stories": len(eval_dataset.stories) if eval_split == "test" else None,
         "vocabulary_size": vocabulary.size,
         "answer_count": len(answer_set),
         "mean_accuracy": mean_accuracy,
@@ -400,6 +429,7 @@ def run_babi_f0_experiment(
         "runtime_config": config.runtime.to_mapping(),
         "memory_config": memory_config.to_mapping(),
         "seed_results": seed_results,
+        "diagnostics": summarize_predictions(all_predictions, answer_set),
         "notes": [
             "The SOE kernel is frozen in F0; F0 coordinates phases and records prediction/stability diagnostics.",
             "Readout learning remains supervised to preserve the current E0 comparison.",
@@ -431,6 +461,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seeds", type=int, default=3)
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--lr", type=float, default=0.05)
+    parser.add_argument("--feature-scale", type=float, default=100.0)
+    parser.add_argument("--eval-split", choices=["valid", "test"], default="test")
     parser.add_argument("--readout", choices=["linear", "mlp"], default="linear")
     parser.add_argument("--mode", choices=["isolated", "continuous"], default="isolated")
     parser.add_argument("--silence-steps", type=int, default=0)
@@ -466,6 +498,7 @@ def main(argv: list[str] | None = None) -> dict[str, str]:
         epochs=args.epochs,
         learning_rate=args.lr,
         readout_type=args.readout,
+        feature_scale=args.feature_scale,
         mode=args.mode,
         silence_steps_between_statements=args.silence_steps,
         runtime=runtime_config,
@@ -476,6 +509,7 @@ def main(argv: list[str] | None = None) -> dict[str, str]:
         data_dir=args.data_dir,
         quick=args.quick,
         max_train_stories=args.max_train_stories,
+        eval_split=args.eval_split,
     )
     paths = save_babi_f0_bundle(result, output_dir=args.output_dir)
     print(
