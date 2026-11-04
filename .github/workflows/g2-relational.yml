@@ -1,0 +1,143 @@
+name: G2 Relational Composition (QA3 + QA5)
+
+on:
+  workflow_dispatch:
+    inputs:
+      dim:
+        description: Memory dimension
+        required: true
+        default: "64"
+        type: string
+      seeds:
+        description: Matched seed count (3–20)
+        required: true
+        default: "5"
+        type: string
+      epochs:
+        description: Readout training epochs
+        required: true
+        default: "5"
+        type: string
+      bootstrap_samples:
+        description: Story-bootstrap replicates
+        required: true
+        default: "400"
+        type: string
+  push:
+    paths:
+      - ".github/workflows/g2-relational.yml"
+      - "code/python/d2c/experiments/babi_g2.py"
+      - "code/python/d2c/experiments/confidence_metrics.py"
+      - "code/python/d2c/experiments/fixtures/g2_relational_cases.json"
+      - "code/python/tests/test_babi_g2.py"
+      - "code/python/d2c/digital/babi.py"
+      - "code/python/d2c/experiments/babi_qa.py"
+      - "code/python/d2c/experiments/babi_f0.py"
+
+permissions:
+  contents: read
+
+jobs:
+  g2-relational:
+    name: Fixtures → matched QA3/QA5 → confidence audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PYTHONPATH: ${{ github.workspace }}/code/python
+      GFE_CORE_LIB: ${{ github.workspace }}/code/c++ core/build-shared/libgfe_core.so
+      DIM: ${{ github.event.inputs.dim || '64' }}
+      SEEDS: ${{ github.event.inputs.seeds || '5' }}
+      EPOCHS: ${{ github.event.inputs.epochs || '5' }}
+      BOOTSTRAP_SAMPLES: ${{ github.event.inputs.bootstrap_samples || '400' }}
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      VECLIB_MAXIMUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+      RUNS: runs/experiment-lab/g2
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build unchanged C++ runtime
+        run: |
+          cmake -S "code/c++ core" -B "code/c++ core/build-shared" -DBUILD_SHARED_LIBS=ON
+          cmake --build "code/c++ core/build-shared" -j
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy==2.4.6" matplotlib pytest
+
+      - name: Download and validate bAbI splits
+        run: python -m d2c.digital.download_babi
+
+      - name: Run fixture, confidence and G1-L regression tests
+        run: |
+          pytest -q code/python/tests/test_babi_g2.py code/python/tests/test_babi_g1l.py
+
+      - name: Validate G2 and Lab Python modules
+        run: |
+          python -m compileall -q             code/python/d2c/experiments/babi_g2.py             code/python/d2c/experiments/confidence_metrics.py             code/python/d2c/experiments/babi_g1l.py             code/python/d2c/experiment_lab/server.py
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          html = Path("code/python/d2c/experiment_lab/index.html").read_text()
+          scripts = re.findall(r"<script>(.*?)</script>", html, flags=re.S)
+          if len(scripts) != 1:
+              raise SystemExit(f"expected one inline Lab script, found {len(scripts)}")
+          Path("/tmp/experiment-lab.js").write_text(scripts[0])
+          PY
+          node --check /tmp/experiment-lab.js
+
+      - name: Run paired E0/E-F0 QA3 and QA5 with confidence evidence
+        run: |
+          mkdir -p "$RUNS"
+          python -m d2c.experiments.babi_g2 \
+            --tasks 3,5 \
+            --dim "$DIM" \
+            --seeds "$SEEDS" \
+            --epochs "$EPOCHS" \
+            --bootstrap-samples "$BOOTSTRAP_SAMPLES" \
+            --eval-split test \
+            --output-dir "$RUNS"
+
+      - name: Enforce G2 evidence-bundle gates
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          root = pathlib.Path("runs/experiment-lab/g2")
+          summaries = sorted(root.glob("g2_*/summary.json"))
+          if not summaries:
+              raise SystemExit("G2 produced no summary.json")
+          report = json.loads(summaries[-1].read_text())
+          acceptance = report["acceptance"]
+          required = ("fixture_suite", "qa3_qa5_benchmark_coverage",
+                      "matched_seed_and_example_controls", "confidence_evidence")
+          failed = [key for key in required if not acceptance[key]["passed"]]
+          print(json.dumps({
+              "fixture_control": report["fixture_control"]["passed"],
+              "tasks": sorted(report["tasks"]),
+              "acceptance": acceptance,
+              "paired_differences": {
+                  key: task["paired_accuracy_difference_ef0_minus_e0"]
+                  for key, task in report["tasks"].items()
+              },
+          }, indent=2))
+          if failed:
+              raise SystemExit("G2 evidence gates failed: " + ", ".join(failed))
+          PY
+
+      - name: Upload G2 Lab register and raw evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g2-relational-composition-qa3-qa5
+          path: runs/experiment-lab/g2/
+          if-no-files-found: warn
+          retention-days: 30
