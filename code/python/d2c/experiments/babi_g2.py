@@ -273,7 +273,7 @@ def _arm_summary(result: dict[str, Any], *, arm: str, bootstrap_samples: int, ta
             "accuracy": float(seed_row["accuracy"]),
             "confidence": per_seed_diag,
             "confidence_quality_flags": flags,
-            "predictions": predictions,
+            "predictions": seed_row["predictions"],
         })
         confidence.append(per_seed_diag)
     return {
@@ -469,9 +469,32 @@ def save_g2_bundle(result: dict[str, Any], *, output_dir: Path) -> dict[str, str
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)
+    per_example_rows = []
+    for task_key, task in result["tasks"].items():
+        for arm_name, arm in task["arms"].items():
+            for seed in arm["seed_results"]:
+                for prediction in seed["predictions"]:
+                    per_example_rows.append({
+                        "task": int(task_key), "arm": arm_name, "seed": seed["seed"], **prediction
+                    })
+    with (bundle / "per_example.jsonl").open("w", encoding="utf-8") as handle:
+        for row in per_example_rows:
+            handle.write(json.dumps(row, sort_keys=True) + "\\n")
+    example_fields = [
+        "task", "arm", "seed", "story_index", "question", "target", "prediction",
+        "correct", "confidence", "top_two_margin", "failure_category", "probability_vector",
+    ]
+    with (bundle / "per_example.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=example_fields)
+        writer.writeheader()
+        for row in per_example_rows:
+            writer.writerow({
+                key: json.dumps(row.get(key), sort_keys=True) if key == "probability_vector" else row.get(key)
+                for key in example_fields
+            })
     with (bundle / "fixtures.jsonl").open("w", encoding="utf-8") as handle:
         for row in result["fixture_control"]["results"]:
-            handle.write(json.dumps(row, sort_keys=True) + "\n")
+            handle.write(json.dumps(row, sort_keys=True) + "\\n")
     report = [
         "# G2 relational composition report",
         "",
