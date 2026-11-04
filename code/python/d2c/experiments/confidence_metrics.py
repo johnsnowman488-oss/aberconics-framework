@@ -169,6 +169,7 @@ def _core(labels: list[str], vectors: list[list[float]], targets: list[int], bin
     return {
         "n": n,
         "correct": sum(corrects),
+        "incorrect_count": n - sum(corrects),
         "accuracy": sum(corrects) / n,
         "accuracy_wilson_95_ci": _wilson(sum(corrects), n),
         "mean_top_label_confidence": sum(confidences) / n,
