@@ -77,3 +77,14 @@ Then open http://127.0.0.1:8765.
 The local API provides the experiment catalogue, dataset status, run launch/status/history/logs, structured results, two-to-five-run comparison and allow-listed result downloads. Runs are stored under runs/experiment-lab/. G1 is labelled as a deterministic symbolic control; G1-L separates pilot validation from held-out test confirmation and exposes holder-retrieval evidence.
 
 A GitHub Actions workflow runs G1 parser/transition tests, the E0/E-F0 comparison and the separate G1 QA2 diagnostic, then uploads a Lab register and full result bundle for remote inspection.
+
+## G2: relational composition and confidence qualification
+
+G2 is registered in the Lab as a paired QA3/QA5 benchmark. It executes E0 and isolated E-F0 with the same full-variant readout configuration, training seeds, epoch count and evaluation story order. The default full run uses five matched seeds and a locked test evaluation. It also replays a 12-case structured-event semantic fixture suite, but those fixtures are not natural-language parser tests or learned benchmark scores. G1-L remains QA2-only and is not presented as a QA3/QA5 learner.
+
+G2 run bundles expose per-seed metrics, full per-example probability evidence, fixtures, dataset fingerprints, manifest and `experiment_lab_register.json`. The Lab control surface exposes the task set (QA3, QA5 or both), dimension, seeds, epochs, readout and learning settings. Full G2 closure requires both tasks, all fixtures, matched seed/example identity and complete confidence diagnostics.
+
+The confidence layer retains complete probability vectors and adds NLL, multiclass Brier, fixed-width and adaptive equal-mass ECE, classwise ECE, maximum/RMS calibration error, confidence-on-error, high-confidence risk, margin, entropy, risk-coverage/AURC, Wilson accuracy intervals and story-bootstrap intervals. It reports bootstrap sampling uncertainty separately from between-seed paired t intervals. Metrics are descriptive on the test split; they are not used to tune or recalibrate against held-out test data.
+
+See `docs/G2_RELATIONAL_COMPOSITION.md` for the protocol, controls, scope boundaries, confidence metrics and acceptance criteria. The full benchmark is run by `.github/workflows/g2-relational.yml`. Julia remains skipped; runtime ablation and hierarchy are outside G2.
+
