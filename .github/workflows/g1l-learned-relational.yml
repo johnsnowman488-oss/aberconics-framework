@@ -1,0 +1,183 @@
+name: G1-L Learned Relational Binding (L0-L2)
+
+on:
+  workflow_dispatch:
+    inputs:
+      dim:
+        description: Learned relation embedding dimension
+        required: true
+        default: "64"
+      pilot_train:
+        description: L1 training stories
+        required: true
+        default: "200"
+      pilot_validation:
+        description: L1 validation stories
+        required: true
+        default: "100"
+      epochs:
+        description: Training epochs for pilot and confirmation
+        required: true
+        default: "3"
+      confirm_seeds:
+        description: Matched seeds for L2 confirmation
+        required: true
+        default: "3"
+  push:
+    paths:
+      - ".github/workflows/g1l-learned-relational.yml"
+      - "code/python/d2c/experiments/babi_g1l.py"
+      - "code/python/tests/test_babi_g1l.py"
+
+permissions:
+  contents: read
+
+jobs:
+  staged-g1l:
+    name: L0 sanity → L1 pilot → conditional L2 confirmation
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PYTHONPATH: ${{ github.workspace }}/code/python
+      GFE_CORE_LIB: ${{ github.workspace }}/code/c++ core/build-shared/libgfe_core.so
+      DIM: ${{ github.event.inputs.dim || '64' }}
+      PILOT_TRAIN: ${{ github.event.inputs.pilot_train || '200' }}
+      PILOT_VALIDATION: ${{ github.event.inputs.pilot_validation || '100' }}
+      EPOCHS: ${{ github.event.inputs.epochs || '3' }}
+      CONFIRM_SEEDS: ${{ github.event.inputs.confirm_seeds || '3' }}
+      RUNS: runs/experiment-lab/g1l
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build unchanged F0/SOE shared runtime
+        run: |
+          cmake -S "code/c++ core" -B "code/c++ core/build-shared" -DBUILD_SHARED_LIBS=ON
+          cmake --build "code/c++ core/build-shared" -j
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy matplotlib pytest
+
+      - name: Download and validate bAbI splits
+        run: python -m d2c.digital.download_babi
+
+      - name: L0 fast parser, identity, role and gradient sanity tests
+        run: pytest -q code/python/tests/test_babi_g1l.py code/python/tests/test_babi_g1.py
+
+      - name: Validate Python modules and Lab browser script
+        run: |
+          python -m compileall -q code/python/d2c/experiments/babi_g1l.py code/python/d2c/experiment_lab/server.py
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          html = Path("code/python/d2c/experiment_lab/index.html").read_text()
+          scripts = re.findall(r"<script>(.*?)</script>", html, flags=re.S)
+          if len(scripts) != 1:
+              raise SystemExit(f"expected one inline Lab script, found {len(scripts)}")
+          Path("/tmp/experiment-lab.js").write_text(scripts[0])
+          PY
+          node --check /tmp/experiment-lab.js
+
+      - name: Run L0, L1 and gated L2 in one process
+        run: |
+          mkdir -p "$RUNS"
+          python -m d2c.experiments.babi_g1l \
+            --stage all \
+            --dim "$DIM" \
+            --epochs "$EPOCHS" \
+            --train-limit "$PILOT_TRAIN" \
+            --eval-limit "$PILOT_VALIDATION" \
+            --confirm-seeds "$CONFIRM_SEEDS" \
+            --output-dir "$RUNS"
+          python - <<'PY'
+          import json, pathlib
+          root = pathlib.Path("runs/experiment-lab/g1l")
+          summaries = sorted(root.glob("g1l_*/summary.json"))
+          if not summaries:
+              raise SystemExit("G1-L did not produce summary.json")
+          report = json.loads(summaries[-1].read_text())
+          if not report["stages"]["L0"]["passed"]:
+              raise SystemExit("L0 sanity gate failed")
+          print(json.dumps({
+              "L0": report["stages"]["L0"]["passed"],
+              "L1": report["stages"]["L1"]["status"],
+              "L1_validation_accuracy": report["stages"]["L1"]["validation_after_training"]["accuracy"],
+              "L1_holder_retrieval_accuracy": report["stages"]["L1"]["validation_after_training"]["holder_retrieval_accuracy"],
+              "L2": report["stages"]["L2"]["status"],
+              "L2_reason": report["stages"]["L2"].get("reason"),
+              "L2_per_seed_accuracy": report["stages"]["L2"].get("per_seed_accuracy"),
+              "F0_companion": report.get("f0_companion"),
+          }, indent=2))
+          PY
+
+      - name: Update Experiment Lab register and stage report
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, pathlib, os
+          root = pathlib.Path("runs/experiment-lab")
+          bundles = sorted((root / "g1l").glob("g1l_*/summary.json"))
+          report = json.loads(bundles[-1].read_text()) if bundles else None
+          if report:
+              l0, l1, l2 = (report["stages"][k] for k in ("L0", "L1", "L2"))
+              register = {
+                  "schema_version": 1,
+                  "experiment": "G1-L",
+                  "workflow": os.environ.get("GITHUB_WORKFLOW"),
+                  "workflow_run_id": os.environ.get("GITHUB_RUN_ID"),
+                  "commit_sha": os.environ.get("GITHUB_SHA"),
+                  "dataset_fingerprints": report["dataset"],
+                  "configuration": report["configuration"],
+                  "stages": {
+                      "L0": {"status": "passed" if l0["passed"] else "failed", "checks": l0["checks"]},
+                      "L1": {"status": l1["status"], "gate_passed": l1["gate_passed"],
+                             "validation_before": l1["validation_before_training"],
+                             "validation_after": l1["validation_after_training"],
+                             "training": l1["training"]},
+                      "L2": {"status": l2["status"], "reason": l2.get("reason"),
+                             "mean_accuracy": l2.get("mean_accuracy"),
+                             "standard_error": l2.get("standard_error"),
+                             "per_seed_accuracy": l2.get("per_seed_accuracy")},
+                  },
+                  "f0_companion": report.get("f0_companion"),
+                  "result_bundle": str(bundles[-1].parent),
+                  "interpretation": report["claim_boundary"],
+              }
+              (root / "experiment_lab_register.json").write_text(json.dumps(register, indent=2))
+              lines = [
+                  "# G1-L Lab register",
+                  "",
+                  f"- Commit: {os.environ.get('GITHUB_SHA')}",
+                  f"- L0: {'PASS' if l0['passed'] else 'FAIL'}",
+                  f"- L1: {l1['status']}",
+                  f"- L1 validation accuracy: {l1['validation_after_training']['accuracy']:.4f}",
+                  f"- L1 holder retrieval accuracy: {l1['validation_after_training']['holder_retrieval_accuracy']}",
+                  f"- L2: {l2['status']}",
+                  f"- L2 per-seed accuracy: {l2.get('per_seed_accuracy')}",
+                  f"- F0 stability violations: {report.get('f0_companion', {}).get('stability_violations', 'not recorded')}",
+                  "",
+                  f"**Interpretation:** {report['claim_boundary']}",
+              ]
+              (root / "G1L_REPORT.md").write_text("\n".join(lines) + "\n")
+              print(json.dumps(register, indent=2))
+          else:
+              print("No G1-L summary was produced; uploading logs if present.")
+          PY
+
+      - name: Upload G1-L Lab register and raw evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g1l-learned-relational-binding
+          path: |
+            runs/experiment-lab/g1l/
+            runs/experiment-lab/G1L_REPORT.md
+          if-no-files-found: warn
+          retention-days: 30
