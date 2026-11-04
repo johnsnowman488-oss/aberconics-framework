@@ -34,7 +34,7 @@
 <script>
 const $=id=>document.getElementById(id);let selected=null,timer=null;
 async function api(path,opts){const r=await fetch(path,opts);const j=await r.json();if(!r.ok)throw Error(j.error||r.statusText);return j}
-async function refresh(){const d=await api("/api/datasets");$("dataset").textContent="Dataset: "+(d.ready_for_g2?"QA3/QA5 train + test splits detected":d.ready_for_g1l?"train/validation/test splits detected":d.ready?"train/test splits detected":"bAbI train/test data missing; run downloader first");const h=await api("/api/runs");$("history").innerHTML=h.runs.length?h.runs.map(x=>'<div class="run" data-id="'+x.run_id+'"><div style="display:flex;gap:10px;align-items:center"><input class="compare-run" type="checkbox" value="'+x.run_id+'" style="width:auto"><a href="#" class="run-open" style="color:inherit;text-decoration:none"><b>'+x.experiment.toUpperCase()+'</b> · task '+x.config.task+' · '+x.status+'<br><small>'+x.created_at+'</small></a></div></div>').join(""):"No saved runs yet.";document.querySelectorAll(".run-open").forEach(x=>x.onclick=e=>{e.preventDefault();show(x.closest(".run").dataset.id)});document.querySelectorAll(".compare-run").forEach(x=>x.onclick=e=>e.stopPropagation())}
+async function refresh(){const d=await api("/api/datasets");$("dataset").textContent="Dataset: "+(d.ready_for_g2?"QA3/QA5 train + test splits detected":d.ready_for_g1l?"train/validation/test splits detected":d.ready?"train/test splits detected":"bAbI train/test data missing; run downloader first");const h=await api("/api/runs");$("history").innerHTML=h.runs.length?h.runs.map(x=>'<div class="run" data-id="'+x.run_id+'"><div style="display:flex;gap:10px;align-items:center"><input class="compare-run" type="checkbox" value="'+x.run_id+'" style="width:auto"><a href="#" class="run-open" style="color:inherit;text-decoration:none"><b>'+x.experiment.toUpperCase()+'</b> · '+(x.config.tasks?'QA'+x.config.tasks.join('+'):'task '+x.config.task)+' · '+x.status+'<br><small>'+x.created_at+'</small></a></div></div>').join(""):"No saved runs yet.";document.querySelectorAll(".run-open").forEach(x=>x.onclick=e=>{e.preventDefault();show(x.closest(".run").dataset.id)});document.querySelectorAll(".compare-run").forEach(x=>x.onclick=e=>e.stopPropagation())}
 async function show(id){selected=id;const job=await api("/api/runs/"+id);$("empty").hidden=true;$("results").hidden=false;$("status").textContent=job.status+" · "+id;if(job.status==="running"){const l=await api("/api/runs/"+id+"/logs");$("logs").textContent=l.stdout+"\n"+l.stderr;return}try{const r=await api("/api/runs/"+id+"/results");if(r.pending){$("details").textContent="Result file not ready.";return}const g1=job.experiment==="g1";const seeds=r.seed_results||[];
 if(job.experiment==="g2"){
 const taskRows=Object.entries(r.tasks||{}),tableRows=[],confidenceView={};
@@ -43,15 +43,18 @@ confidenceView["QA"+taskKey]={};
 for(const armName of ["e0","ef0"]){
 const arm=task.arms[armName];confidenceView["QA"+taskKey][armName]=arm.confidence_summary;
 for(const seed of arm.seed_results||[]){
-tableRows.push({seed:"QA"+taskKey+" "+armName.toUpperCase()+" "+seed.seed,correct:seed.correct,total:seed.total,accuracy:seed.accuracy,holder_retrieval_accuracy:null});
+tableRows.push({seed:"QA"+taskKey+" "+armName.toUpperCase()+" "+seed.seed,correct:seed.correct,total:seed.total,accuracy:seed.accuracy,holder_retrieval_accuracy:null,confidence_quality_flags:(seed.confidence_quality_flags||[]).join(", ")||"no flag"});
 }
 }
 }
 const meanAccuracy=tableRows.length?tableRows.reduce((sum,row)=>sum+row.accuracy,0)/tableRows.length:null;
+$("accuracy").parentElement.querySelector("small").textContent="Mean accuracy across G2 cells";
+$("error").parentElement.querySelector("small").textContent="Paired E-F0 − E0 comparison";
+$("rows").closest(".tablewrap").querySelector("thead th:last-child").textContent="Confidence flags";
 $("accuracy").textContent=meanAccuracy==null?"—":(100*meanAccuracy).toFixed(1)+"%";
 $("error").textContent=taskRows.map(([k,v])=>{const d=v.paired_accuracy_difference_ef0_minus_e0;return "QA"+k+" Δ "+(100*d.mean).toFixed(2)+"pp; CI "+(d.ci95_two_sided_t||[]).map(x=>(100*x).toFixed(2)+"pp").join(" to ")}).join(" · ");
 $("stories").textContent=taskRows.map(([k,v])=>"QA"+k+": "+v.evaluation_stories).join(" · ");
-$("rows").innerHTML=tableRows.map(x=>'<tr><td>'+x.seed+'</td><td>'+x.correct+'</td><td>'+x.total+'</td><td>'+(100*x.accuracy).toFixed(1)+'%</td><td>confidence audit</td></tr>').join("");
+$("rows").innerHTML=tableRows.map(x=>'<tr><td>'+x.seed+'</td><td>'+x.correct+'</td><td>'+x.total+'</td><td>'+(100*x.accuracy).toFixed(1)+'%</td><td>'+x.confidence_quality_flags+'</td></tr>').join("");
 draw(tableRows);
 $("calibration").textContent=JSON.stringify({per_task:confidenceView,paired_seed_differences:Object.fromEntries(taskRows.map(([k,v])=>["QA"+k,v.paired_accuracy_difference_ef0_minus_e0]))},null,2);
 $("distributions").textContent=JSON.stringify({fixture_control:{passed:r.fixture_control?.passed,total:r.fixture_control?.total,by_category:r.fixture_control?.by_category},acceptance:r.acceptance,claim_boundary:r.claim_boundary},null,2);
