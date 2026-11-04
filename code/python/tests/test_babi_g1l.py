@@ -11,10 +11,12 @@ from d2c.experiments.babi_g1l import (
     LearnedRelationalBinder,
     ParsedStory,
     _run_l0,
+    _evaluate,
     run_g1l_experiment,
     save_g1l_bundle,
 )
 from d2c.digital.relational import RelationalEvent
+from d2c.experiment_lab.server import write_manifest
 
 
 def _vocabulary():
@@ -46,6 +48,42 @@ def test_holder_attention_is_normalized_and_names_target_holder() -> None:
     assert result["target_holder"] == "Mary"
     assert set(result["attention"]) == {"John", "Mary"}
     assert abs(sum(result["attention"].values()) - 1.0) < 1e-10
+
+
+def test_evaluation_reports_held_and_fixed_relation_metrics_separately() -> None:
+    model = LearnedRelationalBinder(**_vocabulary(), dim=16, seed=5)
+    held = ParsedStory((
+        RelationalEvent("move", "John", location="garden"),
+        RelationalEvent("move", "Mary", location="kitchen"),
+        RelationalEvent("pickup", "Mary", object="football"),
+        RelationalEvent("move", "Mary", location="hallway"),
+    ), "Where is the football?", "football", "hallway")
+    fixed = ParsedStory((
+        RelationalEvent("move", "John", location="office"),
+        RelationalEvent("pickup", "John", object="milk"),
+        RelationalEvent("move", "John", location="garden"),
+        RelationalEvent("release", "John", object="milk"),
+    ), "Where is the milk?", "milk", "garden")
+    result = _evaluate(model, [held, fixed])
+    assert result["relation_metrics"]["object_holder_to_person_location"]["total"] == 1
+    assert result["relation_metrics"]["fixed_object_location"]["total"] == 1
+    assert result["held_query_total"] == 1
+    assert result["fixed_location_total"] == 1
+    assert result["holder_retrieval_total"] == 1
+
+
+def test_lab_manifest_writer_records_result_inventory(tmp_path: Path) -> None:
+    run_dir = tmp_path / "lab-run"
+    run_dir.mkdir()
+    (run_dir / "config.json").write_text("{}", encoding="utf-8")
+    write_manifest({
+        "run_id": "manifest-test", "directory": str(run_dir),
+        "experiment": "g1l", "status": "running", "created_at": "now",
+        "config": {},
+    })
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert "config.json" in manifest["result_files"]
+    assert manifest["run_id"] == "manifest-test"
 
 
 def test_release_without_known_actor_location_uses_unknown_state() -> None:
@@ -164,3 +202,6 @@ def test_pilot_bundle_has_manifest_and_explicit_stage_gate(tmp_path: Path) -> No
         assert (bundle / name).is_file()
     saved = json.loads((bundle / "summary.json").read_text())
     assert saved["experiment"] == "babi_g1l_learned_relational_binding"
+    metadata = json.loads((bundle / "manifest.json").read_text())
+    assert metadata["created_at"] <= metadata["completed_at"]
+    assert metadata["dataset_fingerprints"]["train_sha256"]
