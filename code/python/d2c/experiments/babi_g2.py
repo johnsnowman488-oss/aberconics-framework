@@ -254,12 +254,26 @@ def _arm_summary(result: dict[str, Any], *, arm: str, bootstrap_samples: int, ta
             seed_row, labels=labels, bootstrap_samples=bootstrap_samples,
             bootstrap_seed=(task * 10_000 + int(seed_row["seed"]) * 101 + (0 if arm == "e0" else 1)),
         )
+        flags = []
+        fixed_ece = per_seed_diag["calibration"]["fixed_bin_top_label_ece"]
+        adaptive_ece = per_seed_diag["calibration"]["adaptive_equal_mass_top_label_ece"]
+        wrong = per_seed_diag["incorrect_count"]
+        wrong_high = per_seed_diag["overconfident_error_fraction"]["0.9"]
+        high_confidence = per_seed_diag["selective_prediction"]["confidence_thresholds"]["0.9"]
+        if max(fixed_ece, adaptive_ece) > 0.10:
+            flags.append("calibration_error_above_0.10")
+        if wrong >= 20 and wrong_high is not None and wrong_high > 0.25:
+            flags.append("more_than_25_percent_of_errors_have_confidence_at_least_0.90")
+        if high_confidence["count"] >= 30 and high_confidence["risk"] is not None and high_confidence["risk"] > 0.10:
+            flags.append("high_confidence_selective_risk_above_0.10")
         enriched_seed_rows.append({
             "seed": int(seed_row["seed"]),
             "correct": int(seed_row["correct"]),
             "total": int(seed_row["total"]),
             "accuracy": float(seed_row["accuracy"]),
             "confidence": per_seed_diag,
+            "confidence_quality_flags": flags,
+            "predictions": predictions,
         })
         confidence.append(per_seed_diag)
     return {
@@ -284,6 +298,10 @@ def _arm_summary(result: dict[str, Any], *, arm: str, bootstrap_samples: int, ta
             ),
             "overconfident_error_fraction_at_0_90_by_seed": [
                 row["overconfident_error_fraction"]["0.9"] for row in confidence
+            ],
+            "quality_flags_by_seed": [
+                {"seed": row["seed"], "flags": row["confidence_quality_flags"]}
+                for row in enriched_seed_rows
             ],
             "interpretation": "Arithmetic mean of per-seed diagnostics; do not pool seed × story predictions as independent observations.",
         },
@@ -496,7 +514,7 @@ def save_g2_bundle(result: dict[str, Any], *, output_dir: Path) -> dict[str, str
         "code_revision": _revision(),
         "dataset_fingerprints": result["dataset"]["fingerprints"],
         "configuration": result["configuration"],
-        "result_files": ["summary.json", "summary.md", "per_seed_metrics.csv", "fixtures.jsonl"],
+        "result_files": ["summary.json", "summary.md", "per_seed_metrics.csv", "per_example.csv", "per_example.jsonl", "fixtures.jsonl"],
     }
     (bundle / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     (bundle / "manifest.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
