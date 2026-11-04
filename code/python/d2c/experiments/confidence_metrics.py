@@ -146,12 +146,15 @@ def _core(labels: list[str], vectors: list[list[float]], targets: list[int], bin
     curve = []
     area = 0.0
     previous_coverage, previous_risk = 0.0, 0.0
+    cumulative_correct = 0
+    curve_ranks = {max(1, round(n * pct)) for pct in (0.25, 0.50, 0.75, 0.90)}
     for rank, index in enumerate(sorted_indices, start=1):
+        cumulative_correct += corrects[index]
         coverage = rank / n
-        risk = 1.0 - sum(corrects[j] for j in sorted_indices[:rank]) / rank
+        risk = 1.0 - cumulative_correct / rank
         area += (coverage - previous_coverage) * (risk + previous_risk) / 2.0
         previous_coverage, previous_risk = coverage, risk
-        if rank in {max(1, round(n * pct)) for pct in (0.25, 0.50, 0.75, 0.90)} or rank == n:
+        if rank in curve_ranks or rank == n:
             curve.append({"coverage": coverage, "risk": risk, "retained": rank})
     wrong_conf = [confidences[i] for i, c in enumerate(corrects) if not c]
     threshold_stats = {}
