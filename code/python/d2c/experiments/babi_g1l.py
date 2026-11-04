@@ -495,10 +495,20 @@ def _evaluate(
     holder_correct = holder_total = 0
     holder_chance_total = 0.0
     predictions: list[dict[str, Any]] = []
+    relation_metrics: dict[str, dict[str, int]] = {
+        "fixed_object_location": {"correct": 0, "total": 0},
+        "object_holder_to_person_location": {"correct": 0, "total": 0},
+    }
     for index, story in enumerate(stories):
         output = model._forward(story)
         is_correct = output["prediction"] == story.answer
         correct += int(is_correct)
+        relation = (
+            "object_holder_to_person_location"
+            if output["is_held"] else "fixed_object_location"
+        )
+        relation_metrics[relation]["correct"] += int(is_correct)
+        relation_metrics[relation]["total"] += 1
         if output["is_held"]:
             holder_total += 1
             holder_correct += int(bool(output["holder_correct"]))
@@ -510,7 +520,7 @@ def _evaluate(
             "target": story.answer,
             "prediction": output["prediction"],
             "correct": is_correct,
-            "query_relation": "object_holder_to_person_location" if output["is_held"] else "fixed_object_location",
+            "query_relation": relation,
             "target_holder": output["target_holder"],
             "predicted_holder": output["predicted_holder"],
             "holder_correct": output["holder_correct"],
@@ -518,17 +528,29 @@ def _evaluate(
             "confidence": float(np.max(output["probabilities"])),
         })
     total = len(stories)
+    for values in relation_metrics.values():
+        values["accuracy"] = (
+            values["correct"] / values["total"] if values["total"] else 0.0
+        )
+    held = relation_metrics["object_holder_to_person_location"]
+    fixed = relation_metrics["fixed_object_location"]
     return {
         "correct": correct,
         "total": total,
         "accuracy": correct / total if total else 0.0,
+        "relation_metrics": relation_metrics,
+        "held_query_accuracy": held["accuracy"],
+        "held_query_correct": held["correct"],
+        "held_query_total": held["total"],
+        "fixed_location_accuracy": fixed["accuracy"],
+        "fixed_location_correct": fixed["correct"],
+        "fixed_location_total": fixed["total"],
         "holder_retrieval_correct": holder_correct,
         "holder_retrieval_total": holder_total,
         "holder_retrieval_accuracy": holder_correct / holder_total if holder_total else None,
         "holder_random_baseline": holder_chance_total / holder_total if holder_total else None,
         "predictions": predictions,
     }
-
 
 def _train(
     model: LearnedRelationalBinder,
@@ -644,10 +666,10 @@ def run_g1l_experiment(
         "gate_passed": l1_gate,
         "training": training,
         "validation_before_training": {
-            key: before[key] for key in ("accuracy", "holder_retrieval_accuracy", "correct", "total")
+            key: before[key] for key in ("accuracy", "holder_retrieval_accuracy", "correct", "total", "relation_metrics", "held_query_accuracy", "fixed_location_accuracy")
         },
         "validation_after_training": {
-            key: after[key] for key in ("accuracy", "holder_retrieval_accuracy", "holder_retrieval_correct", "holder_retrieval_total", "correct", "total")
+            key: after[key] for key in ("accuracy", "holder_retrieval_accuracy", "holder_retrieval_correct", "holder_retrieval_total", "correct", "total", "relation_metrics", "held_query_accuracy", "fixed_location_accuracy")
         },
         "random_holder_baseline": random_holder_baseline,
         "validation_predictions": after["predictions"],
@@ -684,6 +706,9 @@ def run_g1l_experiment(
                 "holder_retrieval_correct": evaluation["holder_retrieval_correct"],
                 "holder_retrieval_total": evaluation["holder_retrieval_total"],
                 "holder_retrieval_accuracy": evaluation["holder_retrieval_accuracy"],
+                "held_query_accuracy": evaluation["held_query_accuracy"],
+                "fixed_location_accuracy": evaluation["fixed_location_accuracy"],
+                "relation_metrics": evaluation["relation_metrics"],
                 "predictions": evaluation["predictions"],
             })
         accuracies = [row["accuracy"] for row in seed_results]
@@ -699,6 +724,12 @@ def run_g1l_experiment(
             "per_seed_accuracy": accuracies,
             "mean_holder_retrieval_accuracy": float(np.mean([
                 row["holder_retrieval_accuracy"] or 0.0 for row in seed_results
+            ])),
+            "mean_held_query_accuracy": float(np.mean([
+                row["held_query_accuracy"] for row in seed_results
+            ])),
+            "mean_fixed_location_accuracy": float(np.mean([
+                row["fixed_location_accuracy"] for row in seed_results
             ])),
             "seed_results": seed_results,
             "per_example": [
@@ -785,6 +816,9 @@ def save_g1l_bundle(result: dict[str, Any], *, output_dir: Path) -> dict[str, st
         f"- L2 confirmation: {l2['status']} — {l2.get('reason') or 'completed'}",
         f"- L2 per-seed accuracy: {l2.get('per_seed_accuracy')}",
         f"- L2 mean accuracy: {l2.get('mean_accuracy')}",
+        f"- L2 held-query accuracy: {l2.get('mean_held_query_accuracy')}",
+        f"- L2 fixed-location accuracy: {l2.get('mean_fixed_location_accuracy')}",
+        f"- L2 holder retrieval accuracy: {l2.get('mean_holder_retrieval_accuracy')}",
         f"- Total duration: {result['duration_seconds']:.2f}s",
         "",
         f"**Claim boundary:** {result['claim_boundary']}",
@@ -827,6 +861,9 @@ def save_g1l_bundle(result: dict[str, Any], *, output_dir: Path) -> dict[str, st
                 "mean_accuracy": l2.get("mean_accuracy"),
                 "standard_error": l2.get("standard_error"),
                 "per_seed_accuracy": l2.get("per_seed_accuracy"),
+                "mean_held_query_accuracy": l2.get("mean_held_query_accuracy"),
+                "mean_fixed_location_accuracy": l2.get("mean_fixed_location_accuracy"),
+                "mean_holder_retrieval_accuracy": l2.get("mean_holder_retrieval_accuracy"),
             },
         },
         "f0_companion": result.get("f0_companion"),
