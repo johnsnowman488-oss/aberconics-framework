@@ -498,7 +498,7 @@ def save_g2_bundle(result: dict[str, Any], *, output_dir: Path) -> dict[str, str
                     })
     with (bundle / "per_example.jsonl").open("w", encoding="utf-8") as handle:
         for row in per_example_rows:
-            handle.write(json.dumps(row, sort_keys=True) + "\\n")
+            handle.write(json.dumps(row, sort_keys=True) + "\n")
     example_fields = [
         "task", "arm", "seed", "story_index", "question", "target", "prediction",
         "correct", "confidence", "top_two_margin", "failure_category", "probability_vector",
@@ -513,7 +513,7 @@ def save_g2_bundle(result: dict[str, Any], *, output_dir: Path) -> dict[str, str
             })
     with (bundle / "fixtures.jsonl").open("w", encoding="utf-8") as handle:
         for row in result["fixture_control"]["results"]:
-            handle.write(json.dumps(row, sort_keys=True) + "\\n")
+            handle.write(json.dumps(row, sort_keys=True) + "\n")
     report = [
         "# G2 relational composition report",
         "",
