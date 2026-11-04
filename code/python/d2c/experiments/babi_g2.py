@@ -412,6 +412,19 @@ def run_g2_experiment(
             "arms": {"e0": e0, "ef0": ef0},
         }
 
+    # Two pre-specified task-wise comparisons (QA3 and QA5): apply Holm
+    # correction to exact paired sign-test p-values to limit family-wise error.
+    ordered_p = sorted(
+        (row["paired_accuracy_difference_ef0_minus_e0"]["exact_two_sided_sign_test_p"], key)
+        for key, row in task_results.items()
+    )
+    running_adjusted = 0.0
+    task_count = len(ordered_p)
+    for rank, (raw_p, task_key) in enumerate(ordered_p, start=1):
+        adjusted = min(1.0, max(running_adjusted, (task_count - rank + 1) * raw_p))
+        task_results[task_key]["paired_accuracy_difference_ef0_minus_e0"]["holm_adjusted_exact_sign_test_p"] = adjusted
+        running_adjusted = adjusted
+
     return {
         "schema_version": 1,
         "experiment": "g2_relational_composition",
@@ -572,7 +585,7 @@ def save_g2_bundle(result: dict[str, Any], *, output_dir: Path) -> dict[str, str
             f"- E0 mean accuracy across seeds: {task['arms']['e0']['mean_accuracy_over_seeds']:.4f}",
             f"- E-F0 mean accuracy across seeds: {task['arms']['ef0']['mean_accuracy_over_seeds']:.4f}",
             f"- Paired E-F0 − E0 accuracy: {delta['mean']:.4f}; 95% t interval: {delta['ci95_two_sided_t']}",
-            f"- Exact paired sign-test p: {delta['exact_two_sided_sign_test_p']:.4f}; positive/negative/zero seeds: {delta['positive_seed_differences']}/{delta['negative_seed_differences']}/{delta['zero_seed_differences']}",
+            f"- Exact paired sign-test p: {delta['exact_two_sided_sign_test_p']:.4f}; Holm-adjusted across tasks: {delta['holm_adjusted_exact_sign_test_p']:.4f}; positive/negative/zero seeds: {delta['positive_seed_differences']}/{delta['negative_seed_differences']}/{delta['zero_seed_differences']}",
             f"- E0 mean fixed/adaptive ECE: {task['arms']['e0']['confidence_summary']['mean_fixed_bin_top_label_ece_over_seeds']:.4f} / {task['arms']['e0']['confidence_summary']['mean_adaptive_top_label_ece_over_seeds']:.4f}",
             f"- E-F0 mean fixed/adaptive ECE: {task['arms']['ef0']['confidence_summary']['mean_fixed_bin_top_label_ece_over_seeds']:.4f} / {task['arms']['ef0']['confidence_summary']['mean_adaptive_top_label_ece_over_seeds']:.4f}",
             "",
