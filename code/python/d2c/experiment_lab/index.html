@@ -52,7 +52,7 @@ $("evidence").textContent=JSON.stringify(finalRows.slice(0,20),null,2);
 $("spine-results").textContent="Full F0/SOE sidecar: "+JSON.stringify({stories:r.f0_companion?.stories_exercised,stability_checks:r.f0_companion?.stability_checks,stability_violations:r.f0_companion?.stability_violations,trace_records:r.f0_companion?.trace_records,learned_path_uses_F0_vectors:r.f0_companion?.learning_path_uses_f0_features},null,2);
 $("details").textContent=JSON.stringify({experiment:job.experiment,config:job.config,method:r.method,claim_boundary:r.claim_boundary,dataset:r.dataset,stages:{L0:stages.L0?.passed,L1:l1.status,L2:l2.status},duration_seconds:r.duration_seconds},null,2);
 const l=await api("/api/runs/"+id+"/logs");$("logs").textContent=l.stdout+"\n"+l.stderr;
-$("files").innerHTML=["summary.json","summary.md","per_example.csv","per_example.jsonl","manifest.json","config.json"].map(f=>'<a href="/api/runs/'+id+'/files/'+f+'" target="_blank">'+f+'</a>').join(" · ");
+$("files").innerHTML=["summary.json","summary.md","per_example.csv","per_example.jsonl","manifest.json","config.json","experiment_lab_register.json"].map(f=>'<a href="/api/runs/'+id+'/files/'+f+'" target="_blank">'+f+'</a>').join(" · ");
 return;
 }
 if(g1){

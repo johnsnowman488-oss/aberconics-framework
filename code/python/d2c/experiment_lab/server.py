@@ -99,13 +99,13 @@ class Handler(BaseHTTPRequestHandler):
                     "dataset":result.get("dataset"),
                 })
             return self.send(200,{"runs":rows})
-        file_match=re.fullmatch(r"/api/runs/([a-f0-9-]+)/files/(summary\.json|summary\.md|per_example\.csv|per_example\.jsonl|manifest\.json|config\.json)",path)
+        file_match=re.fullmatch(r"/api/runs/([a-f0-9-]+)/files/(summary\.json|summary\.md|per_example\.csv|per_example\.jsonl|manifest\.json|config\.json|experiment_lab_register\.json)",path)
         if file_match:
             rid,filename=file_match.groups(); job=JOBS.get(rid)
             if not job: return self.send(404,{"error":"run not found"})
             matches=[p for p in Path(job["directory"]).glob(f"**/{filename}") if p.is_file()]
             if not matches: return self.send(404,{"error":"result file not found"})
-            types={"summary.json":"application/json","summary.md":"text/markdown","per_example.csv":"text/csv","per_example.jsonl":"application/x-ndjson","manifest.json":"application/json","config.json":"application/json"}
+            types={"summary.json":"application/json","summary.md":"text/markdown","per_example.csv":"text/csv","per_example.jsonl":"application/x-ndjson","manifest.json":"application/json","config.json":"application/json","experiment_lab_register.json":"application/json"}
             return self.send(200,matches[0].read_bytes(),types[filename])
         m=re.fullmatch(r"/api/runs/([a-f0-9-]+)(?:/(results|logs))?",path)
         if m:

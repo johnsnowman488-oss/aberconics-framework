@@ -804,8 +804,39 @@ def save_g1l_bundle(result: dict[str, Any], *, output_dir: Path) -> dict[str, st
         "configuration": result["configuration"],
         "dataset": result["dataset"],
         "duration_seconds": result["duration_seconds"],
-        "result_files": ["summary.json", "summary.md", "per_example.csv", "per_example.jsonl"],
+        "result_files": ["summary.json", "summary.md", "per_example.csv", "per_example.jsonl", "config.json"],
     }
+    l0, l1, l2 = (result["stages"][key] for key in ("L0", "L1", "L2"))
+    register = {
+        "schema_version": 1,
+        "run_id": run_id,
+        "experiment": result["experiment"],
+        "code_revision": metadata["code_revision"],
+        "dataset_fingerprints": result["dataset"],
+        "configuration": result["configuration"],
+        "stages": {
+            "L0": {"status": "passed" if l0["passed"] else "failed", "checks": l0["checks"]},
+            "L1": {
+                "status": l1["status"], "gate_passed": l1["gate_passed"],
+                "validation_before": l1["validation_before_training"],
+                "validation_after": l1["validation_after_training"],
+                "training": l1["training"],
+            },
+            "L2": {
+                "status": l2["status"], "reason": l2.get("reason"),
+                "mean_accuracy": l2.get("mean_accuracy"),
+                "standard_error": l2.get("standard_error"),
+                "per_seed_accuracy": l2.get("per_seed_accuracy"),
+            },
+        },
+        "f0_companion": result.get("f0_companion"),
+        "duration_seconds": result["duration_seconds"],
+        "claim_boundary": result["claim_boundary"],
+    }
+    (bundle / "experiment_lab_register.json").write_text(
+        json.dumps(register, indent=2), encoding="utf-8"
+    )
+    metadata["result_files"].append("experiment_lab_register.json")
     (bundle / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     (bundle / "manifest.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     (bundle / "config.json").write_text(json.dumps(result["configuration"], indent=2), encoding="utf-8")

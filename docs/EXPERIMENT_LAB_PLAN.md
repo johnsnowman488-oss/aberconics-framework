@@ -55,7 +55,7 @@ Hierarchy is held fixed at the full configuration. No no-slow or collapsed-times
 
 ## Reproducibility, comparison and evidence
 
-Every local run receives a manifest with a unique run ID, experiment, exact command and configuration, code revision, Python version, dataset-split SHA-256 fingerprints and file sizes, timestamps, exit code, and result-file inventory. The Lab exposes allow-listed downloads for summary JSON/Markdown, configuration, manifests, and per-example CSV/JSONL.
+Every local run receives a manifest with a unique run ID, experiment, exact command and configuration, code revision, Python version, dataset-split SHA-256 fingerprints and file sizes, timestamps, exit code, and result-file inventory. G1-L also embeds an `experiment_lab_register.json` in each run bundle, recording L0/L1/L2 status, validation gates, per-seed confirmation results and the F0 companion audit. The Lab exposes allow-listed downloads for summary JSON/Markdown, configuration, manifests, the experiment register and per-example CSV/JSONL.
 
 The comparison endpoint supports two to five saved runs and displays experiment, accuracy and staged L1/L2 status side by side. The results explorer surfaces G1-L validation and confirmation separately, holder-retrieval accuracy and attention maps, F0 companion audit, stage gates, and per-example evidence.
 

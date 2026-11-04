@@ -179,5 +179,6 @@ jobs:
           path: |
             runs/experiment-lab/g1l/
             runs/experiment-lab/G1L_REPORT.md
+            runs/experiment-lab/experiment_lab_register.json
           if-no-files-found: warn
           retention-days: 30
