@@ -34,7 +34,7 @@ Each fixture stores an expected holder and expected location. The deterministic 
 
 Default run: tasks 3 and 5, 5 matched seeds (0–4), dimension 64, 5 epochs, linear readout, learning rate 0.05, feature scale 100, full memory variant, isolated execution. The CLI allows 3–20 seeds, dimension/readout/epoch adjustments, and a task subset for diagnostic runs. The full G2 closure gate requires both QA3 and QA5.
 
-The fixed comparison is E0 versus E-F0 for each task. Seed IDs and the ordered question/target pairs must match exactly; the runner fails if they do not. Train/validation/test split files are SHA-256 fingerprinted where present, and train/evaluation task counts are recorded. The held-out test split is evaluated once under this pre-registered configuration; no test-based tuning, threshold selection, or model selection is performed. Validation-only exploratory work must be a separate run and must not replace this locked confirmation.
+The fixed comparison is E0 versus E-F0 for each task. Seed IDs and the ordered story identity (story index, raw passage, question and target) and class-label order must match exactly; the runner fails if they do not. The E-F0 arm also executes a separate deterministic F0 spine audit for every task/seed: all six phases (WARMUP, EXPLORE, CONSOLIDATE, EVALUATE, PRUNE, GROW), non-mutating maintenance with unchanged SOE kernel, continuity-valid trace-window sampling, checkpoint snapshot/restore plus deterministic continuation, and zero stability violations. This audit does not change the benchmark readout and is not a runtime ablation. Train/validation/test split files are SHA-256 fingerprinted where present, and train/evaluation task counts are recorded. The held-out test split is evaluated once under this pre-registered configuration; no test-based tuning, threshold selection, or model selection is performed. Validation-only exploratory work must be a separate run and must not replace this locked confirmation.
 
 G1-L is not a third arm on QA3/QA5 because its current parser only supports QA2. Comparing it numerically with the E0/E-F0 QA3/QA5 scores would be an architectural and task mismatch.
 
@@ -75,9 +75,10 @@ G2 has two distinct acceptance layers.
 1. All 12 structured semantic fixtures pass, with category counts and event ledgers present.
 2. Both QA3 and QA5 are evaluated for full closure.
 3. E0 and E-F0 complete with at least 3 matched seeds (5 by default), identical seed IDs and identical ordered evaluation question/target pairs.
-4. Dataset fingerprints, configuration, code revision, split sizes, per-seed outcomes and per-example evidence are recorded.
-5. Probability vectors validate, and each seed contains Wilson, bootstrap, NLL, Brier, calibration and selective-risk diagnostics.
-6. The held-out split is used only for fixed, pre-registered evaluation—not selection or calibration fitting.
+4. Every E-F0 seed/task spine audit passes phase coverage, kernel immutability, trace continuity, checkpoint/continuation and zero-stability-violation checks.
+5. Dataset fingerprints, configuration, code revision, split sizes, per-seed outcomes and per-example evidence are recorded.
+6. Probability vectors validate, and each seed contains Wilson, bootstrap, NLL, Brier, calibration and selective-risk diagnostics.
+7. The held-out split is used only for fixed, pre-registered evaluation—not selection or calibration fitting.
 
 A diagnostic single-task run can pass its local mechanics but cannot close the two-task G2 coverage gate.
 
