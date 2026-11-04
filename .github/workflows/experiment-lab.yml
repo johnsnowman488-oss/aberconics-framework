@@ -17,14 +17,19 @@ on:
         required: true
         default: "3"
   push:
+    # Only scientific benchmark changes launch this long-form G0 sweep.
+    # Lab UI/API/docs changes are validated by the fast Python+C++ pull-request CI.
     paths:
-      - ".github/workflows/experiment-lab.yml"
       - "code/python/d2c/digital/relational.py"
       - "code/python/d2c/experiments/babi_g1.py"
-      - "code/python/d2c/experiment_lab/server.py"
-      - "code/python/d2c/experiment_lab/index.html"
+      - "code/python/d2c/experiments/babi_qa.py"
+      - "code/python/d2c/experiments/babi_f0.py"
+      - "code/python/d2c/experiments/g0_readout_sweep.py"
+      - "code/python/d2c/experiments/g0_reasoning_probe.py"
       - "code/python/tests/test_babi_g1.py"
-      - "docs/EXPERIMENT_LAB_PLAN.md"
+      - "code/python/tests/test_g0_diagnostics.py"
+      - "code/python/tests/test_g0_reasoning_probe.py"
+      - "code/python/tests/test_g0_readout_sweep.py"
 
 jobs:
   g0-investigation:
