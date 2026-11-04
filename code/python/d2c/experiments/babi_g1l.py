@@ -20,6 +20,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+# Small dense matrix operations are more reproducible and generally faster
+# with a single BLAS worker at this model scale. Set before importing NumPy.
+for _thread_var in (
+    "OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS",
+    "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS",
+):
+    os.environ[_thread_var] = "1"
+
 import numpy as np
 
 from ..digital.babi import (
@@ -855,6 +863,14 @@ def save_g1l_bundle(result: dict[str, Any], *, output_dir: Path) -> dict[str, st
         "completed_at": result.get("completed_at_utc", now),
         "code_revision": _git_revision(),
         "python_version": __import__("platform").python_version(),
+        "numpy_version": np.__version__,
+        "numeric_thread_environment": {
+            key: os.environ.get(key)
+            for key in (
+                "OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS",
+                "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS",
+            )
+        },
         "dataset_fingerprints": result["dataset"],
         "configuration": result["configuration"],
         "dataset": result["dataset"],
