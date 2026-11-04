@@ -632,6 +632,10 @@ def save_g2_bundle(result: dict[str, Any], *, output_dir: Path) -> dict[str, str
                 "paired_accuracy_difference": task["paired_accuracy_difference_ef0_minus_e0"],
                 "e0": task["arms"]["e0"]["confidence_summary"],
                 "ef0": task["arms"]["ef0"]["confidence_summary"],
+                "ef0_spine_audits": [
+                    {"seed": seed["seed"], "audit": seed.get("spine_exercise")}
+                    for seed in task["arms"]["ef0"]["seed_results"]
+                ],
             }
             for key, task in result["tasks"].items()
         },
