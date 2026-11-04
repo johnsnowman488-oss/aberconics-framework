@@ -63,8 +63,8 @@ class G2Config:
             raise ValueError("feature_scale must be finite and positive")
         if self.readout not in {"linear", "mlp"}:
             raise ValueError("readout must be linear or mlp")
-        if self.bootstrap_samples < 0 or self.bootstrap_samples > 5000:
-            raise ValueError("bootstrap_samples must be between 0 and 5000")
+        if self.bootstrap_samples < 200 or self.bootstrap_samples > 5000:
+            raise ValueError("bootstrap_samples must be between 200 and 5000 for G2 confidence gates")
 
 
 def _sha256(path: Path) -> str:
@@ -214,9 +214,20 @@ def _paired_interval(differences: list[float]) -> dict[str, Any]:
         critical = _T_CRITICAL_975.get(n - 1, 1.96)
         half = critical * se
         ci = [mean - half, mean + half]
+    positive = sum(value > 0 for value in differences)
+    negative = sum(value < 0 for value in differences)
+    nonzero = positive + negative
+    minority = min(positive, negative)
+    sign_p = (
+        min(1.0, 2.0 * sum(math.comb(nonzero, k) for k in range(minority + 1)) / (2 ** nonzero))
+        if nonzero else 1.0
+    )
     return {
         "n": n, "mean": mean, "standard_deviation": sd,
         "standard_error": se, "ci95_two_sided_t": ci,
+        "exact_two_sided_sign_test_p": sign_p,
+        "sign_test_nonzero_pairs": nonzero,
+        "sign_test_interpretation": "Exact paired sign test; robust to difference magnitudes but low-power with few seeds. Report alongside—not instead of—the paired t interval.",
         "positive_seed_differences": sum(value > 0 for value in differences),
         "negative_seed_differences": sum(value < 0 for value in differences),
         "zero_seed_differences": sum(value == 0 for value in differences),
