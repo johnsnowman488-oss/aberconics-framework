@@ -158,7 +158,7 @@ class Handler(BaseHTTPRequestHandler):
                 if (exp not in {"e0","ef0","g1","g1l","g2"} or mode not in {"isolated","continuous"}
                     or (exp in {"e0","g1","g1l"} and mode!="isolated")
                     or (exp in {"g1","g1l"} and task!=2)
-                    or (exp=="g2" and (mode!="isolated" or seeds<3 or seeds>20 or dim<4))
+                    or (exp=="g2" and (mode!="isolated" or seeds<3 or seeds>20 or dim<4 or not g2_tasks or any(value not in {3,5} for value in g2_tasks) or len(set(g2_tasks))!=len(g2_tasks)))
                     or (exp=="g1l" and (stage not in {"pilot","all"} or seeds>10 or dim<8))
                     or not (1<=train_limit<=900 and 1<=eval_limit<=1000)
                     or readout not in {"linear","mlp"}
@@ -168,7 +168,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(400,{"error":"invalid experiment configuration"})
                 rid=str(uuid.uuid4()); directory=RUNS/rid; directory.mkdir(parents=True)
                 module={"e0":"d2c.experiments.babi_qa","ef0":"d2c.experiments.babi_f0","g1":"d2c.experiments.babi_g1","g1l":"d2c.experiments.babi_g1l","g2":"d2c.experiments.babi_g2"}[exp]
-                args=[sys.executable,"-m",module,"--task",str(task),"--dim",str(dim),"--output-dir",str(directory)]
+                args=[sys.executable,"-m",module,"--dim",str(dim),"--output-dir",str(directory)]
+                if exp!="g2": args += ["--task",str(task)]
                 if exp not in {"g1l","g2"}: args += ["--variant","full"]
                 if exp=="g1":
                     args += ["--trace-capacity","20000"]
@@ -176,6 +177,11 @@ class Handler(BaseHTTPRequestHandler):
                     args += ["--stage",stage,"--learning-rate",str(learning_rate),
                         "--epochs",str(epochs),"--train-limit",str(train_limit),
                         "--eval-limit",str(eval_limit),"--confirm-seeds",str(seeds)]
+                elif exp=="g2":
+                    args += ["--tasks",",".join(str(value) for value in g2_tasks),
+                        "--seeds",str(seeds),"--epochs",str(epochs),
+                        "--learning-rate",str(learning_rate),"--feature-scale",str(feature_scale),
+                        "--readout",readout,"--bootstrap-samples","300","--eval-split","test"]
                 else:
                     args += ["--seeds",str(seeds),"--readout",readout,"--lr",str(learning_rate),"--feature-scale",str(feature_scale),"--epochs",str(epochs),"--eval-split","test"]
                 if exp=="ef0":
