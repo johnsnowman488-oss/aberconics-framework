@@ -293,6 +293,7 @@ def _arm_summary(result: dict[str, Any], *, arm: str, bootstrap_samples: int, ta
             "confidence": per_seed_diag,
             "confidence_quality_flags": flags,
             "predictions": seed_row["predictions"],
+            "spine_exercise": seed_row.get("spine_exercise"),
         })
         confidence.append(per_seed_diag)
     return {
@@ -372,7 +373,7 @@ def run_g2_experiment(
             epochs=cfg.epochs, hidden_dim=32,
             learning_rate=cfg.learning_rate, readout_type=cfg.readout,
             feature_scale=cfg.feature_scale, mode="isolated",
-            exercise_spine=False,
+            exercise_spine=True,
         )
         # These are paired, pre-registered settings. The locked test split is
         # evaluated once and is not used to select hyperparameters.
@@ -442,6 +443,29 @@ def run_g2_experiment(
             "matched_seed_and_example_controls": {
                 "passed": all(row["paired_controls_verified"] for row in task_results.values()),
                 "seed_count": cfg.seeds,
+            },
+            "f0_spine_audit": {
+                "passed": all(
+                    seed.get("spine_exercise") is not None
+                    and seed["spine_exercise"].get("status") == "passed"
+                    and all(seed["spine_exercise"].get("phase_coverage", {}).values())
+                    and seed["spine_exercise"].get("maintenance", {}).get("kernel_unchanged") is True
+                    and seed["spine_exercise"].get("trace_store", {}).get("sample_is_contiguous") is True
+                    and seed["spine_exercise"].get("checkpoint_restore", {}).get("snapshot_round_trip_equal") is True
+                    and seed["spine_exercise"].get("checkpoint_restore", {}).get("deterministic_continuation_equal") is True
+                    and seed["spine_exercise"].get("diagnostics", {}).get("stability_violations") == 0
+                    for task_row in task_results.values()
+                    for seed in task_row["arms"]["ef0"]["seed_results"]
+                ),
+                "audits_required": len(cfg.tasks) * cfg.seeds,
+                "required_checks": [
+                    "WARMUP/EXPLORE/CONSOLIDATE/EVALUATE/PRUNE/GROW coverage",
+                    "SOE kernel unchanged by maintenance",
+                    "continuity-valid contiguous trace sampling",
+                    "checkpoint snapshot and deterministic continuation equality",
+                    "zero stability violations",
+                ],
+                "interpretation": "Separate deterministic F0 runtime-spine audit; it does not alter the learned readout or add an ablation.",
             },
             "confidence_evidence": {
                 "passed": all(
