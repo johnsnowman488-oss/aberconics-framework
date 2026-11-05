@@ -87,3 +87,5 @@ jobs:
           retention-days: 30
 
 # Independent CI-run parity check; experiment code and parameters are unchanged.
+
+# Final pinned-run parity check includes epoch training-order fingerprints.
