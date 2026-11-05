@@ -46,7 +46,12 @@ set_target_properties(gfe_core PROPERTIES
     OUTPUT_NAME gfe_core
     POSITION_INDEPENDENT_CODE ON
 )
-target_compile_definitions(gfe_core PRIVATE GFE_CORE_EXPORTS)
+
+if(BUILD_SHARED_LIBS)
+    target_compile_definitions(gfe_core PRIVATE GFE_CORE_EXPORTS)
+else()
+    target_compile_definitions(gfe_core PUBLIC GFE_CORE_STATIC)
+endif()
 
 if(GFE_BUILD_TESTS)
     enable_testing()

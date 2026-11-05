@@ -68,3 +68,4 @@ code/c++ core/build-*/
 codex_context.txt
 # Patch backup files
 *.orig
+nohup.out

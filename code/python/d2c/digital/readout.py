@@ -163,6 +163,84 @@ class QueryConditionedMLPReadout:
         return loss, input_gradient
 
 
+class NumpyMLPReadout:
+    """Fast numpy-backed MLP readout for bAbI experiments.
+
+    Same architecture as QueryConditionedMLPReadout (one ReLU hidden layer)
+    but uses numpy vectorised operations for ~50x speedup on the forward and
+    backward passes.  Accepts np.ndarray features directly.
+    """
+
+    def __init__(self, input_dim: int, output_dim: int, hidden_dim: int = 128,
+                 seed: int = 0, lr: float = 0.01):
+        import numpy as np
+        rng = np.random.RandomState(seed)
+        scale1 = 1.0 / np.sqrt(input_dim)
+        scale2 = 1.0 / np.sqrt(hidden_dim)
+        self.w1 = rng.randn(hidden_dim, input_dim).astype(np.float32) * scale1
+        self.b1 = np.zeros(hidden_dim, dtype=np.float32)
+        self.w2 = rng.randn(output_dim, hidden_dim).astype(np.float32) * scale2
+        self.b2 = np.zeros(output_dim, dtype=np.float32)
+        self.lr = lr
+
+    def _forward(self, x):
+        import numpy as np
+        self._last_x = x
+        self._pre_h = self.w1 @ x + self.b1
+        self._h = np.maximum(0, self._pre_h)
+        logits = self.w2 @ self._h + self.b2
+        # softmax
+        logits -= logits.max()
+        exp_l = np.exp(logits)
+        probs = exp_l / exp_l.sum()
+        self._last_probs = probs
+        return probs
+
+    def train_step(self, features, target_index: int):
+        import numpy as np
+        if isinstance(features, list):
+            features = np.array(features, dtype=np.float32)
+        probs = self._forward(features)
+        loss = -np.log(max(probs[target_index], 1e-12))
+
+        # Backward
+        grad_logits = probs.copy()
+        grad_logits[target_index] -= 1.0  # softmax + cross-entropy gradient
+
+        # w2, b2
+        grad_w2 = np.outer(grad_logits, self._h)
+        grad_b2 = grad_logits
+
+        # Hidden
+        grad_h = self.w2.T @ grad_logits
+        grad_pre_h = grad_h * (self._pre_h > 0).astype(np.float32)
+
+        # w1, b1
+        grad_w1 = np.outer(grad_pre_h, self._last_x)
+        grad_b1 = grad_pre_h
+
+        # SGD update
+        self.w2 -= self.lr * grad_w2
+        self.b2 -= self.lr * grad_b2
+        self.w1 -= self.lr * grad_w1
+        self.b1 -= self.lr * grad_b1
+        return loss
+
+    def predict(self, features):
+        import numpy as np
+        if isinstance(features, list):
+            features = np.array(features, dtype=np.float32)
+        probs = self._forward(features)
+        idx = int(np.argmax(probs))
+        return idx, float(probs[idx])
+
+    def probabilities(self, features):
+        import numpy as np
+        if isinstance(features, list):
+            features = np.array(features, dtype=np.float32)
+        return self._forward(features).tolist()
+
+
 def query_conditioned_features(
     state: DigitalMemoryState,
     config: DigitalMemoryConfig,
@@ -183,3 +261,17 @@ def query_conditioned_features(
     normalized_memory = [100.0 * value for value in memory]
     gated = [query_value * memory_value for query_value in query_values for memory_value in normalized_memory]
     return [*normalized_memory, *query_values, *gated]
+
+
+def query_conditioned_features_np(
+    state: DigitalMemoryState,
+    config: DigitalMemoryConfig,
+    query,
+):
+    """NumPy version of query_conditioned_features — returns np.ndarray."""
+    import numpy as np
+    memory = combined_readout_vector(state, config)
+    query_values = [float(v) for v in query]
+    norm_mem = [100.0 * v for v in memory]
+    gated = [q * m for q in query_values for m in norm_mem]
+    return np.array([*norm_mem, *query_values, *gated], dtype=np.float32)

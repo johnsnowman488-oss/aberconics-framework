@@ -1,0 +1,15 @@
+# Core scientific stack
+numpy>=1.24
+scipy>=1.10
+
+# Plotting (used by lorenz63 experiment and report generation)
+matplotlib>=3.7
+
+# Testing
+pytest>=7.0
+
+# Linting
+ruff>=0.1
+
+# C++ build (optional — system cmake also works)
+cmake>=3.25

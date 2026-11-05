@@ -3,7 +3,9 @@
 #include <stddef.h>
 
 #if defined(_WIN32)
-#  if defined(GFE_CORE_EXPORTS)
+#  if defined(GFE_CORE_STATIC)
+#    define GFE_C_API
+#  elif defined(GFE_CORE_EXPORTS)
 #    define GFE_C_API __declspec(dllexport)
 #  else
 #    define GFE_C_API __declspec(dllimport)

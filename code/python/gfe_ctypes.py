@@ -508,10 +508,32 @@ def _default_library_path() -> Path:
     return repo_root / "code" / "c++ core" / "build-shared" / f"libgfe_core.{suffix}"
 
 
+def _win_dep_dirs() -> list[str]:
+    """Return directories that may hold MinGW / MSVC runtime DLLs on Windows."""
+    dirs: list[str] = []
+    for candidate in [
+        Path(r"C:\msys64\mingw64\bin"),
+        Path(r"C:\mingw64\bin"),
+    ]:
+        if candidate.is_dir():
+            dirs.append(str(candidate))
+    return dirs
+
+
 def load_gfe_library(path: str | None = None) -> ctypes.CDLL:
     lib_path = path or os.environ.get("GFE_CORE_LIB")
     if not lib_path:
         lib_path = str(_default_library_path())
+
+    # On Windows, register the DLL's directory and common dependency
+    # directories so that ctypes can locate transitive runtime deps
+    # (e.g. MinGW libstdc++ / libgcc).
+    if os.name == "nt":
+        lib_dir = str(Path(lib_path).resolve().parent)
+        os.add_dll_directory(lib_dir)
+        for dep_dir in _win_dep_dirs():
+            os.add_dll_directory(dep_dir)
+
     lib = ctypes.CDLL(lib_path)
 
     lib.gfe_c_default_soe_fit_options.argtypes = []

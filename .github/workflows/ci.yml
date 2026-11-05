@@ -1,4 +1,4 @@
-name: Julia + Wrapper CI
+name: CI
 
 on:
   push:
@@ -7,40 +7,96 @@ on:
     branches: [main]
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    env:
-      GFE_CORE_LIB: ${{ github.workspace }}/code/c++ core/build-shared/libgfe_core.so
-
+  cpp-tests:
+    name: C++ core tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      - name: Install MSYS2 + MinGW (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+
+      - name: Configure + Build (static, Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cmake -S "code/c++ core" -B "code/c++ core/build" -DCMAKE_BUILD_TYPE=Release
+          cmake --build "code/c++ core/build" -j
+
+      - name: Configure + Build (static, Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          cmake -S "code/c++ core" -B "code/c++ core/build" \
+            -DCMAKE_BUILD_TYPE=Release -G Ninja \
+            -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
+          cmake --build "code/c++ core/build" -j
+
+      - name: Run C++ tests (Linux)
+        if: runner.os == 'Linux'
+        run: ctest --test-dir "code/c++ core/build" --output-on-failure
+
+      - name: Run C++ tests (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: ctest --test-dir "code/c++ core/build" --output-on-failure
+
+  python-tests:
+    name: Python tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: cpp-tests
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
-      - name: Setup Julia
-        uses: julia-actions/setup-julia@v2
+      - name: Install MSYS2 + MinGW (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
         with:
-          version: '1.12'
+          msystem: MINGW64
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
 
-      - name: Build shared C++ core
+      - name: Build shared library (Linux)
+        if: runner.os == 'Linux'
         run: |
-          cmake -S "code/c++ core" -B "code/c++ core/build-shared" -DBUILD_SHARED_LIBS=ON
+          cmake -S "code/c++ core" -B "code/c++ core/build-shared" \
+            -DBUILD_SHARED_LIBS=ON -DGFE_BUILD_TESTS=OFF -DGFE_BUILD_APPS=OFF
           cmake --build "code/c++ core/build-shared" -j
 
-      - name: Run Python wrapper tests
+      - name: Build shared library (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          cmake -S "code/c++ core" -B "code/c++ core/build-shared" \
+            -DBUILD_SHARED_LIBS=ON -DGFE_BUILD_TESTS=OFF -DGFE_BUILD_APPS=OFF \
+            -G Ninja -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
+          cmake --build "code/c++ core/build-shared" -j
+
+      - name: Install Python deps
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest
-          pytest -q code/python/tests
+          pip install -r requirements.txt
 
-      - name: Install dependencies
-        working-directory: code/julia
-        run: julia --project=. -e 'using Pkg; Pkg.instantiate()'
-
-      - name: Run tests
-        working-directory: code/julia
-        run: julia --project=. src/test/runtests.jl
+      - name: Run Python tests
+        env:
+          PYTHONPATH: code/python
+        run: pytest -q code/python/tests

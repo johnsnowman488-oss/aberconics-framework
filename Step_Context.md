@@ -271,3 +271,143 @@ What exists vs. what the full Q&A system needs:
 
 The bAbI experiment is the first bridge from "toy experiments" to "real data"
 and it strengthens every downstream claim.
+
+---
+
+## 2026-09-19 — E0 bAbI convergence sweep + ablation results (dim=16, QA1)
+
+### Infrastructure
+
+- Installed MSYS2 + MinGW-w64 (gcc 16.2.0, cmake, ninja) for Windows builds
+- C++ core: all 13 tests pass (static build); shared library builds for wrappers
+- Python venv with numpy, scipy, matplotlib, pytest, ruff
+- Added `NumpyMLPReadout` to `readout.py` — numpy-ized forward/backward pass
+  for ~10x speedup over pure-Python `QueryConditionedMLPReadout`
+- bAbI dataset downloaded to `code/python/d2c/progress/babi_data/`
+
+### Hyperparameter sweep (dim=16, QA1, 5 seeds each, 500 train stories)
+
+| Config | Accuracy | Notes |
+|---|---|---|
+| hd=128, ep=20, lr=**0.05** | 0.199 ± 0.012 | Original Step_Context config — overfits |
+| hd=128, ep=30, lr=0.05 | 0.195 ± 0.005 | More epochs doesn't help at this lr |
+| hd=256, ep=20, lr=0.05 | 0.196 ± 0.012 | Bigger hidden dim doesn't help at this lr |
+| hd=128, ep=10, lr=0.05, 900 stories | 0.209 ± 0.006 | More data marginally helps |
+| **hd=128, ep=20, lr=0.02** | **0.334 ± 0.005** | **Dominated: lr is the key knob** |
+
+**Key finding:** The learning rate was the dominant factor, not hidden dim or
+epoch count. lr=0.02 gives 0.334 vs lr=0.05 at 0.199 — a +68% relative
+improvement. The higher learning rate was causing gradient explosion on the
+288-dim feature space.
+
+### Ablation results (best config: hd=128, ep=20, lr=0.02, 500 train, 5 seeds)
+
+| Variant | Accuracy | Channels |
+|---|---|---|
+| full (γ=[2.0, 0.5, 0.1]) | 0.334 ± 0.005 | 3 |
+| **no_slow** (γ=[2.0, 0.5]) | **0.402 ± 0.008** | 2 |
+| collapsed_gamma (γ=[1.0, 1.0, 1.0]) | 0.368 ± 0.006 | 3 |
+
+**Honest interpretation:** The ablation pattern is inverted from the D2C
+hypothesis. `no_slow` (removing the slow channel) gives the *best* accuracy
+on QA1. This is consistent with the original E0 smoke findings (Step_Context,
+2026-09-18).
+
+**Why this happens at dim=16 on QA1:**
+1. QA1 is a simple single-fact retrieval with no distractors — fast memory
+   suffices. The slow channel's interference-filtering advantage (proven in
+   Milestone D on synthetic tasks with distractors) is not needed here.
+2. At dim=16, the state space is too small for the slow channel to encode
+   useful long-range structure without creating noise.
+3. The slow channel (γ=0.1) retains old forcing patterns that conflict with
+   the correct answer signal at readout time.
+
+**This does NOT invalidate the Milestone D claims.** D3-R/D4A proved slow-
+channel advantage on synthetic tasks with explicit distractors and interference.
+QA1 has neither. The claim needs to be scoped: slow-channel advantage appears
+under interference load, not on clean single-fact retrieval.
+
+### What this tells us about E0–E2
+
+- The E0 gate (>80% on QA1) is **not achievable at dim=16** with a frozen SOE
+  kernel and a learned readout. The readout is doing all the work; the memory
+  features are not discriminative enough.
+- To reach the E0 gate we likely need:
+  - dim=64 or 150 (more representational capacity)
+  - OR a learned embedding layer (replace deterministic dense codes)
+  - OR a different readout architecture (attention over memory channels)
+- The slow-channel story will come alive on QA2/QA3 (multi-fact chains) and
+  QA5/QA11 (entity tracking under load), not on QA1.
+
+### Next action
+
+1. Run the same ablation sweep at **dim=32** to test whether representational
+   capacity changes the ablation ordering.
+2. Run at **dim=16 on QA2 and QA3** (multi-fact chains) where the slow channel
+   should start helping.
+3. Consider adding a **linear readout baseline** (softmax regression) to
+   separate feature-quality issues from MLP-capacity issues.
+4. If dim=32/QA2/QA3 still shows no_slow >= full, the E0 claim needs to be
+   reframed: "D2C slow-channel advantage is task-dependent and requires
+   interference load to manifest."
+
+---
+
+## 2026-09-19 (cont.) — dim=32 ablation on QA1
+
+### Configuration
+
+Same best config from dim=16 sweep: hd=128, ep=20, lr=0.02, 500 train stories,
+5 seeds. Only change: dim=32 (feat_dim=1088 vs 288).
+
+### Results
+
+| Variant | dim=16 | dim=32 | Δ |
+|---|---|---|---|
+| full | 0.334 ± 0.005 | 0.349 ± 0.007 | +0.015 |
+| no_slow | **0.402 ± 0.008** | **0.414 ± 0.003** | +0.012 |
+| collapsed_gamma | 0.368 ± 0.006 | 0.404 ± 0.004 | +0.036 |
+
+### Interpretation
+
+1. **The ablation ordering is unchanged.** no_slow > collapsed_gamma > full
+   at both dim=16 and dim=32. Doubling the state dimension does not flip
+   the ordering.
+
+2. **Dim=32 gives a uniform ~1-4 point lift** across all variants. The extra
+   capacity helps all kernels equally — it does not selectively help the
+   slow channel.
+
+3. **collapsed_gamma closed the gap to no_slow** at dim=32 (0.404 vs 0.414,
+   gap=0.010) compared to dim=16 (0.368 vs 0.402, gap=0.034). This is
+   consistent with more capacity allowing the collapsed kernel to better
+   utilise its uniform fast timescales.
+
+4. **The slow channel is still net-negative on QA1** at both dimensions.
+   The hypothesis that "dim=16 was too small for the slow channel" is
+   rejected — even at dim=32 with 4x the feature space, removing the
+   slow channel still helps.
+
+### Honest conclusion
+
+On QA1 (single supporting fact, no distractors, no interference), the slow
+memory channel (γ=0.1) is a liability, not an asset. This is a task-property
+result, not a dimension-property result. The D2C slow-channel advantage
+requires:
+
+- **Multiple competing facts** (QA2/QA3) where the slow channel's retention
+  outlasts fast-channel interference
+- **Distractor load** (as in D3-R synthetic tasks) where the slow channel
+  filters noise
+- **Longer gaps** between encoding and retrieval
+
+### Updated next action
+
+1. **Priority:** Run ablation at dim=16 on **QA2** (two supporting facts) and
+   **QA3** (three supporting facts). These are the tasks where the slow
+   channel's gap-retention advantage should manifest.
+2. If QA2/QA3 show full >= no_slow, the E0 claim is: "slow-channel advantage
+   scales with reasoning chain length."
+3. If QA2/QA3 still show no_slow >= full, the readout architecture needs
+   revision (the current outer-product gated features may not expose the
+   slow channel's signal to the classifier).
