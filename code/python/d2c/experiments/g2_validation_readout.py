@@ -121,8 +121,19 @@ def run(data_dir,output_dir,tasks=(3,5),seeds=5,epochs=5,dim=64,lr=0.05):
                     "feature_norm_p50":float(np.quantile(np.linalg.norm(xt,axis=1),0.50)),
                     "feature_norm_p95":float(np.quantile(np.linalg.norm(xt,axis=1),0.95)),
                     "epochs":epochs_out,"final":epochs_out[-1]})
+            epoch_summaries=[]
+            for epoch_index in range(epochs):
+                epoch_rows=[seed_row["epochs"][epoch_index] for seed_row in seed_rows]
+                epoch_summaries.append({
+                    "epoch":epoch_index+1,
+                    "mean_validation_accuracy":statistics.mean(x["accuracy"] for x in epoch_rows),
+                    "mean_validation_nll":statistics.mean(x["nll"] for x in epoch_rows),
+                    "mean_validation_brier":statistics.mean(x["brier"] for x in epoch_rows),
+                    "mean_validation_ece_15":statistics.mean(x["ece_15"] for x in epoch_rows),
+                    "mean_confidence":statistics.mean(x["mean_confidence"] for x in epoch_rows),
+                    "mean_logit_abs_max_p95":statistics.mean(x["logit_abs_max_p95"] for x in epoch_rows)})
             candidate_rows.append({
-                **cand,"seeds":seed_rows,
+                **cand,"seeds":seed_rows,"epoch_summaries":epoch_summaries,
                 "mean_validation_accuracy":statistics.mean(s["final"]["accuracy"] for s in seed_rows),
                 "mean_validation_nll":statistics.mean(s["final"]["nll"] for s in seed_rows),
                 "mean_validation_brier":statistics.mean(s["final"]["brier"] for s in seed_rows),
@@ -130,12 +141,18 @@ def run(data_dir,output_dir,tasks=(3,5),seeds=5,epochs=5,dim=64,lr=0.05):
                 "mean_confidence":statistics.mean(s["final"]["mean_confidence"] for s in seed_rows),
                 "mean_logit_abs_max_p95":statistics.mean(s["final"]["logit_abs_max_p95"] for s in seed_rows)})
         chosen=min(candidate_rows,key=lambda r:(r["mean_validation_nll"],-r["mean_validation_accuracy"]))
+        checkpoint_options=[(candidate,epoch_row) for candidate in candidate_rows for epoch_row in candidate["epoch_summaries"]]
+        best_candidate,best_epoch=min(checkpoint_options,key=lambda item:(item[1]["mean_validation_nll"],-item[1]["mean_validation_accuracy"]))
         tasks_out[str(task)]={"task":task,"train_stories":data["train_n"],
           "validation_stories":data["valid_n"],"answer_count":len(data["answers"]),
           "candidates":candidate_rows,
           "selected_by_validation_only":{"label":chosen["label"],"feature_scale":chosen["feature_scale"],
             "weight_decay":chosen["weight_decay"],
-            "selection_rule":"lowest mean validation NLL; validation accuracy tie-break"}}
+            "selection_rule":"lowest mean validation NLL at final configured epoch; validation accuracy tie-break"},
+          "selected_validation_checkpoint":{"label":best_candidate["label"],
+            "feature_scale":best_candidate["feature_scale"],"weight_decay":best_candidate["weight_decay"],
+            "epoch":best_epoch["epoch"],"metrics":best_epoch,
+            "selection_rule":"lowest mean validation NLL across all candidate/epoch checkpoints; validation accuracy tie-break"}}
     result={
       "experiment":"g2_validation_only_readout_check","status":"completed",
       "created_at":datetime.now(timezone.utc).isoformat(),"evaluation_split":"valid",
@@ -147,6 +164,23 @@ def run(data_dir,output_dir,tasks=(3,5),seeds=5,epochs=5,dim=64,lr=0.05):
       "tasks":tasks_out}
     output_dir.mkdir(parents=True,exist_ok=True)
     (output_dir/"summary.json").write_text(json.dumps(result,indent=2),encoding="utf-8")
+    lab_register={
+      "experiment_id":"G2-VALIDATION-READOUT",
+      "experiment":result["experiment"],
+      "status":"completed",
+      "run_timestamp":result["created_at"],
+      "evaluation_split":"valid",
+      "held_out_test_split_opened":False,
+      "claim_boundary":result["claim_boundary"],
+      "config":result["config"],
+      "dataset_fingerprints":result["dataset_fingerprints"],
+      "task_results":{
+        task:{"selected_final_epoch":row["selected_by_validation_only"],
+              "selected_validation_checkpoint":row["selected_validation_checkpoint"]}
+        for task,row in result["tasks"].items()},
+      "artifacts":["summary.json","summary.md","per_seed_metrics.csv","experiment_lab_register.json"]
+    }
+    (output_dir/"experiment_lab_register.json").write_text(json.dumps(lab_register,indent=2),encoding="utf-8")
     fields=["task","candidate","feature_scale","weight_decay","seed","epoch","train_loss",
       "validation_accuracy","validation_nll","validation_brier","validation_ece_15",
       "mean_confidence","logit_abs_max_p95","feature_norm_p50","feature_norm_p95"]
