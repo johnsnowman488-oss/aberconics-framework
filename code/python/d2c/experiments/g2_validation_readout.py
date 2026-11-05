@@ -177,7 +177,7 @@ def run(data_dir,output_dir,tasks=(3,5),seeds=5,epochs=5,dim=64,lr=0.05):
     for task_key,tr in tasks_out.items():
         c=tr["selected_by_validation_only"]
         lines.append(f"- QA{task_key}: {c['label']} (scale={c['feature_scale']}, L2={c['weight_decay']}).")
-    (output_dir/"summary.md").write_text("\\n".join(lines)+"\\n",encoding="utf-8")
+    (output_dir/"summary.md").write_text("\n".join(lines)+"\n",encoding="utf-8")
     return result
 
 def main():
