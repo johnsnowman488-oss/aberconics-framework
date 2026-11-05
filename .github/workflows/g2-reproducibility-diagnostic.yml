@@ -83,3 +83,5 @@ jobs:
           path: runs/experiment-lab/g2-reproducibility-diagnostic/
           if-no-files-found: warn
           retention-days: 30
+
+# Independent CI-run parity check; experiment code and parameters are unchanged.
