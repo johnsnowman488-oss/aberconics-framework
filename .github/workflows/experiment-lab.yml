@@ -1,0 +1,240 @@
+name: G0 QA2 Diagnostic and Reasoning Investigation
+# Full reproducible experiment; fast pull-request CI remains in ci.yml.
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: bAbI task number
+        required: true
+        default: "2"
+      dim:
+        description: Memory dimension
+        required: true
+        default: "64"
+      seeds:
+        description: Matched random seeds
+        required: true
+        default: "3"
+  push:
+    # Only scientific benchmark changes launch this long-form G0 sweep.
+    # Lab UI/API/docs changes are validated by the fast Python+C++ pull-request CI.
+    paths:
+      - "code/python/d2c/digital/relational.py"
+      - "code/python/d2c/experiments/babi_g1.py"
+      - "code/python/d2c/experiments/babi_qa.py"
+      - "code/python/d2c/experiments/babi_f0.py"
+      - "code/python/d2c/experiments/g0_readout_sweep.py"
+      - "code/python/d2c/experiments/g0_reasoning_probe.py"
+      - "code/python/tests/test_babi_g1.py"
+      - "code/python/tests/test_g0_diagnostics.py"
+      - "code/python/tests/test_g0_reasoning_probe.py"
+      - "code/python/tests/test_g0_readout_sweep.py"
+
+jobs:
+  g0-investigation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PYTHONPATH: ${{ github.workspace }}/code/python
+      GFE_CORE_LIB: ${{ github.workspace }}/code/c++ core/build-shared/libgfe_core.so
+      TASK: ${{ github.event.inputs.task || '2' }}
+      DIM: ${{ github.event.inputs.dim || '64' }}
+      SEEDS: ${{ github.event.inputs.seeds || '3' }}
+      EPOCHS: "5"
+      DATA: code/python/d2c/progress/babi_data
+      RUNS: runs/experiment-lab
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build shared C++ core
+        run: |
+          cmake -S "code/c++ core" -B "code/c++ core/build-shared" -DBUILD_SHARED_LIBS=ON
+          cmake --build "code/c++ core/build-shared" -j
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy matplotlib pytest
+      - name: Download and validate bAbI data
+        run: python -m d2c.digital.download_babi
+      - name: Run E0 diagnostic baseline
+        run: |
+          mkdir -p "$RUNS/e0"
+          python -m d2c.experiments.babi_qa --task "$TASK" --variant full --dim "$DIM" --seeds "$SEEDS" --epochs "$EPOCHS" --readout linear --lr 0.05 --feature-scale 100 --eval-split test --output-dir "$RUNS/e0"
+      - name: Run E-F0 diagnostic baseline and spine audit
+        run: |
+          mkdir -p "$RUNS/ef0"
+          python -m d2c.experiments.babi_f0 --task "$TASK" --variant full --dim "$DIM" --seeds "$SEEDS" --epochs "$EPOCHS" --readout linear --lr 0.05 --feature-scale 100 --eval-split test --mode isolated --exercise-spine --output-dir "$RUNS/ef0"
+      - name: Run staged readout sweep with validation-only selection
+        run: |
+          python -m d2c.experiments.g0_readout_sweep --task "$TASK" --dim "$DIM" --seeds "$SEEDS" --epochs "$EPOCHS" --scales 1,10,100 --learning-rates 0.001,0.01,0.05 --data-dir "$DATA" --output-dir "$RUNS/readout-sweep"
+      - name: Run QA2 oracle ladder and controlled entity-binding tests
+        run: |
+          mkdir -p "$RUNS/oracle"
+          python -m d2c.experiments.g0_reasoning_probe --task "$TASK" --split test --data-dir "$DATA" --output "$RUNS/oracle/qa2_oracle.json"
+      - name: Run G1 parser, transition and bundle tests
+        run: pytest -q code/python/tests/test_babi_g1.py code/python/tests/test_g0_diagnostics.py code/python/tests/test_g0_reasoning_probe.py code/python/tests/test_g0_readout_sweep.py
+      - name: Run G1 explicit relational-state QA2 diagnostic
+        run: |
+          mkdir -p "$RUNS/g1"
+          python -m d2c.experiments.babi_g1 --task 2 --variant full --dim "$DIM" --output-dir "$RUNS/g1"
+      - name: Assemble reproducible G0 report
+        if: always()
+        run: |
+          python - <<'PY'
+          import csv, json, pathlib
+          root = pathlib.Path("runs/experiment-lab")
+          def load_first(folder):
+              paths = sorted((root / folder).rglob("summary.json"))
+              return json.loads(paths[0].read_text()) if paths else None
+          def compact(result):
+              if not result:
+                  return {"status": "missing"}
+              d = result.get("diagnostics", {})
+              return {
+                  "mean_accuracy": result.get("mean_accuracy"),
+                  "standard_error": result.get("standard_error", result.get("se_accuracy")),
+                  "evaluation_split": result.get("evaluation_split", "test"),
+                  "evaluation_stories": result.get("evaluation_stories", result.get("test_stories")),
+                  "per_seed_accuracy": [s.get("accuracy") for s in result.get("seed_results", [])],
+                  "calibration": d.get("calibration"),
+                  "confidence": d.get("confidence"),
+                  "target_distribution": d.get("target_distribution"),
+                  "predicted_distribution": d.get("predicted_distribution"),
+                  "failure_categories": d.get("failure_categories"),
+              }
+          e0 = load_first("e0")
+          ef0 = load_first("ef0")
+          sweep = load_first("readout-sweep")
+          oracle_path = root / "oracle" / "qa2_oracle.json"
+          oracle = json.loads(oracle_path.read_text()) if oracle_path.exists() else None
+          confirmation = sweep.get("test_confirmation", {}) if sweep else {}
+          comparison = {
+              "experiment": "G0",
+              "protocol": {
+                  "task": int(__import__("os").environ["TASK"]),
+                  "dim": int(__import__("os").environ["DIM"]),
+                  "seeds": int(__import__("os").environ["SEEDS"]),
+                  "epochs": int(__import__("os").environ["EPOCHS"]),
+                  "baseline_readout": "linear",
+                  "baseline_learning_rate": 0.05,
+                  "baseline_feature_scale": 100.0,
+                  "sweep_selection_split": "valid",
+                  "held_out_confirmation_split": "test",
+                  "f0_mode": "isolated",
+                  "soe_kernel_modified": False,
+                  "runtime_ablation": "deferred",
+              },
+              "baseline": {"e0": compact(e0), "ef0": compact(ef0)},
+              "readout_sweep": {
+                  "selected_configuration": sweep.get("selected_configuration") if sweep else None,
+                  "validation_cells": sweep.get("validation_cells") if sweep else [],
+                  "test_confirmation": {
+                      "e0": compact(confirmation.get("e0")),
+                      "ef0": compact(confirmation.get("ef0")),
+                      "paired_mean_accuracy_difference_ef0_minus_e0":
+                          confirmation.get("paired_mean_accuracy_difference_ef0_minus_e0"),
+                  },
+              },
+              "reasoning_probe": {
+                  "levels": oracle.get("levels") if oracle else None,
+                  "controlled_entity_binding": oracle.get("controlled_entity_binding") if oracle else None,
+              },
+          }
+          (root / "comparison.json").write_text(json.dumps(comparison, indent=2))
+          with (root / "comparison.csv").open("w", newline="") as handle:
+              writer = csv.writer(handle)
+              writer.writerow(["section", "experiment_or_cell", "seed", "accuracy", "feature_scale", "learning_rate", "readout"])
+              for name, result in (("baseline_e0", e0), ("baseline_ef0", ef0)):
+                  if result:
+                      for seed in result.get("seed_results", []):
+                          writer.writerow([name, name, seed.get("seed"), seed.get("accuracy"), result.get("feature_scale"), result.get("learning_rate"), result.get("readout_type")])
+              if sweep:
+                  for index, cell in enumerate(sweep.get("validation_cells", [])):
+                      for seed_index, accuracy in enumerate(cell["validation"].get("per_seed_accuracy", [])):
+                          writer.writerow(["validation_sweep", index, seed_index, accuracy, cell["feature_scale"], cell["learning_rate"], cell["readout"]])
+                  for name, result in (("selected_e0_test", confirmation.get("e0")), ("selected_ef0_test", confirmation.get("ef0"))):
+                      if result:
+                          for seed in result.get("seed_results", []):
+                              writer.writerow([name, name, seed.get("seed"), seed.get("accuracy"), result.get("feature_scale"), result.get("learning_rate"), result.get("readout_type")])
+          lines = [
+              "# G0 — QA2 diagnostic and reasoning investigation",
+              "",
+              "## Protocol",
+              "",
+              f"- Task: {comparison['protocol']['task']} · dimension: {comparison['protocol']['dim']} · matched seeds: {comparison['protocol']['seeds']} · epochs: {comparison['protocol']['epochs']}",
+              "- E0 and E-F0 baseline: linear readout, learning rate 0.05, feature scale 100, held-out test split.",
+              "- Readout selection: staged scale / learning-rate / linear-vs-MLP investigation on validation only; selected model confirmed on test.",
+              "- F0 runs in isolated mode. The SOE kernel is frozen. Runtime ablation remains deferred.",
+              "",
+              "## Baseline results",
+              "",
+          ]
+          for name, result in (("E0", e0), ("E-F0", ef0)):
+              c = compact(result)
+              lines += [f"### {name}", "", f"- Mean accuracy: {c.get('mean_accuracy')} · SE: {c.get('standard_error')}", f"- Per-seed accuracy: {c.get('per_seed_accuracy')}", f"- Calibration: {json.dumps(c.get('calibration'), sort_keys=True)}", f"- Confidence: {json.dumps(c.get('confidence'), sort_keys=True)}", f"- Predicted answer distribution: {json.dumps(c.get('predicted_distribution'), sort_keys=True)}", f"- Failure categories: {json.dumps(c.get('failure_categories'), sort_keys=True)}", ""]
+          if sweep:
+              lines += ["## Readout sweep", "", f"- Selected on validation: {json.dumps(sweep.get('selected_configuration'), sort_keys=True)}", "", "| Stage | Readout | Scale | Learning rate | Validation accuracy | SE | ECE | NLL |", "|---|---:|---:|---:|---:|---:|---:|---:|"]
+              for cell in sweep.get("validation_cells", []):
+                  v = cell["validation"]
+                  lines.append(f"| {cell['stage']} | {cell['readout']} | {cell['feature_scale']} | {cell['learning_rate']} | {v['mean_accuracy']:.4f} | {v['standard_error']:.4f} | {v['mean_ece']:.4f} | {v['mean_nll']:.4f} |")
+              lines += ["", f"- Selected test E0 accuracy: {confirmation.get('e0', {}).get('mean_accuracy')}", f"- Selected test E-F0 accuracy: {confirmation.get('ef0', {}).get('mean_accuracy')}", f"- Selected paired E-F0 - E0: {confirmation.get('paired_mean_accuracy_difference_ef0_minus_e0')}", ""]
+          if oracle:
+              lv = oracle["levels"]
+              lines += ["## Reasoning probe", "", f"- Event parsing coverage: {lv['L1_event_segmentation']['event_coverage']:.4f}", f"- Entity binding rate: {lv['L2_entity_binding']['binding_rate']:.4f}", f"- Temporal world-state resolution: {lv['L3_relational_temporal_state']['state_resolution_rate']:.4f}", f"- Symbolic oracle answer accuracy: {lv['L4_oracle_answer_readout']['accuracy']:.4f}", f"- Controlled entity-binding tests: {oracle['controlled_entity_binding']['passed']} ({len(oracle['controlled_entity_binding']['tests'])} cases)", ""]
+          lines += ["## Evidence", "", "- Complete per-example predictions, probabilities, questions, passages, calibration bins, per-class scores, and seed-level runtime traces are in the adjacent e0, ef0, readout-sweep, and oracle result bundles.", "- comparison.csv is the seed/cell summary; comparison.json is the machine-readable report.", ""]
+          (root / "G0_REPORT.md").write_text("\n".join(lines))
+          print((root / "G0_REPORT.md").read_text())
+          PY
+      - name: Assemble G1 relational register alongside G0 report
+        if: always()
+        run: |
+          python - <<'PY'
+          import csv, json, pathlib, os
+          root = pathlib.Path("runs/experiment-lab")
+          def first(folder):
+              files = sorted((root / folder).glob("*/summary.json"))
+              return json.loads(files[0].read_text()) if files else {"status": "no summary produced"}
+          e0, ef0, g1 = first("e0"), first("ef0"), first("g1")
+          rows = []
+          for name, result in (("e0", e0), ("ef0", ef0)):
+              rows.append({"experiment": name, "mean_accuracy": result.get("mean_accuracy"),
+                  "standard_error": result.get("standard_error", result.get("se_accuracy")),
+                  "train_stories": result.get("train_stories"), "test_stories": result.get("test_stories"),
+                  "per_seed_accuracy": [x.get("accuracy") for x in result.get("seed_results", [])],
+                  "status": result.get("status", "completed")})
+          register = {
+              "schema_version": 2,
+              "protocol": {"task": int(os.environ["TASK"]), "g1_task": 2,
+                  "dim": int(os.environ["DIM"]), "matched_seeds": int(os.environ["SEEDS"]),
+                  "epochs": int(os.environ["EPOCHS"]), "e0_ef0_mode": "isolated",
+                  "runtime_ablation": "deferred"},
+              "learned_baseline_comparison": rows,
+              "g1_relational_diagnostic": {key: g1.get(key) for key in (
+                  "experiment", "task", "method", "learning_performed", "mean_accuracy",
+                  "correct", "test_stories", "parse_coverage", "parsed_statements",
+                  "total_statements", "query_resolution_coverage", "event_counts",
+                  "failure_counts", "wilson_95_ci", "claim_boundary", "dataset", "runtime")},
+              "g0_report": "G0_REPORT.md",
+              "interpretation": "G1 is a deterministic symbolic control, not learned-model accuracy."
+          }
+          (root / "experiment_lab_register.json").write_text(json.dumps(register, indent=2))
+          with (root / "comparison.csv").open("a", newline="") as f:
+              csv.writer(f).writerow(["g1_symbolic_diagnostic", "deterministic",
+                  g1.get("mean_accuracy"), g1.get("correct"), g1.get("test_stories")])
+          print(json.dumps(register, indent=2))
+          PY
+      - name: Upload reproducible G0 report and raw evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g0-qa2-diagnostics-readout-reasoning
+          path: |
+            runs/experiment-lab/
+            code/python/d2c/progress/babi_data/
+          if-no-files-found: warn
+          retention-days: 30

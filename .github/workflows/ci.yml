@@ -1,10 +1,13 @@
-name: CI
+name: Python + C++ CI
+# Retried after deferring Julia checks; this workflow currently validates C++ and Python only.
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
   cpp-tests:
@@ -100,3 +103,18 @@ jobs:
         env:
           PYTHONPATH: code/python
         run: pytest -q code/python/tests
+
+      - name: Validate Python modules and Lab browser script
+        if: runner.os == 'Linux'
+        run: |
+          python -m compileall -q code/python/d2c/experiments/babi_g1l.py code/python/d2c/experiments/babi_g2.py code/python/d2c/experiments/confidence_metrics.py code/python/d2c/experiment_lab/server.py
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          html = Path("code/python/d2c/experiment_lab/index.html").read_text()
+          scripts = re.findall(r"<script>(.*?)</script>", html, flags=re.S)
+          if len(scripts) != 1:
+              raise SystemExit(f"expected one inline Lab script, found {len(scripts)}")
+          Path("/tmp/experiment-lab.js").write_text(scripts[0])
+          PY
+          node --check /tmp/experiment-lab.js

@@ -1,0 +1,433 @@
+{
+  "schema_version": 1,
+  "title": "G2 relational composition controls",
+  "claim_boundary": "Synthetic structured-event fixtures verify explicit relational semantics and expected temporal state. They are not natural-language parsing scores, bAbI QA3/QA5 dataset examples, or learned-model accuracy.",
+  "cases": [
+    {
+      "id": "G2-QA3-001",
+      "family": "qa3_synthetic",
+      "category": "held_object_tracks_holder",
+      "description": "An object location follows its holder through three ordered relation facts.",
+      "aliases": {},
+      "events": [
+        {
+          "type": "move",
+          "actor": "mary",
+          "location": "kitchen"
+        },
+        {
+          "type": "pickup",
+          "actor": "mary",
+          "object": "football"
+        },
+        {
+          "type": "move",
+          "actor": "mary",
+          "location": "hallway"
+        }
+      ],
+      "query_object": "football",
+      "expected_holder": "mary",
+      "expected_location": "hallway"
+    },
+    {
+      "id": "G2-QA3-002",
+      "family": "qa3_synthetic",
+      "category": "distractor_interference",
+      "description": "A distractor person's movements must not change another person's carried object.",
+      "aliases": {},
+      "events": [
+        {
+          "type": "move",
+          "actor": "mary",
+          "location": "office"
+        },
+        {
+          "type": "pickup",
+          "actor": "mary",
+          "object": "milk"
+        },
+        {
+          "type": "move",
+          "actor": "john",
+          "location": "garden"
+        },
+        {
+          "type": "move",
+          "actor": "mary",
+          "location": "bedroom"
+        },
+        {
+          "type": "move",
+          "actor": "john",
+          "location": "kitchen"
+        }
+      ],
+      "query_object": "milk",
+      "expected_holder": "mary",
+      "expected_location": "bedroom"
+    },
+    {
+      "id": "G2-QA3-003",
+      "family": "qa3_synthetic",
+      "category": "multiple_entity_binding",
+      "description": "Two people carry different objects; object-holder bindings must not cross.",
+      "aliases": {},
+      "events": [
+        {
+          "type": "move",
+          "actor": "mary",
+          "location": "kitchen"
+        },
+        {
+          "type": "move",
+          "actor": "john",
+          "location": "office"
+        },
+        {
+          "type": "pickup",
+          "actor": "mary",
+          "object": "football"
+        },
+        {
+          "type": "pickup",
+          "actor": "john",
+          "object": "milk"
+        },
+        {
+          "type": "move",
+          "actor": "mary",
+          "location": "hallway"
+        }
+      ],
+      "query_object": "milk",
+      "expected_holder": "john",
+      "expected_location": "office"
+    },
+    {
+      "id": "G2-QA5-001",
+      "family": "qa5_synthetic",
+      "category": "three_relation_chain_transfer",
+      "description": "Resolve object → current holder → holder's latest location after an explicit hand-off.",
+      "aliases": {},
+      "events": [
+        {
+          "type": "move",
+          "actor": "mary",
+          "location": "kitchen"
+        },
+        {
+          "type": "move",
+          "actor": "john",
+          "location": "garden"
+        },
+        {
+          "type": "pickup",
+          "actor": "mary",
+          "object": "book"
+        },
+        {
+          "type": "transfer",
+          "object": "book",
+          "from": "mary",
+          "to": "john"
+        },
+        {
+          "type": "move",
+          "actor": "john",
+          "location": "office"
+        }
+      ],
+      "query_object": "book",
+      "expected_holder": "john",
+      "expected_location": "office"
+    },
+    {
+      "id": "G2-QA5-002",
+      "family": "qa5_synthetic",
+      "category": "release_freezes_location",
+      "description": "After release, later movement of the former holder must not move the object.",
+      "aliases": {},
+      "events": [
+        {
+          "type": "move",
+          "actor": "mary",
+          "location": "kitchen"
+        },
+        {
+          "type": "pickup",
+          "actor": "mary",
+          "object": "football"
+        },
+        {
+          "type": "move",
+          "actor": "mary",
+          "location": "hallway"
+        },
+        {
+          "type": "release",
+          "actor": "mary",
+          "object": "football"
+        },
+        {
+          "type": "move",
+          "actor": "mary",
+          "location": "garden"
+        }
+      ],
+      "query_object": "football",
+      "expected_holder": null,
+      "expected_location": "hallway"
+    },
+    {
+      "id": "G2-QA5-003",
+      "family": "qa5_synthetic",
+      "category": "release_then_reacquire",
+      "description": "A released object can be acquired by another person and follows the new holder.",
+      "aliases": {},
+      "events": [
+        {
+          "type": "move",
+          "actor": "mary",
+          "location": "kitchen"
+        },
+        {
+          "type": "pickup",
+          "actor": "mary",
+          "object": "keys"
+        },
+        {
+          "type": "move",
+          "actor": "mary",
+          "location": "hallway"
+        },
+        {
+          "type": "release",
+          "actor": "mary",
+          "object": "keys"
+        },
+        {
+          "type": "move",
+          "actor": "john",
+          "location": "office"
+        },
+        {
+          "type": "pickup",
+          "actor": "john",
+          "object": "keys"
+        },
+        {
+          "type": "move",
+          "actor": "john",
+          "location": "garden"
+        }
+      ],
+      "query_object": "keys",
+      "expected_holder": "john",
+      "expected_location": "garden"
+    },
+    {
+      "id": "G2-QA5-004",
+      "family": "qa5_synthetic",
+      "category": "temporal_update",
+      "description": "The most recent movement event, not a stale earlier location, determines the held object's location.",
+      "aliases": {},
+      "events": [
+        {
+          "type": "move",
+          "actor": "john",
+          "location": "bedroom"
+        },
+        {
+          "type": "pickup",
+          "actor": "john",
+          "object": "phone"
+        },
+        {
+          "type": "move",
+          "actor": "john",
+          "location": "office"
+        },
+        {
+          "type": "move",
+          "actor": "john",
+          "location": "garden"
+        },
+        {
+          "type": "move",
+          "actor": "john",
+          "location": "bathroom"
+        }
+      ],
+      "query_object": "phone",
+      "expected_holder": "john",
+      "expected_location": "bathroom"
+    },
+    {
+      "id": "G2-QA5-005",
+      "family": "qa5_synthetic",
+      "category": "independent_object_states",
+      "description": "Moving one carrier must not alter a different object's fixed location.",
+      "aliases": {},
+      "events": [
+        {
+          "type": "move",
+          "actor": "mary",
+          "location": "kitchen"
+        },
+        {
+          "type": "move",
+          "actor": "john",
+          "location": "office"
+        },
+        {
+          "type": "pickup",
+          "actor": "mary",
+          "object": "apple"
+        },
+        {
+          "type": "pickup",
+          "actor": "john",
+          "object": "orange"
+        },
+        {
+          "type": "move",
+          "actor": "mary",
+          "location": "hallway"
+        },
+        {
+          "type": "release",
+          "actor": "john",
+          "object": "orange"
+        },
+        {
+          "type": "move",
+          "actor": "mary",
+          "location": "garden"
+        }
+      ],
+      "query_object": "orange",
+      "expected_holder": null,
+      "expected_location": "office"
+    },
+    {
+      "id": "G2-COREf-001",
+      "family": "coreference_synthetic",
+      "category": "explicit_coreference_alias",
+      "description": "A supplied pronoun-to-entity alias preserves a known holder identity; alias resolution is explicit, not inferred.",
+      "aliases": {
+        "she": "mary",
+        "her": "mary"
+      },
+      "events": [
+        {
+          "type": "move",
+          "actor": "mary",
+          "location": "kitchen"
+        },
+        {
+          "type": "pickup",
+          "actor": "mary",
+          "object": "bag"
+        },
+        {
+          "type": "move",
+          "actor": "she",
+          "location": "hallway"
+        }
+      ],
+      "query_object": "bag",
+      "expected_holder": "mary",
+      "expected_location": "hallway"
+    },
+    {
+      "id": "G2-COREf-002",
+      "family": "coreference_synthetic",
+      "category": "explicit_coreference_alias",
+      "description": "A separate supplied alias must resolve to the correct person without identity leakage.",
+      "aliases": {
+        "he": "john",
+        "him": "john"
+      },
+      "events": [
+        {
+          "type": "move",
+          "actor": "mary",
+          "location": "kitchen"
+        },
+        {
+          "type": "move",
+          "actor": "john",
+          "location": "office"
+        },
+        {
+          "type": "pickup",
+          "actor": "john",
+          "object": "parcel"
+        },
+        {
+          "type": "move",
+          "actor": "him",
+          "location": "garden"
+        }
+      ],
+      "query_object": "parcel",
+      "expected_holder": "john",
+      "expected_location": "garden"
+    },
+    {
+      "id": "G2-REL-001",
+      "family": "qa5_synthetic",
+      "category": "role_assignment",
+      "description": "Two similar people and two object relations must preserve actor/object role assignment.",
+      "aliases": {},
+      "events": [
+        {
+          "type": "move",
+          "actor": "mary",
+          "location": "kitchen"
+        },
+        {
+          "type": "move",
+          "actor": "marco",
+          "location": "office"
+        },
+        {
+          "type": "pickup",
+          "actor": "mary",
+          "object": "red_box"
+        },
+        {
+          "type": "pickup",
+          "actor": "marco",
+          "object": "blue_box"
+        },
+        {
+          "type": "move",
+          "actor": "marco",
+          "location": "garden"
+        }
+      ],
+      "query_object": "red_box",
+      "expected_holder": "mary",
+      "expected_location": "kitchen"
+    },
+    {
+      "id": "G2-REL-002",
+      "family": "qa3_synthetic",
+      "category": "insufficient_evidence",
+      "description": "An object with no observed location or holder must remain unresolved rather than receive a fabricated location.",
+      "aliases": {},
+      "events": [
+        {
+          "type": "move",
+          "actor": "mary",
+          "location": "kitchen"
+        }
+      ],
+      "query_object": "unknown_object",
+      "expected_holder": null,
+      "expected_location": null
+    }
+  ]
+}

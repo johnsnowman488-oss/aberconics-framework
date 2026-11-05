@@ -141,3 +141,30 @@ If you want to work from the core:
 ![Lorenz Chaos Suppression](docs/figures/lorenz_before_after.png)
 
 ![OU Colored Noise Memory Extension](docs/figures/ou_trajectories_comparison.png)
+
+## E-F0: Runtime-Integrated Digital Reasoning
+
+The original bAbI E0 experiment remains available as the frozen baseline:
+code/python/d2c/experiments/babi_qa.py.
+
+The digital F0 runtime adds a persistent digital session, six-phase scheduling,
+bounded circular trace storage with continuity-aware windows, stability
+monitoring, prediction-change diagnostics, and versioned state checkpoints.
+A new bAbI runner is available at code/python/d2c/experiments/babi_f0.py.
+
+The default isolated mode resets episodic contents for each story while
+preserving runtime phase history. Continuous mode carries story memory across
+boundaries and is a separate interference stress test, not an independent-story
+benchmark score. F0 freezes the SOE kernel; PRUNE/GROW are proposal phases only.
+See docs/F0_RUNTIME_INTEGRATION.md for controls and run commands.
+
+For a fresh checkout, retrieve the bAbI dataset before running either bAbI
+experiment:
+
+```bash
+PYTHONPATH=code/python python -m d2c.digital.download_babi
+PYTHONPATH=code/python python -m d2c.experiments.babi_f0 --quick
+```
+
+The downloader validates all JSONL splits and reuses valid files unless
+`--force` is supplied.
