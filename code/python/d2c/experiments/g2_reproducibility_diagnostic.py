@@ -188,6 +188,7 @@ def _fit_once(x_train: np.ndarray, y_train: np.ndarray, x_valid: np.ndarray,
     for epoch in range(1, epochs + 1):
         order = list(range(len(y_train)))
         rng.shuffle(order)
+        training_order_sha256 = _hash_array(np.asarray(order, dtype=np.int64))
         losses = []
         for index in order:
             losses.append(float(model.train_step(x_train[index], int(y_train[index]), learning_rate=learning_rate)))
@@ -197,6 +198,7 @@ def _fit_once(x_train: np.ndarray, y_train: np.ndarray, x_valid: np.ndarray,
         history.append({
             "epoch": epoch,
             "mean_train_loss": float(np.mean(losses)),
+            "training_order_sha256": training_order_sha256,
             "weight_sha256": _hash_model(model),
             "logits_sha256": _hash_array(logits),
             "predictions_sha256": _hash_array(predictions.astype(np.int64)),
@@ -274,6 +276,7 @@ def run(data_dir: Path, output_dir: Path, tasks=(3, 5), seeds=5, repeats=2,
                             "task": task, "feature_scale": scale, "seed": seed,
                             "repeat": repeat + 1, "epoch": row["epoch"],
                             "train_loss": row["mean_train_loss"],
+                            "training_order_sha256": row["training_order_sha256"],
                             "validation_accuracy": metrics["accuracy"],
                             "validation_nll": metrics["nll"],
                             "validation_brier": metrics["brier"],
@@ -291,6 +294,7 @@ def run(data_dir: Path, output_dir: Path, tasks=(3, 5), seeds=5, repeats=2,
                 epoch_exact = [
                     {
                         "epoch": ea["epoch"],
+                        "training_order_exact_match": ea["training_order_sha256"] == eb["training_order_sha256"],
                         "weights_exact_match": ea["weight_sha256"] == eb["weight_sha256"],
                         "logits_exact_match": ea["logits_sha256"] == eb["logits_sha256"],
                         "predictions_exact_match": ea["predictions_sha256"] == eb["predictions_sha256"],
@@ -337,6 +341,10 @@ def run(data_dir: Path, output_dir: Path, tasks=(3, 5), seeds=5, repeats=2,
             feature_checks.extend(comp[key].values())
     all_feature_exact = all(feature_checks)
     all_initial_exact = all(row["initial_weights_exact_match"] for row in seed_comparisons)
+    all_orders_exact = all(
+        epoch["training_order_exact_match"]
+        for row in seed_comparisons for epoch in row["epoch_comparisons"]
+    )
     all_weights_exact = all(
         epoch["weights_exact_match"]
         for row in seed_comparisons for epoch in row["epoch_comparisons"]
@@ -385,9 +393,12 @@ def run(data_dir: Path, output_dir: Path, tasks=(3, 5), seeds=5, repeats=2,
             "thread_environment": {
                 key: os.environ.get(key) for key in (
                     "OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS",
-                    "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS"
+                    "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS",
+                    "OPENBLAS_CORETYPE", "NPY_DISABLE_CPU_FEATURES"
                 )
             },
+            "github_run_id": os.environ.get("GITHUB_RUN_ID"),
+            "github_sha": os.environ.get("GITHUB_SHA"),
             "numpy_build_configuration": env_capture.getvalue(),
             "readout_path": "Python LinearReadout + NumPy; fixed Python-side bAbI memory bridge",
             "cxx_runtime_note": "CI builds the unchanged C++ runtime for regression context; this diagnostic's feature/readout path uses the Python bridge and does not invoke the C++ runtime.",
@@ -396,12 +407,13 @@ def run(data_dir: Path, output_dir: Path, tasks=(3, 5), seeds=5, repeats=2,
         "reproducibility_summary": {
             "feature_construction_all_exact": all_feature_exact,
             "initial_weights_all_exact": all_initial_exact,
+            "training_orders_all_exact": all_orders_exact,
             "trained_weights_all_exact": all_weights_exact,
             "validation_logits_all_exact": all_logits_exact,
             "predictions_all_exact": all_predictions_exact,
             "classification": (
                 "bitwise_repeatable_in_this_runner"
-                if all([all_feature_exact, all_initial_exact, all_weights_exact, all_logits_exact, all_predictions_exact])
+                if all([all_feature_exact, all_initial_exact, all_orders_exact, all_weights_exact, all_logits_exact, all_predictions_exact])
                 else "divergence_detected"
             ),
             "seed_comparisons": seed_comparisons,
