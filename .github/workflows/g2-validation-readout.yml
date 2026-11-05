@@ -1,0 +1,86 @@
+name: G2 Validation-Only Readout Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      seeds:
+        description: Matched validation seeds
+        required: true
+        default: "5"
+        type: string
+      epochs:
+        description: Readout training epochs
+        required: true
+        default: "5"
+        type: string
+  push:
+    paths:
+      - ".github/workflows/g2-validation-readout.yml"
+      - "code/python/d2c/experiments/g2_validation_readout.py"
+
+permissions:
+  contents: read
+
+jobs:
+  validation-readout:
+    name: Train-only fitting → validation-only selection
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PYTHONPATH: ${{ github.workspace }}/code/python
+      GFE_CORE_LIB: ${{ github.workspace }}/code/c++ core/build-shared/libgfe_core.so
+      SEEDS: ${{ github.event.inputs.seeds || '5' }}
+      EPOCHS: ${{ github.event.inputs.epochs || '5' }}
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      VECLIB_MAXIMUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+      OUTPUT: runs/experiment-lab/g2-validation-readout
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build unchanged C++ runtime
+        run: |
+          cmake -S "code/c++ core" -B "code/c++ core/build-shared" -DBUILD_SHARED_LIBS=ON
+          cmake --build "code/c++ core/build-shared" -j
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy==2.4.6" matplotlib pytest
+      - name: Download and validate bAbI splits
+        run: python -m d2c.digital.download_babi
+      - name: Validate diagnostic and G2 regression tests
+        run: |
+          python -m compileall -q code/python/d2c/experiments/g2_validation_readout.py
+          pytest -q code/python/tests/test_babi_g2.py
+      - name: Run readout scale and regularization check on validation only
+        run: |
+          mkdir -p "$OUTPUT"
+          python -m d2c.experiments.g2_validation_readout \
+            --tasks 3,5 --dim 64 --seeds "$SEEDS" --epochs "$EPOCHS" \
+            --learning-rate 0.05 --output-dir "$OUTPUT"
+          python - <<'PY'
+          import json, pathlib
+          p = pathlib.Path("runs/experiment-lab/g2-validation-readout/summary.json")
+          report = json.loads(p.read_text())
+          assert report["evaluation_split"] == "valid"
+          assert report["held_out_test_split_opened"] is False
+          assert set(report["tasks"]) == {"3", "5"}
+          for task in report["tasks"].values():
+              assert len(task["candidates"]) == 4
+              assert all(len(c["seeds"]) >= 3 for c in task["candidates"])
+          print("Validation-only guard and evidence checks passed.")
+          PY
+      - name: Upload validation-only evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g2-validation-only-readout
+          path: runs/experiment-lab/g2-validation-readout/
+          if-no-files-found: warn
+          retention-days: 30

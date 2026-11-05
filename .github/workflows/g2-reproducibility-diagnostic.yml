@@ -1,0 +1,91 @@
+name: G2 Reproducibility and Confidence Diagnostic
+
+on:
+  push:
+    paths:
+      - ".github/workflows/g2-reproducibility-diagnostic.yml"
+      - "code/python/d2c/experiments/g2_reproducibility_diagnostic.py"
+  workflow_dispatch:
+    inputs:
+      seeds:
+        description: Matched seeds per task and feature scale
+        required: true
+        default: "5"
+        type: string
+      repeats:
+        description: Independent repeated fits per seed
+        required: true
+        default: "2"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  g2-reproducibility:
+    name: Repeat features, readout fits, and confidence analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PYTHONPATH: ${{ github.workspace }}/code/python
+      GFE_CORE_LIB: ${{ github.workspace }}/code/c++ core/build-shared/libgfe_core.so
+      SEEDS: ${{ github.event.inputs.seeds || '5' }}
+      REPEATS: ${{ github.event.inputs.repeats || '2' }}
+      OPENBLAS_NUM_THREADS: "1"
+      OPENBLAS_CORETYPE: "Haswell"
+      NPY_DISABLE_CPU_FEATURES: "X86_V3,X86_V4,AVX512_ICL,AVX512_SPR"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      VECLIB_MAXIMUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+      OUTPUT: runs/experiment-lab/g2-reproducibility-diagnostic
+    steps:
+      - name: Checkout diagnostic branch
+        uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.18"
+      - name: Build unchanged C++ runtime for regression context
+        run: |
+          cmake -S "code/c++ core" -B "code/c++ core/build-shared" -DBUILD_SHARED_LIBS=ON
+          cmake --build "code/c++ core/build-shared" -j
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy==2.4.6" matplotlib pytest
+      - name: Download train and validation bAbI data
+        run: python -m d2c.digital.download_babi
+      - name: Compile and run G2 regression tests
+        run: |
+          python -m compileall -q code/python/d2c/experiments/g2_reproducibility_diagnostic.py
+          pytest -q code/python/tests/test_babi_g2.py
+      - name: Run repeated validation-only diagnostics
+        run: |
+          mkdir -p "$OUTPUT"
+          python -m d2c.experiments.g2_reproducibility_diagnostic \
+            --tasks 3,5 --dim 64 --seeds "$SEEDS" --repeats "$REPEATS" \
+            --epochs 3 --learning-rate 0.05 --output-dir "$OUTPUT"
+          python - <<'PY'
+          import json, pathlib
+          report = json.loads(pathlib.Path("runs/experiment-lab/g2-reproducibility-diagnostic/summary.json").read_text())
+          assert report["evaluation_split"] == "validation"
+          assert report["held_out_test_split_opened"] is False
+          assert set(report["tasks"]) == {"3", "5"}
+          assert report["config"]["epochs"] == 3
+          assert report["config"]["feature_scales"] == [10.0, 100.0]
+          assert len(report["reproducibility_summary"]["seed_comparisons"]) == 20
+          print("G2 reproducibility diagnostic and held-out-test guard passed.")
+          PY
+      - name: Upload G2 reproducibility evidence and Lab register
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g2-reproducibility-diagnostic
+          path: runs/experiment-lab/g2-reproducibility-diagnostic/
+          if-no-files-found: warn
+          retention-days: 30
+
+# Independent CI-run parity check; experiment code and parameters are unchanged.
+
+# Final pinned-run parity check includes epoch training-order fingerprints.
