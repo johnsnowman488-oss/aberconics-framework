@@ -422,6 +422,8 @@ def test_g3_run_summary_preserves_task_wise_paired_effects(tmp_path):
                         "top_down_dynamic_gamma_fraction": 1.0,
                         "max_fast_active_stability_ratio": 0.85,
                         "fast_active_stability_pass": True,
+                        "max_hierarchy_active_stability_ratio": 0.86,
+                        "all_active_stability_pass": True,
                     }],
                 },
             },
