@@ -49,11 +49,11 @@ The lower level uses the existing full ABI memory kernel, negative-feedback Form
 The hierarchy arm adds one slower context level and two edges:
 
 - Bottom-up: level 0 → level 1; gain 0.4; normalized positive kernel materialization.
-- Top-down: level 1 → level 0; gain 2.0; normalized positive kernel materialization.
+- Top-down: level 1 → level 0; gain 2.0; positive kernel materialization with weight normalization disabled so the base aggregate weight scale is preserved at zero context drive.
 
 The context level uses gamma [0.35, 0.08], weights [0.05, 0.02], and leak 0.5. Both levels use the same state dimension and timestep. The level-0 active kernel is captured throughout every episode.
 
-normalize_weights=True is retained to match the existing D4A hierarchy path. This is intentional for G3 continuity, but it is also a known interpretive caveat: materialization can change the aggregate weight sum. The run therefore reports base and active weight sums, per-channel gamma ranges, per-level state norms and spectral units, and whether top-down gamma changed during an episode. A performance gain is not sufficient evidence for context-dependent hierarchy if those diagnostics show only static weight strengthening.
+The top-down edge uses normalize_weights=False. This corrects the D4A confound: normalization had increased aggregate fast-level feedback to a constant sum independent of context. G3 instead starts from the same base weights as flat ABI and permits context-dependent co-modulation of weights and decay rates. Both active weight sums and per-channel gamma ranges are recorded. The C++ Form-B stability ratio sum(w / (gamma * leak)) is computed on every active lower-level kernel; every observed ratio must remain at or below the 0.9 safety margin. A performance gain is not sufficient evidence for context-dependent hierarchy if the modulation is inactive or destabilizes the lower level.
 
 ## 4. Matching and training controls
 
@@ -99,7 +99,7 @@ A technically valid G3 evidence bundle requires:
 
 1. Both QA3 and QA5 complete.
 2. Matched seed IDs, initial readout fingerprints, training-order hashes and evaluation example identities.
-3. Both bottom-up and top-down hierarchy edges are active; context activity is non-zero; state/spectral outputs remain finite; active kernel values remain finite and positive; top-down gamma variation is reported.
+3. Both bottom-up and top-down hierarchy edges are active; context activity is non-zero; state/spectral outputs remain finite; active kernel values remain finite and positive; top-down gamma variation is non-zero; the per-step lower-level stability ratio remains at or below 0.9.
 4. All F0 six-phase audits pass for every seed, with no stability violations and successful checkpoint/trace checks.
 5. Complete confidence evidence for both arms and both tasks.
 6. All 12 structured relational fixtures pass.
