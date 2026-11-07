@@ -16,6 +16,12 @@ on:
       - "code/python/tests/test_experiment_lab.py"
       - "docs/G3_FULL_HIERARCHY.md"
   workflow_dispatch:
+    inputs:
+      run_locked_test:
+        description: "Open the held-out bAbI test split and run the 20-seed benchmark after reviewing the passing validation preflight."
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -116,9 +122,11 @@ jobs:
           PY
 
       - name: Prepare locked test split only after validation preflight
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_locked_test }}
         run: python -m d2c.digital.download_babi --splits test
 
       - name: Locked G3 test evaluation (20 matched seeds)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_locked_test }}
         run: |
           mkdir -p "$G3_TEST_OUTPUT"
           python -m d2c.experiments.babi_g3 \
@@ -127,6 +135,7 @@ jobs:
             --eval-split test --output-dir "$G3_TEST_OUTPUT"
 
       - name: Enforce G3 evidence-integrity gates
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_locked_test }}
         run: |
           python - <<'PY'
           import json, pathlib
