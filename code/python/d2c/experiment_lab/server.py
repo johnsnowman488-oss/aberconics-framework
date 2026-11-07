@@ -427,6 +427,8 @@ def build_launch(data: dict, directory: Path) -> tuple[list[str], dict, dict]:
             "arms": ["flat_abi", "hier_bu_td"],
             "hierarchy": "full bottom-up + top-down",
             "bottom_up_gain": 0.4, "top_down_gain": 0.5,
+            "context_gamma": [0.35, 0.08], "context_w": [0.05, 0.02],
+            "context_leak": 0.5, "hierarchy_kernel_form": "negative_feedback_form_b",
             "top_down_weight_normalization": False,
             "active_kernel_stability_margin": 0.9,
             "f0_spine_audit": True, "static_weight_control": "deferred",
