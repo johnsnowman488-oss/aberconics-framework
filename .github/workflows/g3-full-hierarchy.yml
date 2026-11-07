@@ -72,6 +72,7 @@ jobs:
           python -m compileall -q \
             code/python/d2c/experiments/babi_g3.py \
             code/python/d2c/experiments/babi_g2.py \
+            code/python/d2c/digital/download_babi.py \
             code/python/d2c/experiment_lab/server.py
           python - <<'PY'
           import re
@@ -106,7 +107,11 @@ jobs:
               raise SystemExit("G3 preflight missed QA3 or QA5")
           if not result["acceptance"]["matched_seed_example_and_training_order"]["passed"]:
               raise SystemExit("G3 preflight failed matched-arm identity controls")
-          print("G3 validation preflight and test-split isolation passed.")
+          if not result["acceptance"]["full_bottom_up_top_down_mechanism"]["passed"]:
+              raise SystemExit("G3 preflight failed hierarchy activity, positive-kernel, finite-state or stability gates")
+          if not result["acceptance"]["f0_six_phase_spine_audit"]["passed"]:
+              raise SystemExit("G3 preflight failed F0 six-phase spine audit")
+          print("G3 validation preflight, mechanism, stability, F0 spine and test-split isolation passed.")
           PY
 
       - name: Prepare locked test split only after validation preflight
