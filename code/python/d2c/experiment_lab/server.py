@@ -85,6 +85,19 @@ EXPERIMENTS = [
             "eval_split": "test", "bootstrap_samples": 400,
         },
     },
+    {
+        "id": "g3",
+        "name": "G3 flat ABI vs full hierarchy",
+        "description": "Matched QA3/QA5 benchmark: flat ABI control versus full bottom-up + top-down hierarchy, with per-seed F0 spine audit.",
+        "modes": ["isolated"],
+        "tasks": [3, 5],
+        "defaults": {
+            "tasks": [3, 5], "dim": 64, "seeds": 20, "epochs": 3,
+            "learning_rate": 0.05, "feature_scale": 10.0,
+            "readout": "linear", "mode": "isolated",
+            "eval_split": "test", "bootstrap_samples": 400,
+        },
+    },
 ]
 EXPERIMENT_BY_ID = {item["id"]: item for item in EXPERIMENTS}
 
@@ -226,7 +239,7 @@ def build_launch(data: dict, directory: Path) -> tuple[list[str], dict, dict]:
             "directory": profile["relative_directory"],
         },
         "dataset_fingerprints": dataset_fingerprints(profile),
-        "task": task if experiment != "g2" else None,
+        "task": task if experiment not in {"g2", "g3"} else None,
         "tasks": None,
         "dim": dim,
         "mode": mode,
@@ -238,6 +251,7 @@ def build_launch(data: dict, directory: Path) -> tuple[list[str], dict, dict]:
         "g1": "d2c.experiments.babi_g1",
         "g1l": "d2c.experiments.babi_g1l",
         "g2": "d2c.experiments.babi_g2",
+        "g3": "d2c.experiments.babi_g3",
     }[experiment]
     args = [
         sys.executable, "-m", module, "--dim", str(dim),
@@ -333,7 +347,7 @@ def build_launch(data: dict, directory: Path) -> tuple[list[str], dict, dict]:
         ]
         if stage == "all":
             args += ["--confirm-seeds", str(confirmation_seeds)]
-    else:
+    elif experiment == "g2":
         tasks = settings.get("tasks", [3, 5])
         if isinstance(tasks, str):
             tasks = [int(value.strip()) for value in tasks.split(",") if value.strip()]
@@ -374,6 +388,42 @@ def build_launch(data: dict, directory: Path) -> tuple[list[str], dict, dict]:
             "--seeds", str(seeds), "--epochs", str(epochs),
             "--learning-rate", str(learning_rate),
             "--feature-scale", str(feature_scale), "--readout", readout,
+            "--bootstrap-samples", str(bootstrap_samples),
+            "--eval-split", eval_split,
+        ]
+    elif experiment == "g3":
+        tasks = settings.get("tasks", [3, 5])
+        if isinstance(tasks, str):
+            tasks = [int(value.strip()) for value in tasks.split(",") if value.strip()]
+        else:
+            tasks = [int(value) for value in tasks]
+        seeds = int(settings.get("seeds", 20))
+        epochs = int(settings.get("epochs", 3))
+        learning_rate = _positive_number(settings.get("learning_rate", 0.05), "learning rate")
+        feature_scale = _positive_number(settings.get("feature_scale", 10.0), "feature scale")
+        eval_split = settings.get("eval_split", "test")
+        bootstrap_samples = int(settings.get("bootstrap_samples", 400))
+        if (
+            tasks != [3, 5] or not 3 <= seeds <= 20 or epochs != 3
+            or learning_rate != 0.05 or feature_scale != 10.0
+            or eval_split not in {"valid", "test"}
+            or not 200 <= bootstrap_samples <= 5000
+        ):
+            raise ValueError("G3 requires QA3+QA5, 3 epochs, LR 0.05, feature scale 10, 3–20 seeds, and 200–5000 bootstrap samples")
+        config.update({
+            "task": None, "tasks": tasks, "seeds": seeds, "epochs": epochs,
+            "learning_rate": learning_rate, "feature_scale": feature_scale,
+            "readout": "linear", "evaluation_split": eval_split,
+            "bootstrap_samples": bootstrap_samples, "mode": "ABI scalar-chi",
+            "arms": ["flat_abi", "hier_bu_td"],
+            "hierarchy": "full bottom-up + top-down",
+            "f0_spine_audit": True, "static_weight_control": "deferred",
+            "learning_performed": True,
+            "confidence_metrics": "NLL, Brier, fixed/adaptive ECE, AURC, Wilson and story bootstrap",
+        })
+        args += [
+            "--tasks", "3,5", "--seeds", str(seeds), "--epochs", "3",
+            "--lr", "0.05", "--feature-scale", "10.0",
             "--bootstrap-samples", str(bootstrap_samples),
             "--eval-split", eval_split,
         ]
