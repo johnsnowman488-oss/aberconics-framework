@@ -789,6 +789,12 @@ def save_g3_bundle(result: dict[str, Any], output_dir: Path) -> Path:
                     "aurc": seed["confidence"]["selective_prediction"]["area_under_risk_coverage_curve"],
                     "f0_spine": seed["f0_spine_audit"]["status"],
                     "hierarchy_levels": seed["hierarchy_diagnostics"]["level_count"],
+                    "context_activity": seed["hierarchy_diagnostics"]["bottom_up_context_activity"],
+                    "top_down_dynamic_gamma_fraction": seed["hierarchy_diagnostics"]["top_down_dynamic_gamma_fraction"],
+                    "base_fast_weight_sum": seed["hierarchy_diagnostics"]["base_fast_weight_sum"],
+                    "mean_active_fast_weight_sum": seed["hierarchy_diagnostics"]["mean_active_fast_weight_sum"],
+                    "max_fast_active_stability_ratio": seed["hierarchy_diagnostics"]["max_fast_active_stability_ratio"],
+                    "fast_active_stability_pass": seed["hierarchy_diagnostics"]["fast_active_stability_pass"],
                 })
                 for prediction in seed["predictions"]:
                     examples.append({
@@ -817,10 +823,7 @@ def save_g3_bundle(result: dict[str, Any], output_dir: Path) -> Path:
             key: {
                 "paired_effects": task["paired_effects"],
                 "f0_spine_audit": task["f0_spine_audit"],
-                "hierarchy_mechanism_audit": {
-                    "passed": task["hierarchy_mechanism_audit"]["passed"],
-                    "weight_normalization_control": task["hierarchy_mechanism_audit"]["weight_normalization_control"],
-                },
+                "hierarchy_mechanism_audit": task["hierarchy_mechanism_audit"],
                 "confidence_evidence": task["confidence_evidence"],
             }
             for key, task in result["tasks"].items()
@@ -853,7 +856,21 @@ def save_g3_bundle(result: dict[str, Any], output_dir: Path) -> Path:
                 f"{metrics['aurc']:.4f} |"
             )
         effect = task["paired_effects"]["accuracy"]
+        hierarchy_seeds = task["arms"][ARM_HIER]["seed_results"]
+        hierarchy_diags = [row["hierarchy_diagnostics"] for row in hierarchy_seeds]
+        mean_context = statistics.mean(row["bottom_up_context_activity"] for row in hierarchy_diags)
+        mean_gamma_fraction = statistics.mean(row["top_down_dynamic_gamma_fraction"] for row in hierarchy_diags)
+        mean_active_weight = statistics.mean(row["weight_normalization_observed"] for row in hierarchy_diags)
+        base_weight = statistics.mean(row["base_fast_weight_sum"] for row in hierarchy_diags)
+        max_stability = max(row["max_fast_active_stability_ratio"] for row in hierarchy_diags)
+        stability_pass = all(row["fast_active_stability_pass"] for row in hierarchy_diags)
         report_lines.extend([
+            "",
+            "### Hierarchy mechanism audit",
+            f"- Mean bottom-up context activity: {mean_context:.6g}",
+            f"- Mean fraction of evaluation episodes with top-down gamma variation: {mean_gamma_fraction:.3f}",
+            f"- Base / mean active fast-level weight sum: {base_weight:.6g} / {mean_active_weight:.6g}",
+            f"- Maximum active fast-level stability ratio: {max_stability:.4f} (margin 0.9; {'PASS' if stability_pass else 'FAIL'})",
             "",
             f"- Paired accuracy delta (hierarchy − flat): {effect['mean']:.4f}",
             f"- 95% paired-seed t interval: {effect['ci95_two_sided_t']}",
