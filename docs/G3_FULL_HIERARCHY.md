@@ -53,7 +53,7 @@ The hierarchy arm adds one slower context level and two edges:
 
 The context level uses gamma [0.35, 0.08], weights [0.05, 0.02], and leak 0.5. Both levels use the same state dimension and timestep. The level-0 active kernel is captured throughout every episode.
 
-The top-down edge uses normalize_weights=False. This corrects the D4A confound: normalization had increased aggregate fast-level feedback to a constant sum independent of context. The G3 top-down gain is conservatively set to 0.5 so the unnormalized co-modulation has room to vary while retaining the 0.9 active-kernel stability margin. G3 instead starts from the same base weights as flat ABI and permits context-dependent co-modulation of weights and decay rates. Both active weight sums and per-channel gamma ranges are recorded. The C++ Form-B stability ratio sum(w / (gamma * leak)) is computed on every active lower-level kernel; every observed ratio must remain at or below the 0.9 safety margin. A performance gain is not sufficient evidence for context-dependent hierarchy if the modulation is inactive or destabilizes the lower level.
+The top-down edge uses normalize_weights=False. This corrects the D4A confound: normalization had increased aggregate fast-level feedback to a constant sum independent of context. The G3 top-down gain is conservatively set to 0.5 so the unnormalized co-modulation has room to vary while retaining the 0.9 active-kernel stability margin. G3 instead starts from the same base weights as flat ABI and permits context-dependent co-modulation of weights and decay rates. Both active weight sums and per-channel gamma ranges are recorded. The C++ Form-B stability ratio sum(w / (gamma * leak)) is computed for every active kernel at both levels using that level's leak rate; every observed ratio must remain at or below the 0.9 safety margin. A performance gain is not sufficient evidence for context-dependent hierarchy if the modulation is inactive or destabilizes the lower level.
 
 ## 4. Matching and training controls
 
@@ -83,7 +83,7 @@ Story-bootstrap uncertainty and between-seed paired uncertainty are kept separat
 
 ### Hierarchy mechanism
 
-Per-level state norm, D_eff, M_cap, M_scale, and H_mem where emitted; lower-level active kernel weight and gamma ranges; weight-sum normalization; top-down gamma variation; bottom-up context activity; positive-kernel and finite-state checks.
+Per-level state norm, D_eff, M_cap, M_scale, and H_mem where emitted; lower-level active kernel weight and gamma ranges; weight-sum normalization; top-down gamma variation; bottom-up context activity; positive-kernel and finite-state checks for both levels, plus per-level stability ratios.
 
 ### F0 spine companion
 
@@ -99,7 +99,7 @@ A technically valid G3 evidence bundle requires:
 
 1. Both QA3 and QA5 complete.
 2. Matched seed IDs, initial readout fingerprints, training-order hashes and evaluation example identities.
-3. Both bottom-up and top-down hierarchy edges are active; context activity is non-zero; state/spectral outputs remain finite; active kernel values remain finite and positive; top-down gamma variation is non-zero; the per-step lower-level stability ratio remains at or below 0.9.
+3. Both bottom-up and top-down hierarchy edges are active; context activity is non-zero; state/spectral outputs remain finite; active kernels at both levels remain finite and positive; top-down gamma variation is non-zero; the per-step stability ratio at each level remains at or below 0.9.
 4. All F0 six-phase audits pass for every seed, with no stability violations and successful checkpoint/trace checks.
 5. Complete confidence evidence for both arms and both tasks.
 6. All 12 structured relational fixtures pass.
