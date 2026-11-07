@@ -331,3 +331,43 @@ def test_delete_refuses_run_directory_outside_lab_store(tmp_path, monkeypatch):
         httpd.shutdown()
         httpd.server_close()
         thread.join()
+
+
+def test_g3_lab_launch_registers_two_arm_frozen_protocol(tmp_path, monkeypatch):
+    _write_profile(tmp_path)
+    monkeypatch.setattr(lab, "ROOT", tmp_path)
+    monkeypatch.setattr(lab, "PROFILE_REGISTRY", tmp_path / "profiles.json")
+    monkeypatch.setattr(lab, "sys", type("Sys", (), {"executable": "python"})())
+
+    command, config, fingerprints = lab.build_launch(
+        {"experiment": "g3", "dataset_profile": "fixture"},
+        tmp_path / "runs" / "g3",
+    )
+
+    assert command[command.index("-m") + 1] == "d2c.experiments.babi_g3"
+    assert command[command.index("--tasks") + 1] == "3,5"
+    assert command[command.index("--epochs") + 1] == "3"
+    assert command[command.index("--feature-scale") + 1] == "10.0"
+    assert config["tasks"] == [3, 5]
+    assert config["seeds"] == 20
+    assert config["epochs"] == 3
+    assert config["feature_scale"] == 10.0
+    assert config["arms"] == ["flat_abi", "hier_bu_td"]
+    assert config["f0_spine_audit"] is True
+    assert fingerprints["train"]["sha256"]
+
+
+def test_g3_lab_rejects_unregistered_or_unmatched_protocol_values(tmp_path, monkeypatch):
+    _write_profile(tmp_path)
+    monkeypatch.setattr(lab, "ROOT", tmp_path)
+    monkeypatch.setattr(lab, "PROFILE_REGISTRY", tmp_path / "profiles.json")
+    with pytest.raises(ValueError, match="G3 requires QA3"):
+        lab.build_launch(
+            {"experiment": "g3", "dataset_profile": "fixture", "feature_scale": 100},
+            tmp_path / "runs" / "g3",
+        )
+    with pytest.raises(ValueError, match="G3 requires QA3"):
+        lab.build_launch(
+            {"experiment": "g3", "dataset_profile": "fixture", "tasks": [3]},
+            tmp_path / "runs" / "g3",
+        )
