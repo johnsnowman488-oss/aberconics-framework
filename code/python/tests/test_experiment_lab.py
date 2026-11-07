@@ -393,3 +393,67 @@ def test_g3_validation_launch_does_not_require_or_fingerprint_test_split(tmp_pat
     assert config["evaluation_split"] == "valid"
     assert set(fingerprints) == {"train", "valid"}
     assert "test" not in fingerprints
+
+
+def test_g3_run_summary_preserves_task_wise_paired_effects(tmp_path):
+    run_id = str(uuid.uuid4())
+    run_dir = tmp_path / run_id
+    bundle = run_dir / "g3_run"
+    bundle.mkdir(parents=True)
+    summary = {
+        "claim_boundary": "G3 paired hierarchy benchmark",
+        "tasks": {
+            "3": {
+                "arms": {
+                    "flat_abi": {"mean_accuracy_over_seeds": 0.20},
+                    "hier_bu_td": {"mean_accuracy_over_seeds": 0.25},
+                },
+                "paired_effects": {
+                    "accuracy": {
+                        "mean": 0.05,
+                        "ci95_two_sided_t": [0.01, 0.09],
+                        "exact_two_sided_sign_test_p": 0.0625,
+                        "holm_adjusted_exact_sign_test_p_across_tasks": 0.125,
+                    },
+                },
+                "hierarchy_mechanism_audit": {
+                    "per_seed": [{
+                        "bottom_up_context_activity": 0.02,
+                        "top_down_dynamic_gamma_fraction": 1.0,
+                        "max_fast_active_stability_ratio": 0.85,
+                        "fast_active_stability_pass": True,
+                    }],
+                },
+            },
+            "5": {
+                "arms": {
+                    "flat_abi": {"mean_accuracy_over_seeds": 0.60},
+                    "hier_bu_td": {"mean_accuracy_over_seeds": 0.70},
+                },
+                "paired_effects": {"accuracy": {"mean": 0.10}},
+                "hierarchy_mechanism_audit": {"per_seed": []},
+            },
+        },
+    }
+    (bundle / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
+    job = {
+        "run_id": run_id,
+        "directory": str(run_dir),
+        "experiment": "g3",
+        "config": {
+            "evaluation_split": "test",
+            "tasks": [3, 5],
+            "seeds": 20,
+            "dataset": {"id": "babi_canonical"},
+        },
+    }
+
+    result = lab._run_summary(job)
+
+    assert result["accuracy"] == pytest.approx(0.475)
+    assert result["evaluation_split"] == "test"
+    assert result["stage"] == "full hierarchy benchmark"
+    assert result["g3_paired_results"]["3"]["paired_delta"] == pytest.approx(0.05)
+    assert result["g3_paired_results"]["3"]["holm_adjusted_p"] == pytest.approx(0.125)
+    assert result["g3_paired_results"]["3"]["active_stability_pass"] is True
+    assert result["g3_paired_results"]["5"]["flat_mean_accuracy"] == pytest.approx(0.60)
