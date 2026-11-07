@@ -277,8 +277,12 @@ def _episode_hierarchy_diagnostics(result, arm: str, base_weight_sum: float) -> 
         "bottom_up_context_observed": len(levels) > 1 and context_norm > 0.0,
         "top_down_coupling_configured": arm == ARM_HIER,
         "finite_state_and_spectral_evidence": all(row["finite"] for row in levels)
-            and all(math.isfinite(float(value)) for row in levels for value in row["spectral"].values()
-                    for value in value.values()),
+            and all(
+                math.isfinite(float(metric_value))
+                for row in levels
+                for metric_group in row["spectral"].values()
+                for metric_value in metric_group.values()
+            ),
     }
 
 
@@ -474,11 +478,16 @@ def _verify_pair(flat: dict[str, Any], hierarchy: dict[str, Any]) -> bool:
     if flat["seed"] != hierarchy["seed"] or flat["total"] != hierarchy["total"]:
         return False
     fields = ("story_index", "task", "raw_passage", "question", "target")
+    flat_predictions = flat.get("predictions", [])
+    hierarchy_predictions = hierarchy.get("predictions", [])
     return (
-        flat.get("initial_readout_sha256") == hierarchy.get("initial_readout_sha256")
+        len(flat_predictions) == flat["total"]
+        and len(hierarchy_predictions) == hierarchy["total"]
+        and len(flat_predictions) == len(hierarchy_predictions)
+        and flat.get("initial_readout_sha256") == hierarchy.get("initial_readout_sha256")
         and all(
             all(a.get(field) == b.get(field) for field in fields)
-            for a, b in zip(flat["predictions"], hierarchy["predictions"])
+            for a, b in zip(flat_predictions, hierarchy_predictions)
         )
     )
 
