@@ -224,7 +224,7 @@ def _kernel_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _episode_hierarchy_diagnostics(result, arm: str) -> dict[str, Any]:
+def _episode_hierarchy_diagnostics(result, arm: str, base_weight_sum: float) -> dict[str, Any]:
     levels = []
     for index, trace in enumerate(result.level_traces):
         states = [step.u for step in trace.steps]
@@ -256,7 +256,7 @@ def _episode_hierarchy_diagnostics(result, arm: str) -> dict[str, Any]:
     kernel = _kernel_summary(flat_kernels)
     kernel_by_level = [_kernel_summary(rows) for rows in per_level_kernels]
     context_norm = levels[1]["mean_state_norm"] if len(levels) > 1 else 0.0
-    base_w_sum = sum(float(v) for v in flat_kernels[0].get("w", [])) if flat_kernels else 0.0
+    first_active_w_sum = sum(float(v) for v in flat_kernels[0].get("w", [])) if flat_kernels else 0.0
     dynamic_gamma = any(
         len(row.get("gamma", [])) == len(flat_kernels[0].get("gamma", []))
         and any(abs(float(a) - float(b)) > 1e-12
@@ -269,7 +269,9 @@ def _episode_hierarchy_diagnostics(result, arm: str) -> dict[str, Any]:
         "levels": levels,
         "fast_level_active_kernel": kernel,
         "active_kernels_by_level": kernel_by_level,
-        "base_fast_weight_sum": base_w_sum,
+        "base_fast_weight_sum": float(base_weight_sum),
+        "first_active_fast_weight_sum": first_active_w_sum,
+        "mean_active_fast_weight_sum": kernel.get("mean_weight_sum"),
         "top_down_gamma_changed_over_episode": dynamic_gamma if arm == ARM_HIER else False,
         "context_level_activity": context_norm,
         "bottom_up_context_observed": len(levels) > 1 and context_norm > 0.0,
@@ -350,7 +352,7 @@ def _run_arm(
         predictions.append(prediction)
         correct += int(prediction["correct"])
         if arm == ARM_HIER:
-            hierarchy_rows.append(_episode_hierarchy_diagnostics(episode_result, arm))
+            hierarchy_rows.append(_episode_hierarchy_diagnostics(episode_result, arm, base_weight_sum=sum(memory.w)))
 
     accuracy = correct / len(eval_stories) if eval_stories else 0.0
     confidence = summarize_confidence(
