@@ -99,7 +99,9 @@ def test_full_hierarchy_executes_both_couplings_and_reports_finite_state():
         query=[0.0] * 8,
     )
     result = director.run_episode(episode, experiment_name="g3_test")
-    report = _episode_hierarchy_diagnostics(result, ARM_HIER)
+    report = _episode_hierarchy_diagnostics(
+        result, ARM_HIER, sum(memory.w), [memory.leak_rate, config.context_leak]
+    )
 
     assert len(result.level_traces) == 2
     assert report["level_count"] == 2
