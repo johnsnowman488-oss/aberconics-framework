@@ -174,7 +174,10 @@ def build_g3_chain(
             "target_level": 0,
             "relation": GFE_C_HIERARCHICAL_RELATION_TOP_DOWN,
             "gain": config.top_down_gain,
-            "normalize_weights": True,
+            # Preserve the base aggregate weight scale. Context may still
+            # co-modulate w and gamma; D4A showed normalization=True adds a
+            # large static feedback boost unrelated to context.
+            "normalize_weights": False,
         },
     ]
     return [fast, context], edges
@@ -224,7 +227,9 @@ def _kernel_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _episode_hierarchy_diagnostics(result, arm: str, base_weight_sum: float) -> dict[str, Any]:
+def _episode_hierarchy_diagnostics(
+    result, arm: str, base_weight_sum: float, fast_leak_rate: float,
+) -> dict[str, Any]:
     levels = []
     for index, trace in enumerate(result.level_traces):
         states = [step.u for step in trace.steps]
@@ -263,6 +268,20 @@ def _episode_hierarchy_diagnostics(result, arm: str, base_weight_sum: float) -> 
                 for a, b in zip(row["gamma"], flat_kernels[0]["gamma"]))
         for row in flat_kernels[1:]
     ) if flat_kernels else False
+    stability_ratios = [
+        sum(float(weight) / (float(rate) * fast_leak_rate)
+            for weight, rate in zip(row.get("w", []), row.get("gamma", [])))
+        if len(row.get("w", [])) == len(row.get("gamma", [])) and row.get("gamma")
+        else math.inf
+        for row in flat_kernels
+    ]
+    finite_stability_ratios = [
+        value for value in stability_ratios if math.isfinite(value)
+    ]
+    max_stability_ratio = max(stability_ratios, default=math.inf)
+    mean_stability_ratio = (
+        statistics.mean(finite_stability_ratios) if finite_stability_ratios else None
+    )
     return {
         "arm": arm,
         "level_count": len(levels),
@@ -272,6 +291,11 @@ def _episode_hierarchy_diagnostics(result, arm: str, base_weight_sum: float) -> 
         "base_fast_weight_sum": float(base_weight_sum),
         "first_active_fast_weight_sum": first_active_w_sum,
         "mean_active_fast_weight_sum": kernel.get("mean_weight_sum"),
+        "fast_active_stability_ratio_max": max_stability_ratio,
+        "fast_active_stability_ratio_mean": mean_stability_ratio,
+        "fast_active_stability_margin": 0.9,
+        "fast_active_stability_pass": bool(stability_ratios)
+            and all(math.isfinite(value) and value <= 0.9 for value in stability_ratios),
         "top_down_gamma_changed_over_episode": dynamic_gamma if arm == ARM_HIER else False,
         "context_level_activity": context_norm,
         "bottom_up_context_observed": len(levels) > 1 and context_norm > 0.0,
@@ -415,6 +439,12 @@ def _run_arm(
                 statistics.mean(row["fast_level_active_kernel"]["mean_weight_sum"] for row in hierarchy_rows)
                 if hierarchy_rows else None
             ),
+            "max_fast_active_stability_ratio": max(
+                row["fast_active_stability_ratio_max"] for row in hierarchy_rows
+            ) if hierarchy_rows else None,
+            "fast_active_stability_pass": all(
+                row["fast_active_stability_pass"] for row in hierarchy_rows
+            ) if hierarchy_rows else True,
         },
     }
 
@@ -623,6 +653,7 @@ def run_g3_experiment(
             and row["hierarchy_diagnostics"]["bottom_up_context_activity"] > 0
             and row["hierarchy_diagnostics"]["top_down_coupling_configured"] is True
             and row["hierarchy_diagnostics"]["top_down_dynamic_gamma_fraction"] > 0
+            and row["hierarchy_diagnostics"]["fast_active_stability_pass"]
             for row in hierarchy["seed_results"]
         )
         all_confidence_complete = all(
