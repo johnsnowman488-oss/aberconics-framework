@@ -732,6 +732,7 @@ class Handler(BaseHTTPRequestHandler):
                         "deterministic diagnostic" if job.get("experiment") == "g1"
                         else "validation pilot / gated confirmation" if job.get("experiment") == "g1l"
                         else "paired benchmark with internal E0/E-F0 comparison" if job.get("experiment") == "g2"
+                        else "paired flat ABI versus full hierarchy benchmark" if job.get("experiment") == "g3"
                         else "learned benchmark arm"
                     ),
                 })
