@@ -380,7 +380,14 @@ def _run_arm(
         predictions.append(prediction)
         correct += int(prediction["correct"])
         if arm == ARM_HIER:
-            hierarchy_rows.append(_episode_hierarchy_diagnostics(episode_result, arm, base_weight_sum=sum(memory.w)))
+            hierarchy_rows.append(
+                _episode_hierarchy_diagnostics(
+                    episode_result,
+                    arm,
+                    base_weight_sum=sum(memory.w),
+                    fast_leak_rate=memory.leak_rate,
+                )
+            )
 
     accuracy = correct / len(eval_stories) if eval_stories else 0.0
     confidence = summarize_confidence(
@@ -400,6 +407,7 @@ def _run_arm(
         "confidence": confidence,
         "hierarchy_diagnostics": {
             "evaluation_examples": len(hierarchy_rows),
+            "level_count": len(levels),
             "levels": [
                 {
                     "level": level,
@@ -435,6 +443,18 @@ def _run_arm(
             "positive_active_kernel_pass": all(
                 row["fast_level_active_kernel"].get("all_positive", False) for row in hierarchy_rows
             ) if hierarchy_rows else True,
+            "base_fast_weight_sum": (
+                statistics.mean(row["base_fast_weight_sum"] for row in hierarchy_rows)
+                if hierarchy_rows else sum(memory.w)
+            ),
+            "first_active_fast_weight_sum": (
+                statistics.mean(row["first_active_fast_weight_sum"] for row in hierarchy_rows)
+                if hierarchy_rows else None
+            ),
+            "mean_active_fast_weight_sum": (
+                statistics.mean(row["mean_active_fast_weight_sum"] for row in hierarchy_rows)
+                if hierarchy_rows else None
+            ),
             "weight_normalization_observed": (
                 statistics.mean(row["fast_level_active_kernel"]["mean_weight_sum"] for row in hierarchy_rows)
                 if hierarchy_rows else None
