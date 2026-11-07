@@ -74,7 +74,7 @@ class G3Config:
     readout: str = "linear"
     bootstrap_samples: int = 400
     bottom_up_gain: float = 0.4
-    top_down_gain: float = 2.0
+    top_down_gain: float = 0.5
     context_gamma: tuple[float, ...] = (0.35, 0.08)
     context_w: tuple[float, ...] = (0.05, 0.02)
     context_leak: float = 0.5
