@@ -231,6 +231,15 @@ def build_launch(data: dict, directory: Path) -> tuple[list[str], dict, dict]:
     if experiment in {"g1", "g1l"} and task != 2:
         raise ValueError(f"{experiment.upper()} supports QA2 only")
 
+    fingerprint_splits = (
+        ("train", settings.get("eval_split", "test"))
+        if experiment == "g3" else ("train", "valid", "test")
+    )
+    fingerprints = {
+        split: {"sha256": file_sha256(profile["files"][split]), "bytes": profile["files"][split].stat().st_size}
+        for split in fingerprint_splits
+        if profile["files"][split].is_file()
+    }
     config = {
         "experiment": experiment,
         "dataset": {
@@ -238,7 +247,7 @@ def build_launch(data: dict, directory: Path) -> tuple[list[str], dict, dict]:
             "name": profile["name"],
             "directory": profile["relative_directory"],
         },
-        "dataset_fingerprints": dataset_fingerprints(profile),
+        "dataset_fingerprints": fingerprints,
         "task": task if experiment not in {"g2", "g3"} else None,
         "tasks": None,
         "dim": dim,
