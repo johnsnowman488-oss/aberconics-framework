@@ -216,4 +216,23 @@ def test_flat_arm_collects_baseline_diagnostics_for_each_eval_story(monkeypatch)
     assert len(diagnostics["levels"]) == 1
     assert diagnostics["levels"][0]["mean_state_norm"] > 0.0
     assert diagnostics["fast_active_kernel"]["samples"] == len(stories)
+    assert diagnostics["top_down_coupling_configured"] is False
     assert diagnostics["top_down_dynamic_gamma_fraction"] == 0.0
+
+    hierarchy_result = g3._run_arm(
+        arm=ARM_HIER,
+        task=3,
+        seed=0,
+        train_stories=stories,
+        eval_stories=stories,
+        answer_set=["yes", "no"],
+        bridge=None,
+        memory=memory,
+        config=config,
+        orders=[[0, 1]],
+        lib=object(),
+    )
+    hierarchy_diagnostics = hierarchy_result["hierarchy_diagnostics"]
+    assert hierarchy_diagnostics["evaluation_examples"] == len(stories)
+    assert hierarchy_diagnostics["level_count"] == 2
+    assert hierarchy_diagnostics["top_down_coupling_configured"] is True

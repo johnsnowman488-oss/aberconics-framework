@@ -463,6 +463,11 @@ def _run_arm(
             "bottom_up_context_activity": statistics.mean(
                 row["context_level_activity"] for row in hierarchy_rows
             ) if hierarchy_rows else 0.0,
+            "top_down_coupling_configured": (
+                bool(hierarchy_rows) and all(
+                    row["top_down_coupling_configured"] for row in hierarchy_rows
+                )
+            ),
             "top_down_dynamic_gamma_fraction": (
                 sum(bool(row["top_down_gamma_changed_over_episode"]) for row in hierarchy_rows) / len(hierarchy_rows)
                 if hierarchy_rows else 0.0
