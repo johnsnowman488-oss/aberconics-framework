@@ -49,11 +49,11 @@ The lower level uses the existing full ABI memory kernel, negative-feedback Form
 The hierarchy arm adds one slower context level and two edges:
 
 - Bottom-up: level 0 → level 1; gain 0.4; normalized positive kernel materialization.
-- Top-down: level 1 → level 0; gain 2.0; positive kernel materialization with weight normalization disabled so the base aggregate weight scale is preserved at zero context drive.
+- Top-down: level 1 → level 0; gain 0.5; positive kernel materialization with weight normalization disabled so the base aggregate weight scale is preserved at zero context drive.
 
 The context level uses gamma [0.35, 0.08], weights [0.05, 0.02], and leak 0.5. Both levels use the same state dimension and timestep. The level-0 active kernel is captured throughout every episode.
 
-The top-down edge uses normalize_weights=False. This corrects the D4A confound: normalization had increased aggregate fast-level feedback to a constant sum independent of context. G3 instead starts from the same base weights as flat ABI and permits context-dependent co-modulation of weights and decay rates. Both active weight sums and per-channel gamma ranges are recorded. The C++ Form-B stability ratio sum(w / (gamma * leak)) is computed on every active lower-level kernel; every observed ratio must remain at or below the 0.9 safety margin. A performance gain is not sufficient evidence for context-dependent hierarchy if the modulation is inactive or destabilizes the lower level.
+The top-down edge uses normalize_weights=False. This corrects the D4A confound: normalization had increased aggregate fast-level feedback to a constant sum independent of context. The G3 top-down gain is conservatively set to 0.5 so the unnormalized co-modulation has room to vary while retaining the 0.9 active-kernel stability margin. G3 instead starts from the same base weights as flat ABI and permits context-dependent co-modulation of weights and decay rates. Both active weight sums and per-channel gamma ranges are recorded. The C++ Form-B stability ratio sum(w / (gamma * leak)) is computed on every active lower-level kernel; every observed ratio must remain at or below the 0.9 safety margin. A performance gain is not sufficient evidence for context-dependent hierarchy if the modulation is inactive or destabilizes the lower level.
 
 ## 4. Matching and training controls
 
