@@ -113,6 +113,8 @@ def test_full_hierarchy_executes_both_couplings_and_reports_finite_state():
     assert report["fast_active_stability_pass"]
     assert report["all_active_stability_pass"]
     assert report["max_hierarchy_active_stability_ratio"] <= report["fast_active_stability_margin"]
+    assert len(report["stability_by_level"]) == 2
+    assert all(row["passed"] for row in report["stability_by_level"])
     assert report["base_fast_weight_sum"] == pytest.approx(sum(memory.w))
     assert report["first_active_fast_weight_sum"] == pytest.approx(sum(memory.w), rel=1e-9, abs=1e-9)
     assert all(math.isfinite(row["mean_state_norm"]) for row in report["levels"])
