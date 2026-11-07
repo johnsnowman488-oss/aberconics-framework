@@ -7,7 +7,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
-from typing import Any
+from typing import Any, Sequence
 from urllib.request import urlopen
 
 
@@ -110,6 +110,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Download and validate bAbI JSONL data.")
     parser.add_argument("--output-dir", type=Path, default=default_dir)
     parser.add_argument("--force", action="store_true", help="replace existing valid split files")
+    parser.add_argument(
+        "--splits", default="train,test,valid",
+        help="comma-separated subset of train,valid,test (default: all three)",
+    )
     parser.add_argument("--timeout", type=float, default=60.0)
     args = parser.parse_args(argv)
 
@@ -117,6 +121,7 @@ def main(argv: list[str] | None = None) -> int:
         args.output_dir,
         force=args.force,
         timeout=args.timeout,
+        splits=tuple(value.strip() for value in args.splits.split(",") if value.strip()),
     )
     for split, result in results.items():
         print(
