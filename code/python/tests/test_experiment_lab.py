@@ -371,3 +371,25 @@ def test_g3_lab_rejects_unregistered_or_unmatched_protocol_values(tmp_path, monk
             {"experiment": "g3", "dataset_profile": "fixture", "tasks": [3]},
             tmp_path / "runs" / "g3",
         )
+
+
+def test_g3_validation_launch_does_not_require_or_fingerprint_test_split(tmp_path, monkeypatch):
+    data_dir = _write_profile(tmp_path)
+    (data_dir / "babi_test.jsonl").unlink()
+    monkeypatch.setattr(lab, "ROOT", tmp_path)
+    monkeypatch.setattr(lab, "PROFILE_REGISTRY", tmp_path / "profiles.json")
+    monkeypatch.setattr(lab, "sys", type("Sys", (), {"executable": "python"})())
+
+    command, config, fingerprints = lab.build_launch(
+        {
+            "experiment": "g3",
+            "dataset_profile": "fixture",
+            "eval_split": "valid",
+        },
+        tmp_path / "runs" / "g3-validation",
+    )
+
+    assert command[command.index("--eval-split") + 1] == "valid"
+    assert config["evaluation_split"] == "valid"
+    assert set(fingerprints) == {"train", "valid"}
+    assert "test" not in fingerprints
