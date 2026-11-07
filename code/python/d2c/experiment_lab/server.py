@@ -485,18 +485,59 @@ def _run_summary(job: dict) -> dict:
     stages = result.get("stages", {})
     l1 = stages.get("L1", {})
     l2 = stages.get("L2", {})
+    g2_summary = {}
+    g3_summary = {}
     if experiment == "g1l":
         confirmed = l2.get("status") == "completed"
         accuracy = l2.get("mean_accuracy") if confirmed else l1.get("validation_after_training", {}).get("accuracy")
         split = "test" if confirmed else "validation"
         error = l2.get("standard_error") if confirmed else None
         stage = "L2 confirmation" if confirmed else "L1 pilot"
+    elif experiment == "g3":
+        task_rows = result.get("tasks", {})
+        hierarchy_accuracies = []
+        for task_key, task in task_rows.items():
+            arms = task.get("arms", {})
+            flat = arms.get("flat_abi", {})
+            hierarchy = arms.get("hier_bu_td", {})
+            effect = task.get("paired_effects", {}).get("accuracy", {})
+            diagnostics = task.get("hierarchy_mechanism_audit", {}).get("per_seed", [])
+            hierarchy_accuracies.append(hierarchy.get("mean_accuracy_over_seeds", 0.0))
+            stability_values = [
+                row.get("fast_active_stability_ratio_max")
+                for row in diagnostics
+                if row.get("fast_active_stability_ratio_max") is not None
+            ]
+            g3_summary[task_key] = {
+                "flat_mean_accuracy": flat.get("mean_accuracy_over_seeds"),
+                "hierarchy_mean_accuracy": hierarchy.get("mean_accuracy_over_seeds"),
+                "paired_delta": effect.get("mean"),
+                "paired_ci95": effect.get("ci95_two_sided_t"),
+                "sign_test_p": effect.get("exact_two_sided_sign_test_p"),
+                "holm_adjusted_p": effect.get("holm_adjusted_exact_sign_test_p_across_tasks"),
+                "mean_context_activity": (
+                    sum(row.get("bottom_up_context_activity", 0.0) for row in diagnostics) / len(diagnostics)
+                    if diagnostics else None
+                ),
+                "mean_top_down_gamma_fraction": (
+                    sum(row.get("top_down_dynamic_gamma_fraction", 0.0) for row in diagnostics) / len(diagnostics)
+                    if diagnostics else None
+                ),
+                "max_active_stability_ratio": max(stability_values) if stability_values else None,
+                "active_stability_pass": all(row.get("fast_active_stability_pass", False) for row in diagnostics),
+            }
+        accuracy = (
+            sum(hierarchy_accuracies) / len(hierarchy_accuracies)
+            if hierarchy_accuracies else None
+        )
+        split = config.get("evaluation_split", result.get("protocol", {}).get("evaluation_split", "test"))
+        error = None
+        stage = "full hierarchy benchmark"
     else:
         accuracy = result.get("mean_accuracy")
         split = config.get("evaluation_split", result.get("evaluation_split", "test"))
         error = result.get("standard_error", result.get("se_accuracy"))
         stage = None
-    g2_summary = {}
     if experiment == "g2":
         for task_key, task in result.get("tasks", {}).items():
             difference = task.get("paired_accuracy_difference_ef0_minus_e0", {})
@@ -514,13 +555,13 @@ def _run_summary(job: dict) -> dict:
         "evaluation_split": split,
         "stage": stage,
         "g2_paired_results": g2_summary,
+        "g3_paired_results": g3_summary,
         "dataset": config.get("dataset"),
         "task": config.get("task"),
         "tasks": config.get("tasks"),
         "seed_count": config.get("seeds"),
         "claim_boundary": result.get("claim_boundary"),
     }
-
 
 def _matched_ef0_pair(left: dict, right: dict) -> tuple[bool, str]:
     experiments = {left.get("experiment"), right.get("experiment")}
