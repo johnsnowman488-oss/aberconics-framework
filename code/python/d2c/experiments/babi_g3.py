@@ -231,7 +231,7 @@ def _kernel_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _episode_hierarchy_diagnostics(
-    result, arm: str, base_weight_sum: float, fast_leak_rate: float,
+    result, arm: str, base_weight_sum: float, level_leak_rates: list[float],
 ) -> dict[str, Any]:
     levels = []
     for index, trace in enumerate(result.level_traces):
@@ -271,19 +271,38 @@ def _episode_hierarchy_diagnostics(
                 for a, b in zip(row["gamma"], flat_kernels[0]["gamma"]))
         for row in flat_kernels[1:]
     ) if flat_kernels else False
-    stability_ratios = [
-        sum(float(weight) / (float(rate) * fast_leak_rate)
-            for weight, rate in zip(row.get("w", []), row.get("gamma", [])))
-        if len(row.get("w", [])) == len(row.get("gamma", [])) and row.get("gamma")
-        else math.inf
-        for row in flat_kernels
-    ]
-    finite_stability_ratios = [
-        value for value in stability_ratios if math.isfinite(value)
-    ]
-    max_stability_ratio = max(stability_ratios, default=math.inf)
-    mean_stability_ratio = (
-        statistics.mean(finite_stability_ratios) if finite_stability_ratios else None
+    stability_by_level = []
+    for level_index, kernels in enumerate(per_level_kernels):
+        leak_rate = level_leak_rates[level_index]
+        ratios = [
+            sum(float(weight) / (float(rate) * leak_rate)
+                for weight, rate in zip(row.get("w", []), row.get("gamma", [])))
+            if len(row.get("w", [])) == len(row.get("gamma", []))
+            and row.get("gamma")
+            and all(math.isfinite(float(rate)) and float(rate) > 0 for rate in row["gamma"])
+            and all(math.isfinite(float(weight)) and float(weight) > 0 for weight in row["w"])
+            else math.inf
+            for row in kernels
+        ]
+        finite_ratios = [value for value in ratios if math.isfinite(value)]
+        stability_by_level.append({
+            "level": level_index,
+            "leak_rate": leak_rate,
+            "max_ratio": max(ratios, default=math.inf),
+            "mean_ratio": statistics.mean(finite_ratios) if finite_ratios else None,
+            "passed": bool(ratios) and all(math.isfinite(value) and value <= 0.9 for value in ratios),
+        })
+    fast_stability = stability_by_level[0] if stability_by_level else {
+        "max_ratio": math.inf, "mean_ratio": None, "passed": False
+    }
+    max_stability_ratio = max(
+        (row["max_ratio"] for row in stability_by_level), default=math.inf
+    )
+    all_active_stability_pass = (
+        bool(stability_by_level) and all(row["passed"] for row in stability_by_level)
+    )
+    positive_all_active_kernels = (
+        bool(kernel_by_level) and all(row.get("all_positive", False) for row in kernel_by_level)
     )
     return {
         "arm": arm,
@@ -294,11 +313,14 @@ def _episode_hierarchy_diagnostics(
         "base_fast_weight_sum": float(base_weight_sum),
         "first_active_fast_weight_sum": first_active_w_sum,
         "mean_active_fast_weight_sum": kernel.get("mean_weight_sum"),
-        "fast_active_stability_ratio_max": max_stability_ratio,
-        "fast_active_stability_ratio_mean": mean_stability_ratio,
+        "fast_active_stability_ratio_max": fast_stability["max_ratio"],
+        "fast_active_stability_ratio_mean": fast_stability["mean_ratio"],
         "fast_active_stability_margin": 0.9,
-        "fast_active_stability_pass": bool(stability_ratios)
-            and all(math.isfinite(value) and value <= 0.9 for value in stability_ratios),
+        "fast_active_stability_pass": fast_stability["passed"],
+        "stability_by_level": stability_by_level,
+        "max_hierarchy_active_stability_ratio": max_stability_ratio,
+        "all_active_stability_pass": all_active_stability_pass,
+        "positive_all_active_kernels": positive_all_active_kernels,
         "top_down_gamma_changed_over_episode": dynamic_gamma if arm == ARM_HIER else False,
         "context_level_activity": context_norm,
         "bottom_up_context_observed": len(levels) > 1 and context_norm > 0.0,
@@ -388,7 +410,11 @@ def _run_arm(
                     episode_result,
                     arm,
                     base_weight_sum=sum(memory.w),
-                    fast_leak_rate=memory.leak_rate,
+                    level_leak_rates=(
+                        [memory.leak_rate]
+                        if arm == ARM_FLAT
+                        else [memory.leak_rate, config.context_leak]
+                    ),
                 )
             )
 
@@ -444,7 +470,7 @@ def _run_arm(
                 row["finite_state_and_spectral_evidence"] for row in hierarchy_rows
             ) if hierarchy_rows else True,
             "positive_active_kernel_pass": all(
-                row["fast_level_active_kernel"].get("all_positive", False) for row in hierarchy_rows
+                row["positive_all_active_kernels"] for row in hierarchy_rows
             ) if hierarchy_rows else True,
             "base_fast_weight_sum": (
                 statistics.mean(row["base_fast_weight_sum"] for row in hierarchy_rows)
@@ -467,6 +493,12 @@ def _run_arm(
             ) if hierarchy_rows else None,
             "fast_active_stability_pass": all(
                 row["fast_active_stability_pass"] for row in hierarchy_rows
+            ) if hierarchy_rows else True,
+            "max_hierarchy_active_stability_ratio": max(
+                row["max_hierarchy_active_stability_ratio"] for row in hierarchy_rows
+            ) if hierarchy_rows else None,
+            "all_active_stability_pass": all(
+                row["all_active_stability_pass"] for row in hierarchy_rows
             ) if hierarchy_rows else True,
         },
     }
@@ -677,6 +709,7 @@ def run_g3_experiment(
             and row["hierarchy_diagnostics"]["top_down_coupling_configured"] is True
             and row["hierarchy_diagnostics"]["top_down_dynamic_gamma_fraction"] > 0
             and row["hierarchy_diagnostics"]["fast_active_stability_pass"]
+            and row["hierarchy_diagnostics"]["all_active_stability_pass"]
             for row in hierarchy["seed_results"]
         )
         all_confidence_complete = all(
@@ -817,7 +850,9 @@ def save_g3_bundle(result: dict[str, Any], output_dir: Path) -> Path:
                     "base_fast_weight_sum": seed["hierarchy_diagnostics"]["base_fast_weight_sum"],
                     "mean_active_fast_weight_sum": seed["hierarchy_diagnostics"]["mean_active_fast_weight_sum"],
                     "max_fast_active_stability_ratio": seed["hierarchy_diagnostics"]["max_fast_active_stability_ratio"],
+                    "max_hierarchy_active_stability_ratio": seed["hierarchy_diagnostics"]["max_hierarchy_active_stability_ratio"],
                     "fast_active_stability_pass": seed["hierarchy_diagnostics"]["fast_active_stability_pass"],
+                    "all_active_stability_pass": seed["hierarchy_diagnostics"]["all_active_stability_pass"],
                 })
                 for prediction in seed["predictions"]:
                     examples.append({
@@ -885,8 +920,8 @@ def save_g3_bundle(result: dict[str, Any], output_dir: Path) -> Path:
         mean_gamma_fraction = statistics.mean(row["top_down_dynamic_gamma_fraction"] for row in hierarchy_diags)
         mean_active_weight = statistics.mean(row["weight_normalization_observed"] for row in hierarchy_diags)
         base_weight = statistics.mean(row["base_fast_weight_sum"] for row in hierarchy_diags)
-        max_stability = max(row["max_fast_active_stability_ratio"] for row in hierarchy_diags)
-        stability_pass = all(row["fast_active_stability_pass"] for row in hierarchy_diags)
+        max_stability = max(row["max_hierarchy_active_stability_ratio"] for row in hierarchy_diags)
+        stability_pass = all(row["all_active_stability_pass"] for row in hierarchy_diags)
         report_lines.extend([
             "",
             "### Hierarchy mechanism audit",
