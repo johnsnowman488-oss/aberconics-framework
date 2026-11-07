@@ -23,8 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
-      PYTHONPATH: \${{ github.workspace }}/code/python
-      GFE_CORE_LIB: \${{ github.workspace }}/code/c++ core/build-shared/libgfe_core.so
+      PYTHONPATH: ${{ github.workspace }}/code/python
+      GFE_CORE_LIB: ${{ github.workspace }}/code/c++ core/build-shared/libgfe_core.so
       OPENBLAS_NUM_THREADS: "1"
       OPENBLAS_CORETYPE: "Haswell"
       NPY_DISABLE_CPU_FEATURES: "X86_V3,X86_V4,AVX512_ICL,AVX512_SPR"
