@@ -87,12 +87,12 @@ class G3Config:
             raise ValueError("G3 dimension must be between 8 and 512")
         if not 3 <= self.seeds <= 20:
             raise ValueError("G3 requires 3–20 matched seeds")
-        if not 3 <= self.epochs <= 20:
-            raise ValueError("G3 uses a fixed three-epoch checkpoint or later pre-registered epochs")
-        if not math.isfinite(self.learning_rate) or self.learning_rate <= 0:
-            raise ValueError("learning rate must be finite and positive")
-        if not math.isfinite(self.feature_scale) or self.feature_scale <= 0:
-            raise ValueError("feature scale must be finite and positive")
+        if self.epochs != 3:
+            raise ValueError("G3 uses the fixed three-epoch checkpoint")
+        if self.learning_rate != 0.05:
+            raise ValueError("G3 fixes the learning rate at 0.05")
+        if self.feature_scale != 10.0:
+            raise ValueError("G3 fixes feature scale at 10.0")
         if self.readout != "linear":
             raise ValueError("G3 is registered with the linear readout only")
         if not 200 <= self.bootstrap_samples <= 5000:
@@ -101,8 +101,11 @@ class G3Config:
             raise ValueError("context gamma and weights must have matching non-empty lengths")
         if any(x <= 0 or not math.isfinite(x) for x in (*self.context_gamma, *self.context_w)):
             raise ValueError("context kernel values must be finite and positive")
-        if self.bottom_up_gain <= 0 or self.top_down_gain <= 0 or self.context_leak <= 0:
-            raise ValueError("hierarchy gains and context leak must be positive")
+        if any(
+            not math.isfinite(value) or value <= 0
+            for value in (self.bottom_up_gain, self.top_down_gain, self.context_leak)
+        ):
+            raise ValueError("hierarchy gains and context leak must be finite and positive")
 
 
 def _sha256(path: Path) -> str:
