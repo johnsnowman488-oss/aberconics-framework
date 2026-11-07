@@ -27,6 +27,12 @@ def test_g3_config_requires_full_qa3_qa5_and_matched_seed_count():
         G3Config(seeds=2)
     with pytest.raises(ValueError, match="linear readout"):
         G3Config(readout="mlp")
+    with pytest.raises(ValueError, match="three-epoch"):
+        G3Config(epochs=4)
+    with pytest.raises(ValueError, match="learning rate"):
+        G3Config(learning_rate=0.1)
+    with pytest.raises(ValueError, match="feature scale"):
+        G3Config(feature_scale=100.0)
 
 
 def test_g3_has_only_flat_and_full_bidirectional_hierarchy_arms():
