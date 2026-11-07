@@ -44,7 +44,7 @@ const $=id=>document.getElementById(id);
 let selected=null,timer=null,catalogue=[],profiles=[];
 let exampleRows=[],examplePage=0;
 const EXAMPLES_PER_PAGE=25;
-const experimentNames={e0:"E0",ef0:"E-F0",g1:"G1",g1l:"G1-L",g2:"G2"};
+const experimentNames={e0:"E0",ef0:"E-F0",g1:"G1",g1l:"G1-L",g2:"G2",g3:"G3"};
 async function api(path,opts){const response=await fetch(path,opts);const result=await response.json();if(!response.ok)throw Error(result.error||response.statusText);return result}
 function setHidden(id,hidden){const element=$(id);(element.tagName==="LABEL"?element:element.closest("label")||element).hidden=hidden}
 function setValue(id,value){if(value!==undefined&&value!==null)$(id).value=String(value)}
@@ -90,25 +90,19 @@ function setDefaults(){
  $("experiment-help").textContent=exp.description;
 }
 function updateControls(){
- const exp=$("experiment").value,g1=exp==="g1",g1l=exp==="g1l",g2=exp==="g2",learnedBaseline=exp==="e0"||exp==="ef0";
- setHidden("task-wrap",g1||g1l||g2);
- setHidden("g2-taskset-wrap",!g2);
- setHidden("seeds",!learnedBaseline&&!g2);
- setHidden("epochs",!learnedBaseline&&!g2&&!g1l);
- setHidden("readout",!learnedBaseline&&!g2);
- setHidden("learning-rate",!learnedBaseline&&!g2&&!g1l);
- setHidden("feature-scale",!learnedBaseline&&!g2);
- setHidden("eval-split-wrap",!learnedBaseline&&!g2);
- setHidden("bootstrap-wrap",!g2);
- setHidden("mode-wrap",exp!=="ef0");
- setHidden("spine-wrap",exp!=="ef0");
- setHidden("quick-wrap",!(learnedBaseline||g1));
- setHidden("g1l-stage-wrap",!g1l);
- setHidden("train-limit-wrap",!g1l);
- setHidden("eval-limit-wrap",!g1l);
+ const exp=$("experiment").value,g1=exp==="g1",g1l=exp==="g1l",g2=exp==="g2",g3=exp==="g3",paired=g2||g3,learnedBaseline=exp==="e0"||exp==="ef0";
+ setHidden("task-wrap",g1||g1l||paired);setHidden("g2-taskset-wrap",!paired);
+ setHidden("seeds",!learnedBaseline&&!paired);setHidden("epochs",!learnedBaseline&&!paired&&!g1l);
+ setHidden("readout",!learnedBaseline&&!paired);setHidden("learning-rate",!learnedBaseline&&!paired&&!g1l);
+ setHidden("feature-scale",!learnedBaseline&&!paired);setHidden("eval-split-wrap",!learnedBaseline&&!paired);
+ setHidden("bootstrap-wrap",!paired);setHidden("mode-wrap",exp!=="ef0");setHidden("spine-wrap",exp!=="ef0");
+ setHidden("quick-wrap",!(learnedBaseline||g1));setHidden("g1l-stage-wrap",!g1l);
+ setHidden("train-limit-wrap",!g1l);setHidden("eval-limit-wrap",!g1l);
  setHidden("confirmation-seeds-wrap",!g1l||$("g1l-stage").value!=="all");
- $("epochs").disabled=learnedBaseline&&$("quick").checked;
- $("task").disabled=g1||g1l||g2;
+ if(g3){$("g2-taskset").value="3,5";$("g2-taskset").disabled=true}else $("g2-taskset").disabled=false;
+ $("epochs").disabled=(learnedBaseline&&$("quick").checked)||g3;
+ $("learning-rate").disabled=g3;$("feature-scale").disabled=g3;$("readout").disabled=g3;
+ $("task").disabled=g1||g1l||paired;$("quick").checked=g3?false:$("quick").checked;
  updateDatasetStatus();
 }
 function fillTable(columns,rows){
@@ -208,7 +202,41 @@ async function show(id){
  if(result.pending){$("details").textContent="Result file not ready.";return}
  const exp=job.experiment,config=job.config||{},points=[],outcomeRows=[],insights=$("experiment-insights");
  insights.replaceChildren();let examples=[];
- if(exp==="g2"){
+   if(exp==="g3"){
+   const taskRows=Object.entries(result.tasks||{}),acc=[],effectRows=[],confRows=[],mechRows=[],spineRows=[];
+   for(const [task,entry] of taskRows){
+    const flat=entry.arms?.flat_abi||{},hier=entry.arms?.hier_bu_td||{},effect=entry.paired_effects?.accuracy||{};
+    effectRows.push({task:"QA"+task,flat:formatPercent(flat.mean_accuracy_over_seeds),hier:formatPercent(hier.mean_accuracy_over_seeds),delta:effect.mean==null?"—":(100*effect.mean).toFixed(2)+" pp",ci:(effect.ci95_two_sided_t||[]).map(v=>(100*v).toFixed(2)).join(" to ")+" pp",p:effect.exact_two_sided_sign_test_p?.toFixed(3)??"—",holm:effect.holm_adjusted_exact_sign_test_p_across_tasks?.toFixed(3)??"—"});
+    for(const armName of ["flat_abi","hier_bu_td"]){
+     const arm=entry.arms?.[armName]||{},m=arm.mean_confidence_metrics_over_seeds||{};
+     confRows.push({task:"QA"+task,arm:armName,ece:formatPercent(m.fixed_ece,2),adaptive:formatPercent(m.adaptive_ece,2),nll:m.nll?.toFixed(3)??"—",brier:m.brier?.toFixed(3)??"—",aurc:m.aurc?.toFixed(3)??"—"});
+     for(const seed of arm.seed_results||[]){
+      const label="QA"+task+" "+armName+" seed "+seed.seed,d=seed.hierarchy_diagnostics||{},audit=seed.f0_spine_audit||{};
+      outcomeRows.push({seed:label,correct:seed.correct,total:seed.total,accuracy:formatPercent(seed.accuracy),audit:armName==="hier_bu_td"?"context "+(d.bottom_up_context_activity?.toFixed(3)??"—")+" / dynamic gamma "+formatPercent(d.top_down_dynamic_gamma_fraction,0):"F0 spine "+(audit.status||"—")});
+      points.push({seed:label,accuracy:seed.accuracy,color:armName==="flat_abi"?"#a8aaad":"#b94f1c"});acc.push(seed.accuracy);
+      examples.push(...(seed.predictions||[]).map((row,index)=>({arm:label,example:row.story_index??index,task:"QA"+task,question:row.question,target:row.target,prediction:row.prediction,correct:row.correct,evidence:row})));
+      if(armName==="hier_bu_td")mechRows.push({task:"QA"+task,seed:seed.seed,context:d.bottom_up_context_activity?.toFixed(4)??"—",gamma:formatPercent(d.top_down_dynamic_gamma_fraction,0),weight_sum:d.weight_normalization_observed?.toFixed(4)??"—",finite:d.finite_state_and_spectral_pass?"PASS":"FAIL",positive:d.positive_active_kernel_pass?"PASS":"FAIL"});
+      if(armName==="hier_bu_td")spineRows.push({task:"QA"+task,seed:seed.seed,status:audit.status||"missing",stability:audit.diagnostics?.stability_violations??"—",checkpoint:audit.checkpoint_restore?.deterministic_continuation_equal?"PASS":"FAIL",trace:audit.trace_store?.sample_is_contiguous?"PASS":"FAIL"});
+     }
+    }
+   }
+   setMetricLabels("Mean accuracy across task × arm cells","Paired hierarchy − flat effects","Held-out examples per task");
+   $("accuracy").textContent=acc.length?formatPercent(acc.reduce((a,b)=>a+b,0)/acc.length):"—";
+   $("error").textContent=effectRows.map(row=>row.task+": "+row.delta+"; CI "+row.ci+"; Holm p="+row.holm).join("\n");
+   $("stories").textContent=taskRows.map(([task,e])=>"QA"+task+": "+e.evaluation_stories).join(" · ");
+   $("chart-legend").textContent="Flat ABI · silver    Full bottom-up + top-down hierarchy · deep orange";
+   fillTable(["seed","correct","total","accuracy","audit"],outcomeRows);draw(points);
+   const a=result.acceptance||{};
+   addInsightCards(insights,[["QA3 + QA5",a.qa3_qa5_coverage?.passed?"PASS":"FAIL"],["Matched examples",a.matched_seed_example_and_training_order?.passed?"PASS":"FAIL"],["Full hierarchy mechanism",a.full_bottom_up_top_down_mechanism?.passed?"PASS":"FAIL"],["F0 spine",a.f0_six_phase_spine_audit?.passed?"PASS":"FAIL"],["Confidence evidence",a.confidence_evidence?.passed?"PASS":"FAIL"],["Fixtures",(result.fixture_control?.passed??0)+"/"+(result.fixture_control?.total??0)]]);
+   addInsightSection(insights,"Paired hierarchy effects",[{label:"Task",key:"task"},{label:"Flat ABI",key:"flat"},{label:"Hierarchy",key:"hier"},{label:"Paired Δ",key:"delta"},{label:"95% seed interval",key:"ci"},{label:"Exact p",key:"p"},{label:"Holm p",key:"holm"}],effectRows);
+   addInsightSection(insights,"Confidence by task and arm",[{label:"Task",key:"task"},{label:"Arm",key:"arm"},{label:"Fixed ECE",key:"ece"},{label:"Adaptive ECE",key:"adaptive"},{label:"NLL",key:"nll"},{label:"Brier",key:"brier"},{label:"AURC",key:"aurc"}],confRows);
+   addInsightSection(insights,"Hierarchy mechanism",[{label:"Task",key:"task"},{label:"Seed",key:"seed"},{label:"Context activity",key:"context"},{label:"Dynamic gamma",key:"gamma"},{label:"Active weight sum",key:"weight_sum"},{label:"Finite",key:"finite"},{label:"Positive kernel",key:"positive"}],mechRows);
+   addInsightSection(insights,"F0 spine companion audit",[{label:"Task",key:"task"},{label:"Seed",key:"seed"},{label:"Status",key:"status"},{label:"Stability violations",key:"stability"},{label:"Checkpoint",key:"checkpoint"},{label:"Trace",key:"trace"}],spineRows);
+   $("calibration").textContent=JSON.stringify(Object.fromEntries(taskRows.map(([task,e])=>[task,{flat:e.arms?.flat_abi?.mean_confidence_metrics_over_seeds,hierarchy:e.arms?.hier_bu_td?.mean_confidence_metrics_over_seeds,paired_effects:e.paired_effects}])),null,2);
+   $("distributions").textContent=JSON.stringify({acceptance:a,fixture_control:result.fixture_control,hierarchy_mechanism:Object.fromEntries(taskRows.map(([task,e])=>[task,e.hierarchy_mechanism_audit]))},null,2);
+   $("spine-results").textContent="Both benchmark arms use the same C++ ABI scalar-chi substrate. The F0 six-phase runtime spine is a per-seed companion audit, not the hierarchy state engine. G3 omits a static weight-strengthening control; active-kernel weight sums are reported to expose the D4A normalization confound.";
+   showFiles(id,["summary.json","summary.md","per_seed_metrics.csv","per_example.csv","per_example.jsonl","manifest.json","config.json","experiment_lab_register.json"]);
+  }else if(exp==="g2"){
   const taskRows=Object.entries(result.tasks||{}),all=[],confidenceRows=[],pairedRows=[],fixtureResults=result.fixture_control?.results||[];
   $("accuracy-label").textContent="Descriptive mean across benchmark cells";
   $("error-label").textContent="Paired E-F0 − E0 effects by task";
@@ -300,7 +328,8 @@ function launchPayload(){
  if(["e0","ef0"].includes(exp))Object.assign(payload,{task:+$("task").value,seeds:+$("seeds").value,epochs:+$("epochs").value,learning_rate:+$("learning-rate").value,feature_scale:+$("feature-scale").value,readout:$("readout").value,eval_split:$("eval-split").value,mode:$("mode").value,quick:$("quick").checked,exercise_spine:$("spine").checked});
  else if(exp==="g1")Object.assign(payload,{task:2,quick:$("quick").checked});
  else if(exp==="g1l")Object.assign(payload,{task:2,stage:$("g1l-stage").value,epochs:+$("epochs").value,learning_rate:+$("learning-rate").value,train_limit:+$("train-limit").value,eval_limit:+$("eval-limit").value,confirmation_seeds:+$("confirmation-seeds").value});
- else Object.assign(payload,{tasks:$("g2-taskset").value,seeds:+$("seeds").value,epochs:+$("epochs").value,learning_rate:+$("learning-rate").value,feature_scale:+$("feature-scale").value,readout:$("readout").value,eval_split:$("eval-split").value,bootstrap_samples:+$("bootstrap-samples").value});
+ else if(exp==="g3")Object.assign(payload,{tasks:"3,5",seeds:+$("seeds").value,epochs:3,learning_rate:0.05,feature_scale:10.0,eval_split:$("eval-split").value,bootstrap_samples:+$("bootstrap-samples").value});
+  else Object.assign(payload,{tasks:$("g2-taskset").value,seeds:+$("seeds").value,epochs:+$("epochs").value,learning_rate:+$("learning-rate").value,feature_scale:+$("feature-scale").value,readout:$("readout").value,eval_split:$("eval-split").value,bootstrap_samples:+$("bootstrap-samples").value});
  return payload
 }
 async function initialize(){
