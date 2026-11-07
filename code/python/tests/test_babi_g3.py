@@ -1,0 +1,101 @@
+"""Focused G3 configuration, controls and ABI hierarchy diagnostics tests."""
+from __future__ import annotations
+
+import math
+
+import pytest
+
+from d2c.digital import DigitalEpisode, DigitalMemoryState, HierarchicalDigitalDirector
+from d2c.experiments.babi_g3 import (
+    ARM_FLAT,
+    ARM_HIER,
+    G3Config,
+    _episode_hierarchy_diagnostics,
+    _paired_effect,
+    _readout_state,
+    build_g3_chain,
+)
+from d2c.experiments.symbolic_induction import memory_config_for_variant
+from d2c.ffi import load_library
+from gfe_ctypes import GFE_C_HIERARCHICAL_RELATION_BOTTOM_UP, GFE_C_HIERARCHICAL_RELATION_TOP_DOWN
+
+
+def test_g3_config_requires_full_qa3_qa5_and_matched_seed_count():
+    with pytest.raises(ValueError, match="complete QA3 and QA5"):
+        G3Config(tasks=(3,))
+    with pytest.raises(ValueError, match="3–20 matched seeds"):
+        G3Config(seeds=2)
+    with pytest.raises(ValueError, match="linear readout"):
+        G3Config(readout="mlp")
+
+
+def test_g3_has_only_flat_and_full_bidirectional_hierarchy_arms():
+    config = G3Config(dim=8, seeds=3)
+    memory = memory_config_for_variant("full")
+    flat_levels, flat_edges = build_g3_chain(memory, config, ARM_FLAT)
+    hier_levels, hier_edges = build_g3_chain(memory, config, ARM_HIER)
+
+    assert len(flat_levels) == 1
+    assert flat_edges == []
+    assert len(hier_levels) == 2
+    assert len(hier_edges) == 2
+    assert {edge["relation"] for edge in hier_edges} == {
+        GFE_C_HIERARCHICAL_RELATION_BOTTOM_UP,
+        GFE_C_HIERARCHICAL_RELATION_TOP_DOWN,
+    }
+    assert all(edge["normalize_weights"] is True for edge in hier_edges)
+
+
+def test_g3_readout_broadcasts_scalar_abi_chi_to_feature_dimension():
+    state = DigitalMemoryState(
+        u=[1.0, 2.0, 3.0],
+        chi=[[0.25], [0.5]],
+        t=0.1,
+    )
+    compatible = _readout_state(state, 3)
+    assert compatible.u == [1.0, 2.0, 3.0]
+    assert compatible.chi == [[0.25, 0.25, 0.25], [0.5, 0.5, 0.5]]
+
+
+def test_g3_paired_effect_reports_seed_level_interval_and_sign_test():
+    effect = _paired_effect([0.02, 0.01, 0.00, -0.01, 0.03], "accuracy")
+    assert effect["n"] == 5
+    assert effect["mean"] == pytest.approx(0.01)
+    assert effect["ci95_two_sided_t"][0] < effect["mean"] < effect["ci95_two_sided_t"][1]
+    assert effect["positive_seed_differences"] == 3
+    assert effect["negative_seed_differences"] == 1
+    assert effect["zero_seed_differences"] == 1
+
+
+def test_full_hierarchy_executes_both_couplings_and_reports_finite_state():
+    try:
+        lib = load_library(None)
+    except OSError as exc:
+        pytest.skip(f"shared C++ core unavailable: {exc}")
+    config = G3Config(dim=8, seeds=3)
+    memory = memory_config_for_variant("full")
+    levels, edges = build_g3_chain(memory, config, ARM_HIER)
+    director = HierarchicalDigitalDirector(
+        lib=lib, levels=levels, edges=edges, state_dim=config.dim,
+        memory_config=memory,
+    )
+    episode = DigitalEpisode(
+        forcings=[
+            [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0] * 8,
+        ],
+        tokens=["Mary", "moved", None],
+        target="hallway",
+        query=[0.0] * 8,
+    )
+    result = director.run_episode(episode, experiment_name="g3_test")
+    report = _episode_hierarchy_diagnostics(result, ARM_HIER)
+
+    assert len(result.level_traces) == 2
+    assert report["level_count"] == 2
+    assert report["bottom_up_context_observed"]
+    assert report["top_down_coupling_configured"]
+    assert report["finite_state_and_spectral_evidence"]
+    assert report["fast_level_active_kernel"]["all_positive"]
+    assert all(math.isfinite(row["mean_state_norm"]) for row in report["levels"])
