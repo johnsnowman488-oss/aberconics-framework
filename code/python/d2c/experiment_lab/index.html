@@ -99,6 +99,10 @@ function updateControls(){
  setHidden("quick-wrap",!(learnedBaseline||g1));setHidden("g1l-stage-wrap",!g1l);
  setHidden("train-limit-wrap",!g1l);setHidden("eval-limit-wrap",!g1l);
  setHidden("confirmation-seeds-wrap",!g1l||$("g1l-stage").value!=="all");
+ const tasksetLabel=$("g2-taskset-wrap").firstChild;
+ if(tasksetLabel)tasksetLabel.textContent=g3?"G3 benchmark coverage":"G2 benchmark coverage";
+ const fullTaskset=$("g2-taskset").querySelector('option[value="3,5"]');
+ if(fullTaskset)fullTaskset.textContent=g3?"QA3 + QA5 · full G3":"QA3 + QA5 · full G2";
  if(g3){$("g2-taskset").value="3,5";$("g2-taskset").disabled=true}else $("g2-taskset").disabled=false;
  $("epochs").disabled=(learnedBaseline&&$("quick").checked)||g3;
  $("learning-rate").disabled=g3;$("feature-scale").disabled=g3;$("readout").disabled=g3;
