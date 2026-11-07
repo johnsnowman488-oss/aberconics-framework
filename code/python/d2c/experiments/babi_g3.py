@@ -248,16 +248,19 @@ def _episode_hierarchy_diagnostics(result, arm: str) -> dict[str, Any]:
             "finite": all(math.isfinite(float(v)) for row in states for v in row),
         })
 
-    flat_kernels = [row[0] for row in result.active_kernels if row]
+    per_level_kernels = [
+        [step[level_index] for step in result.active_kernels if len(step) > level_index]
+        for level_index in range(len(result.level_traces))
+    ]
+    flat_kernels = per_level_kernels[0] if per_level_kernels else []
     kernel = _kernel_summary(flat_kernels)
+    kernel_by_level = [_kernel_summary(rows) for rows in per_level_kernels]
     context_norm = levels[1]["mean_state_norm"] if len(levels) > 1 else 0.0
     base_w_sum = sum(float(v) for v in flat_kernels[0].get("w", [])) if flat_kernels else 0.0
     dynamic_gamma = any(
         len(row.get("gamma", [])) == len(flat_kernels[0].get("gamma", []))
-        and any(
-            abs(float(a) - float(b)) > 1e-12
-            for a, b in zip(row["gamma"], flat_kernels[0]["gamma"])
-        )
+        and any(abs(float(a) - float(b)) > 1e-12
+                for a, b in zip(row["gamma"], flat_kernels[0]["gamma"]))
         for row in flat_kernels[1:]
     ) if flat_kernels else False
     return {
@@ -265,6 +268,7 @@ def _episode_hierarchy_diagnostics(result, arm: str) -> dict[str, Any]:
         "level_count": len(levels),
         "levels": levels,
         "fast_level_active_kernel": kernel,
+        "active_kernels_by_level": kernel_by_level,
         "base_fast_weight_sum": base_w_sum,
         "top_down_gamma_changed_over_episode": dynamic_gamma if arm == ARM_HIER else False,
         "context_level_activity": context_norm,
@@ -496,7 +500,7 @@ def run_g3_experiment(
     dataset = {
         split: {"sha256": _sha256(data_dir / f"babi_{split}.jsonl"),
                 "bytes": (data_dir / f"babi_{split}.jsonl").stat().st_size}
-        for split in ("train", "valid", "test")
+        for split in ("train", eval_split)
         if (data_dir / f"babi_{split}.jsonl").is_file()
     }
     training_dataset = BabiDataset.from_jsonl(data_dir / "babi_train.jsonl")
@@ -606,6 +610,8 @@ def run_g3_experiment(
             row["hierarchy_diagnostics"]["finite_state_and_spectral_pass"]
             and row["hierarchy_diagnostics"]["positive_active_kernel_pass"]
             and row["hierarchy_diagnostics"]["bottom_up_context_activity"] > 0
+            and row["hierarchy_diagnostics"]["top_down_coupling_configured"] is True
+            and row["hierarchy_diagnostics"]["top_down_dynamic_gamma_fraction"] > 0
             for row in hierarchy["seed_results"]
         )
         all_confidence_complete = all(
