@@ -1,0 +1,97 @@
+{
+  "run_id": "cb2b4212-eb81-43a0-8bef-ee060eec2e29",
+  "experiment": "e0",
+  "config": {
+    "experiment": "e0",
+    "dataset": {
+      "id": "babi_canonical",
+      "name": "bAbI canonical (Hugging Face mirror)",
+      "directory": "code/python/d2c/progress/babi_data"
+    },
+    "dataset_fingerprints": {
+      "train": {
+        "sha256": "faa5d639178ff7a6a082e6766918949b3a154cc567c5b7c903389ff6e11232a6",
+        "bytes": 6996625
+      },
+      "valid": {
+        "sha256": "259236ebfb13ce337bde221e90777e98ea7258e5e08a80d130ccd3ab00159952",
+        "bytes": 769568
+      },
+      "test": {
+        "sha256": "775f4a74059f24fc0f62750ab12cb80e5a9ecbb63f8f44d6d629b2958d19c84c",
+        "bytes": 7791502
+      }
+    },
+    "task": 2,
+    "tasks": null,
+    "dim": 8,
+    "mode": "isolated",
+    "variant": "full",
+    "seeds": 1,
+    "epochs": 2,
+    "requested_epochs": 5,
+    "learning_rate": 0.05,
+    "feature_scale": 100.0,
+    "readout": "linear",
+    "evaluation_split": "test",
+    "quick": true
+  },
+  "status": "completed",
+  "created_at": "2026-11-05T15:51:26.432095+00:00",
+  "started_at": "2026-11-05T15:51:26.432095+00:00",
+  "directory": "D:\\Projectfile\\aberconics-framework\\runs\\experiment-lab\\cb2b4212-eb81-43a0-8bef-ee060eec2e29",
+  "code_revision": "c5314df12a243dc377510ead6501eb35bf7ceb31",
+  "dataset_fingerprints": {
+    "train": {
+      "sha256": "faa5d639178ff7a6a082e6766918949b3a154cc567c5b7c903389ff6e11232a6",
+      "bytes": 6996625
+    },
+    "valid": {
+      "sha256": "259236ebfb13ce337bde221e90777e98ea7258e5e08a80d130ccd3ab00159952",
+      "bytes": 769568
+    },
+    "test": {
+      "sha256": "775f4a74059f24fc0f62750ab12cb80e5a9ecbb63f8f44d6d629b2958d19c84c",
+      "bytes": 7791502
+    }
+  },
+  "pid": 1520,
+  "exit_code": 0,
+  "completed_at": "2026-11-05T15:51:27.633269+00:00",
+  "manifest_version": 1,
+  "command": [
+    "D:\\Projectfile\\aberconics-framework\\.venv\\Scripts\\python.exe",
+    "-m",
+    "d2c.experiments.babi_qa",
+    "--dim",
+    "8",
+    "--data-dir",
+    "D:\\Projectfile\\aberconics-framework\\code\\python\\d2c\\progress\\babi_data",
+    "--output-dir",
+    "D:\\Projectfile\\aberconics-framework\\runs\\experiment-lab\\cb2b4212-eb81-43a0-8bef-ee060eec2e29",
+    "--task",
+    "2",
+    "--variant",
+    "full",
+    "--seeds",
+    "1",
+    "--epochs",
+    "2",
+    "--lr",
+    "0.05",
+    "--feature-scale",
+    "100.0",
+    "--readout",
+    "linear",
+    "--eval-split",
+    "test",
+    "--quick"
+  ],
+  "python_version": "3.12.10",
+  "result_files": [
+    "babi_qa_20261105T155127Z/summary.json",
+    "config.json",
+    "stderr.log",
+    "stdout.log"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "task": 2,
+  "dim": 64,
+  "variant": "full",
+  "trace_capacity": 20000,
+  "mode": "isolated",
+  "readout": "relational_state_resolution",
+  "training_epochs": 0,
+  "seed": null
+}

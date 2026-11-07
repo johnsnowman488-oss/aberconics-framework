@@ -63,18 +63,94 @@ G1-L results are not directly comparable with E0/E-F0 as though they shared an a
 
 ## Local startup
 
-Build the C++ shared library and install the Python runtime dependencies first:
+The currently registered Lab runners use the Python runtime and do not require
+a C++ build. From the repository root, install the project dependencies,
+download the bAbI splits if needed, and start the local server.
 
-    PYTHONPATH=code/python python -m d2c.digital.download_babi
-    cmake -S "code/c++ core" -B "code/c++ core/build-shared" -DBUILD_SHARED_LIBS=ON
-    cmake --build "code/c++ core/build-shared" -j
-    PYTHONPATH=code/python GFE_CORE_LIB="code/c++ core/build-shared/libgfe_core.so" python -m d2c.experiment_lab.server
+**Windows PowerShell**
 
-Then open http://127.0.0.1:8765.
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+$env:PYTHONPATH = "code\python"
+.\.venv\Scripts\python.exe -m d2c.digital.download_babi
+.\.venv\Scripts\python.exe -m d2c.experiment_lab.server
+```
+
+**Linux**
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements.txt
+export PYTHONPATH=code/python
+python -m d2c.digital.download_babi
+python -m d2c.experiment_lab.server
+```
+
+Open <http://127.0.0.1:8765> and stop the process with Ctrl+C. Set
+`D2C_LAB_PORT` before startup to use another local port.
+
+On the **Configure experiment** page, select an experiment and dataset profile;
+the Lab shows only applicable settings and checks the required splits before
+enabling launch. G2 defaults to five matched seeds, five epochs, linear
+readout, feature scale 100, test evaluation, and 400 story-bootstrap samples.
+G1-L defaults to its one-seed, 200-story/100-validation-story, three-epoch
+pilot; confirmation seeds appear only when the gated L2 stage is selected.
+Quick mode is a 20-story smoke slice; E0/E-F0 use two epochs. It is not
+benchmark evidence.
+
+The **Results & compare** page presents experiment-specific views: E0/E-F0
+training loss, class metrics and confusion matrix; G1 parse, resolution and
+runtime checks with event-ledger evidence; G1-L stage gates, training progress
+and holder retrieval; and G2 task-wise paired effects, confidence metrics,
+fixtures and F0 audits. Per-example evidence is searchable, filterable by
+outcome and seed/arm, paged, and expandable to inspect the full recorded row.
+Configuration, calibration detail, logs and other raw result JSON remain
+available in collapsed sections, with report and bundle files linked where
+produced. The page only renders diagnostics an experiment actually recorded.
+
+A cross-run E0/E-F0 seed comparison is presented only when the protocol,
+dataset fingerprints, seed IDs, and ordered evaluation examples match; its
+per-seed deltas are descriptive and no new significance test is implied. G2
+reports its own paired effects. Use **Delete** beside a saved run to remove its
+record and files from `runs/experiment-lab/`; active runs and directories
+outside that run store are protected. The **Datasets & protocols** page
+explains how to add a local profile; registered profiles must use the
+canonical `babi_train.jsonl`, `babi_valid.jsonl`, and `babi_test.jsonl`
+filenames in a repository-relative directory.
+
+### Dataset profiles and protocol defaults
+
+The Lab dataset selector is populated from
+`code/python/d2c/experiment_lab/dataset_profiles.json`. Each profile uses a
+unique ID, a repository-relative directory, and filenames for the train,
+validation, and test JSONL splits. The server rejects profiles that resolve
+outside the repository and records the SHA-256 fingerprint and byte size for
+each available split in the run configuration and manifest. Register a local
+dataset by adding a profile entry and placing its split files under the
+registered repository directory; arbitrary paths are not accepted from the
+browser.
+
+The browser catalogue is served by `/api/experiments` and is the source of
+experiment names, supported modes, and protocol defaults. G2 defaults to five
+matched seeds, five epochs, linear readout, feature scale 100, test evaluation,
+and 400 story-bootstrap samples. G1-L defaults to its documented one-seed,
+200-story/100-validation-story, three-epoch pilot; confirmation seeds appear
+only when the gated L2 stage is selected. Validation is marked exploratory,
+and quick mode is marked as a smoke test rather than benchmark evidence.
+
+The Lab uses three hash-addressable views: experiment configuration, results
+and run comparison, and dataset profiles/protocol guidance. Comparison marks
+a pair as statistically matched only for E0 versus E-F0 when task, dataset
+fingerprints, split, dimension, seeds, epochs, readout, learning settings,
+mode, variant, and smoke-test status agree. G2 retains its own within-run
+paired E0/E-F0 effects by task. Other combinations are shown as descriptive
+side-by-side references.
 
 ## API and result files
 
-The local API provides the experiment catalogue, dataset status, run launch/status/history/logs, structured results, two-to-five-run comparison and allow-listed result downloads. Runs are stored under runs/experiment-lab/. G1 is labelled as a deterministic symbolic control; G1-L separates pilot validation from held-out test confirmation and exposes holder-retrieval evidence.
+The local API provides the experiment catalogue, dataset status, run launch/status/history/logs, structured results, two-to-five-run comparison, allow-listed result downloads, and deletion of completed or failed run directories. Deletion rejects active runs and paths outside the Lab run store. Runs are stored under runs/experiment-lab/. G1 is labelled as a deterministic symbolic control; G1-L separates pilot validation from held-out test confirmation and exposes holder-retrieval evidence.
 
 A GitHub Actions workflow runs G1 parser/transition tests, the E0/E-F0 comparison and the separate G1 QA2 diagnostic, then uploads a Lab register and full result bundle for remote inspection.
 
@@ -89,4 +165,3 @@ The E-F0 arm also executes the fixed F0 runtime-spine audit for each task/seed: 
 The confidence layer retains complete probability vectors and adds NLL, multiclass Brier, fixed-width and adaptive equal-mass ECE, classwise ECE, maximum/RMS calibration error, confidence-on-error, high-confidence risk, margin, entropy, risk-coverage/AURC, Wilson accuracy intervals and story-bootstrap intervals. It reports bootstrap sampling uncertainty separately from between-seed paired t intervals, and gives exact paired sign-test p-values with Holm correction across QA3 and QA5. Five seeds cannot produce a two-sided exact sign-test p below 0.05; the Lab therefore presents effects and intervals alongside p-values rather than treating the sign test as a high-powered test. Metrics are descriptive on the test split; they are not used to tune or recalibrate against held-out test data.
 
 See `docs/G2_RELATIONAL_COMPOSITION.md` for the protocol, controls, scope boundaries, confidence metrics and acceptance criteria. The full benchmark is run by `.github/workflows/g2-relational.yml`. Julia remains skipped; runtime ablation and hierarchy are outside G2.
-

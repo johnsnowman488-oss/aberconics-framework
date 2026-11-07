@@ -220,6 +220,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--feature-scale", type=float, default=100.0)
     p.add_argument("--epochs", type=int, default=5)
     p.add_argument("--eval-split", choices=["valid", "test"], default="test")
+    p.add_argument("--data-dir", type=Path, default=_DATA_DIR)
     p.add_argument("--max-stories", type=int, default=0,
                     help="Cap training stories (0 = all)")
     p.add_argument("--readout", choices=["linear", "mlp"], default="linear",
@@ -238,7 +239,7 @@ def main(argv: list[str] | None = None) -> dict:
         feature_scale=args.feature_scale, epochs=args.epochs,
     )
     result = run_babi_qa_experiment(
-        config, quick=args.quick, max_stories=args.max_stories,
+        config, data_dir=args.data_dir, quick=args.quick, max_stories=args.max_stories,
         eval_split=args.eval_split,
     )
     paths = save_babi_qa_bundle(result, output_dir=args.output_dir)

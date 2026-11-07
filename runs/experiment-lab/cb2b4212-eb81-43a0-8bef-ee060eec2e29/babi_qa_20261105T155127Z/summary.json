@@ -1,0 +1,1296 @@
+{
+  "experiment": "babi_e0_baseline",
+  "task": 2,
+  "variant": "full",
+  "dim": 8,
+  "readout_type": "linear",
+  "feature_scale": 100.0,
+  "learning_rate": 0.05,
+  "epochs": 2,
+  "evaluation_split": "test",
+  "seeds": 1,
+  "train_stories": 20,
+  "evaluation_stories": 20,
+  "test_stories": 20,
+  "vocab_size": 45,
+  "answer_count": 5,
+  "mean_accuracy": 0.3,
+  "se_accuracy": 0.0,
+  "seed_results": [
+    {
+      "seed": 0,
+      "correct": 6,
+      "total": 20,
+      "accuracy": 0.3,
+      "stability_ratio": 1.38,
+      "deff": 2.571428571428571,
+      "predictions": [
+        {
+          "story_index": 0,
+          "task": 2,
+          "question": "Where is the milk?",
+          "statements": [
+            "Mary got the milk there.",
+            "John moved to the bedroom.",
+            "Sandra went back to the kitchen.",
+            "Mary travelled to the hallway."
+          ],
+          "raw_passage": "Mary got the milk there.\nJohn moved to the bedroom.\nSandra went back to the kitchen.\nMary travelled to the hallway.\n",
+          "target": "hallway",
+          "prediction": "hallway",
+          "correct": true,
+          "confidence": 0.9999905319650486,
+          "top_two_margin": 0.9999833659176719,
+          "probability_vector": [
+            7.166047376749304e-06,
+            1.4613433062472498e-07,
+            0.9999905319650486,
+            2.155850560005172e-06,
+            2.683972838732729e-12
+          ],
+          "probabilities": {
+            "bedroom": 7.166047376749304e-06,
+            "garden": 1.4613433062472498e-07,
+            "hallway": 0.9999905319650486,
+            "kitchen": 2.155850560005172e-06,
+            "office": 2.683972838732729e-12
+          },
+          "failure_category": "correct"
+        },
+        {
+          "story_index": 1,
+          "task": 2,
+          "question": "Where is the football?",
+          "statements": [
+            "Mary got the milk there.",
+            "John moved to the bedroom.",
+            "Sandra went back to the kitchen.",
+            "Mary travelled to the hallway.",
+            "John got the football there.",
+            "John went to the hallway."
+          ],
+          "raw_passage": "Mary got the milk there.\nJohn moved to the bedroom.\nSandra went back to the kitchen.\nMary travelled to the hallway.\nJohn got the football there.\nJohn went to the hallway.\n",
+          "target": "hallway",
+          "prediction": "hallway",
+          "correct": true,
+          "confidence": 0.9999999999999996,
+          "top_two_margin": 0.9999999999999991,
+          "probability_vector": [
+            8.542235852816977e-50,
+            4.100051536087707e-16,
+            0.9999999999999996,
+            4.0061913375279237e-28,
+            1.7521354629333406e-34
+          ],
+          "probabilities": {
+            "bedroom": 8.542235852816977e-50,
+            "garden": 4.100051536087707e-16,
+            "hallway": 0.9999999999999996,
+            "kitchen": 4.0061913375279237e-28,
+            "office": 1.7521354629333406e-34
+          },
+          "failure_category": "correct"
+        },
+        {
+          "story_index": 2,
+          "task": 2,
+          "question": "Where is the football?",
+          "statements": [
+            "Mary got the milk there.",
+            "John moved to the bedroom.",
+            "Sandra went back to the kitchen.",
+            "Mary travelled to the hallway.",
+            "John got the football there.",
+            "John went to the hallway.",
+            "John put down the football.",
+            "Mary went to the garden."
+          ],
+          "raw_passage": "Mary got the milk there.\nJohn moved to the bedroom.\nSandra went back to the kitchen.\nMary travelled to the hallway.\nJohn got the football there.\nJohn went to the hallway.\nJohn put down the football.\nMary went to the garden.\n",
+          "target": "hallway",
+          "prediction": "hallway",
+          "correct": true,
+          "confidence": 1.0,
+          "top_two_margin": 1.0,
+          "probability_vector": [
+            1.2889061427156683e-65,
+            7.739769274467945e-23,
+            1.0,
+            1.392800485358897e-39,
+            1.2653920958648393e-44
+          ],
+          "probabilities": {
+            "bedroom": 1.2889061427156683e-65,
+            "garden": 7.739769274467945e-23,
+            "hallway": 1.0,
+            "kitchen": 1.392800485358897e-39,
+            "office": 1.2653920958648393e-44
+          },
+          "failure_category": "correct"
+        },
+        {
+          "story_index": 3,
+          "task": 2,
+          "question": "Where is the football?",
+          "statements": [
+            "Mary got the milk there.",
+            "John moved to the bedroom.",
+            "Sandra went back to the kitchen.",
+            "Mary travelled to the hallway.",
+            "John got the football there.",
+            "John went to the hallway.",
+            "John put down the football.",
+            "Mary went to the garden.",
+            "John went to the kitchen.",
+            "Sandra travelled to the hallway."
+          ],
+          "raw_passage": "Mary got the milk there.\nJohn moved to the bedroom.\nSandra went back to the kitchen.\nMary travelled to the hallway.\nJohn got the football there.\nJohn went to the hallway.\nJohn put down the football.\nMary went to the garden.\nJohn went to the kitchen.\nSandra travelled to the hallway.\n",
+          "target": "hallway",
+          "prediction": "hallway",
+          "correct": true,
+          "confidence": 1.0,
+          "top_two_margin": 1.0,
+          "probability_vector": [
+            6.106541312175697e-78,
+            8.413063922722749e-26,
+            1.0,
+            5.94269271600249e-46,
+            3.2078821110225205e-52
+          ],
+          "probabilities": {
+            "bedroom": 6.106541312175697e-78,
+            "garden": 8.413063922722749e-26,
+            "hallway": 1.0,
+            "kitchen": 5.94269271600249e-46,
+            "office": 3.2078821110225205e-52
+          },
+          "failure_category": "correct"
+        },
+        {
+          "story_index": 4,
+          "task": 2,
+          "question": "Where is the milk?",
+          "statements": [
+            "Mary got the milk there.",
+            "John moved to the bedroom.",
+            "Sandra went back to the kitchen.",
+            "Mary travelled to the hallway.",
+            "John got the football there.",
+            "John went to the hallway.",
+            "John put down the football.",
+            "Mary went to the garden.",
+            "John went to the kitchen.",
+            "Sandra travelled to the hallway.",
+            "Daniel went to the hallway.",
+            "Mary discarded the milk."
+          ],
+          "raw_passage": "Mary got the milk there.\nJohn moved to the bedroom.\nSandra went back to the kitchen.\nMary travelled to the hallway.\nJohn got the football there.\nJohn went to the hallway.\nJohn put down the football.\nMary went to the garden.\nJohn went to the kitchen.\nSandra travelled to the hallway.\nDaniel went to the hallway.\nMary discarded the milk.\n",
+          "target": "garden",
+          "prediction": "hallway",
+          "correct": false,
+          "confidence": 0.9999999999813551,
+          "top_two_margin": 0.9999999999627103,
+          "probability_vector": [
+            1.8644896241150622e-11,
+            7.120289180409099e-21,
+            0.9999999999813551,
+            4.983491113617399e-22,
+            6.078203677424402e-31
+          ],
+          "probabilities": {
+            "bedroom": 1.8644896241150622e-11,
+            "garden": 7.120289180409099e-21,
+            "hallway": 0.9999999999813551,
+            "kitchen": 4.983491113617399e-22,
+            "office": 6.078203677424402e-31
+          },
+          "failure_category": "overconfident_wrong"
+        },
+        {
+          "story_index": 5,
+          "task": 2,
+          "question": "Where is the milk?",
+          "statements": [
+            "Mary journeyed to the bathroom.",
+            "Sandra went to the garden.",
+            "Daniel went back to the garden.",
+            "Daniel went to the office.",
+            "Sandra grabbed the milk there.",
+            "Sandra put down the milk there."
+          ],
+          "raw_passage": "Mary journeyed to the bathroom.\nSandra went to the garden.\nDaniel went back to the garden.\nDaniel went to the office.\nSandra grabbed the milk there.\nSandra put down the milk there.\n",
+          "target": "garden",
+          "prediction": "hallway",
+          "correct": false,
+          "confidence": 0.9977487726333018,
+          "top_two_margin": 0.9954975479635564,
+          "probability_vector": [
+            0.0022512246697453135,
+            2.69695301675288e-09,
+            0.9977487726333018,
+            4.520100663450978e-21,
+            4.831993508401049e-19
+          ],
+          "probabilities": {
+            "bedroom": 0.0022512246697453135,
+            "garden": 2.69695301675288e-09,
+            "hallway": 0.9977487726333018,
+            "kitchen": 4.520100663450978e-21,
+            "office": 4.831993508401049e-19
+          },
+          "failure_category": "overconfident_wrong"
+        },
+        {
+          "story_index": 6,
+          "task": 2,
+          "question": "Where is the football?",
+          "statements": [
+            "Mary journeyed to the bathroom.",
+            "Sandra went to the garden.",
+            "Daniel went back to the garden.",
+            "Daniel went to the office.",
+            "Sandra grabbed the milk there.",
+            "Sandra put down the milk there.",
+            "Daniel went to the hallway.",
+            "Sandra got the milk there.",
+            "Daniel went to the garden.",
+            "Daniel journeyed to the kitchen.",
+            "Daniel journeyed to the bedroom.",
+            "Mary journeyed to the garden.",
+            "Daniel took the football there.",
+            "Mary moved to the office.",
+            "Sandra travelled to the bedroom.",
+            "Daniel dropped the football."
+          ],
+          "raw_passage": "Mary journeyed to the bathroom.\nSandra went to the garden.\nDaniel went back to the garden.\nDaniel went to the office.\nSandra grabbed the milk there.\nSandra put down the milk there.\nDaniel went to the hallway.\nSandra got the milk there.\nDaniel went to the garden.\nDaniel journeyed to the kitchen.\nDaniel journeyed to the bedroom.\nMary journeyed to the garden.\nDaniel took the football there.\nMary moved to the office.\nSandra travelled to the bedroom.\nDaniel dropped the football.\n",
+          "target": "bedroom",
+          "prediction": "hallway",
+          "correct": false,
+          "confidence": 1.0,
+          "top_two_margin": 1.0,
+          "probability_vector": [
+            5.977435792286864e-92,
+            3.8900063482886115e-24,
+            1.0,
+            2.964730628714936e-67,
+            4.6079798055611244e-68
+          ],
+          "probabilities": {
+            "bedroom": 5.977435792286864e-92,
+            "garden": 3.8900063482886115e-24,
+            "hallway": 1.0,
+            "kitchen": 2.964730628714936e-67,
+            "office": 4.6079798055611244e-68
+          },
+          "failure_category": "overconfident_wrong"
+        },
+        {
+          "story_index": 7,
+          "task": 2,
+          "question": "Where is the milk?",
+          "statements": [
+            "Mary journeyed to the bathroom.",
+            "Sandra went to the garden.",
+            "Daniel went back to the garden.",
+            "Daniel went to the office.",
+            "Sandra grabbed the milk there.",
+            "Sandra put down the milk there.",
+            "Daniel went to the hallway.",
+            "Sandra got the milk there.",
+            "Daniel went to the garden.",
+            "Daniel journeyed to the kitchen.",
+            "Daniel journeyed to the bedroom.",
+            "Mary journeyed to the garden.",
+            "Daniel took the football there.",
+            "Mary moved to the office.",
+            "Sandra travelled to the bedroom.",
+            "Daniel dropped the football.",
+            "Sandra left the milk there.",
+            "Daniel grabbed the football there."
+          ],
+          "raw_passage": "Mary journeyed to the bathroom.\nSandra went to the garden.\nDaniel went back to the garden.\nDaniel went to the office.\nSandra grabbed the milk there.\nSandra put down the milk there.\nDaniel went to the hallway.\nSandra got the milk there.\nDaniel went to the garden.\nDaniel journeyed to the kitchen.\nDaniel journeyed to the bedroom.\nMary journeyed to the garden.\nDaniel took the football there.\nMary moved to the office.\nSandra travelled to the bedroom.\nDaniel dropped the football.\nSandra left the milk there.\nDaniel grabbed the football there.\n",
+          "target": "bedroom",
+          "prediction": "bedroom",
+          "correct": true,
+          "confidence": 1.0,
+          "top_two_margin": 1.0,
+          "probability_vector": [
+            1.0,
+            3.32410463824974e-39,
+            6.688144638116506e-26,
+            9.765321445682942e-61,
+            1.992838056847185e-58
+          ],
+          "probabilities": {
+            "bedroom": 1.0,
+            "garden": 3.32410463824974e-39,
+            "hallway": 6.688144638116506e-26,
+            "kitchen": 9.765321445682942e-61,
+            "office": 1.992838056847185e-58
+          },
+          "failure_category": "correct"
+        },
+        {
+          "story_index": 8,
+          "task": 2,
+          "question": "Where is the football?",
+          "statements": [
+            "Mary journeyed to the bathroom.",
+            "Sandra went to the garden.",
+            "Daniel went back to the garden.",
+            "Daniel went to the office.",
+            "Sandra grabbed the milk there.",
+            "Sandra put down the milk there.",
+            "Daniel went to the hallway.",
+            "Sandra got the milk there.",
+            "Daniel went to the garden.",
+            "Daniel journeyed to the kitchen.",
+            "Daniel journeyed to the bedroom.",
+            "Mary journeyed to the garden.",
+            "Daniel took the football there.",
+            "Mary moved to the office.",
+            "Sandra travelled to the bedroom.",
+            "Daniel dropped the football.",
+            "Sandra left the milk there.",
+            "Daniel grabbed the football there.",
+            "Sandra grabbed the milk there.",
+            "Daniel went to the kitchen."
+          ],
+          "raw_passage": "Mary journeyed to the bathroom.\nSandra went to the garden.\nDaniel went back to the garden.\nDaniel went to the office.\nSandra grabbed the milk there.\nSandra put down the milk there.\nDaniel went to the hallway.\nSandra got the milk there.\nDaniel went to the garden.\nDaniel journeyed to the kitchen.\nDaniel journeyed to the bedroom.\nMary journeyed to the garden.\nDaniel took the football there.\nMary moved to the office.\nSandra travelled to the bedroom.\nDaniel dropped the football.\nSandra left the milk there.\nDaniel grabbed the football there.\nSandra grabbed the milk there.\nDaniel went to the kitchen.\n",
+          "target": "kitchen",
+          "prediction": "hallway",
+          "correct": false,
+          "confidence": 1.0,
+          "top_two_margin": 1.0,
+          "probability_vector": [
+            1.6193966839919262e-94,
+            3.3943916663727095e-25,
+            1.0,
+            6.456979918852061e-71,
+            8.04312803345001e-72
+          ],
+          "probabilities": {
+            "bedroom": 1.6193966839919262e-94,
+            "garden": 3.3943916663727095e-25,
+            "hallway": 1.0,
+            "kitchen": 6.456979918852061e-71,
+            "office": 8.04312803345001e-72
+          },
+          "failure_category": "overconfident_wrong"
+        },
+        {
+          "story_index": 9,
+          "task": 2,
+          "question": "Where is the football?",
+          "statements": [
+            "Mary journeyed to the bathroom.",
+            "Sandra went to the garden.",
+            "Daniel went back to the garden.",
+            "Daniel went to the office.",
+            "Sandra grabbed the milk there.",
+            "Sandra put down the milk there.",
+            "Daniel went to the hallway.",
+            "Sandra got the milk there.",
+            "Daniel went to the garden.",
+            "Daniel journeyed to the kitchen.",
+            "Daniel journeyed to the bedroom.",
+            "Mary journeyed to the garden.",
+            "Daniel took the football there.",
+            "Mary moved to the office.",
+            "Sandra travelled to the bedroom.",
+            "Daniel dropped the football.",
+            "Sandra left the milk there.",
+            "Daniel grabbed the football there.",
+            "Sandra grabbed the milk there.",
+            "Daniel went to the kitchen.",
+            "John travelled to the kitchen.",
+            "Mary moved to the hallway."
+          ],
+          "raw_passage": "Mary journeyed to the bathroom.\nSandra went to the garden.\nDaniel went back to the garden.\nDaniel went to the office.\nSandra grabbed the milk there.\nSandra put down the milk there.\nDaniel went to the hallway.\nSandra got the milk there.\nDaniel went to the garden.\nDaniel journeyed to the kitchen.\nDaniel journeyed to the bedroom.\nMary journeyed to the garden.\nDaniel took the football there.\nMary moved to the office.\nSandra travelled to the bedroom.\nDaniel dropped the football.\nSandra left the milk there.\nDaniel grabbed the football there.\nSandra grabbed the milk there.\nDaniel went to the kitchen.\nJohn travelled to the kitchen.\nMary moved to the hallway.\n",
+          "target": "kitchen",
+          "prediction": "hallway",
+          "correct": false,
+          "confidence": 1.0,
+          "top_two_margin": 1.0,
+          "probability_vector": [
+            4.046032849707271e-105,
+            4.9497476406619086e-29,
+            1.0,
+            2.9954280624458665e-71,
+            1.2038105643891238e-75
+          ],
+          "probabilities": {
+            "bedroom": 4.046032849707271e-105,
+            "garden": 4.9497476406619086e-29,
+            "hallway": 1.0,
+            "kitchen": 2.9954280624458665e-71,
+            "office": 1.2038105643891238e-75
+          },
+          "failure_category": "overconfident_wrong"
+        },
+        {
+          "story_index": 10,
+          "task": 2,
+          "question": "Where is the football?",
+          "statements": [
+            "Mary picked up the apple there.",
+            "Mary dropped the apple.",
+            "Daniel went back to the garden.",
+            "Mary journeyed to the office.",
+            "John got the football there.",
+            "Mary went back to the kitchen.",
+            "Daniel picked up the milk there.",
+            "John travelled to the bedroom."
+          ],
+          "raw_passage": "Mary picked up the apple there.\nMary dropped the apple.\nDaniel went back to the garden.\nMary journeyed to the office.\nJohn got the football there.\nMary went back to the kitchen.\nDaniel picked up the milk there.\nJohn travelled to the bedroom.\n",
+          "target": "bedroom",
+          "prediction": "hallway",
+          "correct": false,
+          "confidence": 1.0,
+          "top_two_margin": 1.0,
+          "probability_vector": [
+            1.5401112212206644e-54,
+            1.4651776044691468e-18,
+            1.0,
+            4.6459296701096475e-37,
+            3.305423551030709e-41
+          ],
+          "probabilities": {
+            "bedroom": 1.5401112212206644e-54,
+            "garden": 1.4651776044691468e-18,
+            "hallway": 1.0,
+            "kitchen": 4.6459296701096475e-37,
+            "office": 3.305423551030709e-41
+          },
+          "failure_category": "overconfident_wrong"
+        },
+        {
+          "story_index": 11,
+          "task": 2,
+          "question": "Where is the football?",
+          "statements": [
+            "Mary picked up the apple there.",
+            "Mary dropped the apple.",
+            "Daniel went back to the garden.",
+            "Mary journeyed to the office.",
+            "John got the football there.",
+            "Mary went back to the kitchen.",
+            "Daniel picked up the milk there.",
+            "John travelled to the bedroom.",
+            "John moved to the hallway.",
+            "John discarded the football."
+          ],
+          "raw_passage": "Mary picked up the apple there.\nMary dropped the apple.\nDaniel went back to the garden.\nMary journeyed to the office.\nJohn got the football there.\nMary went back to the kitchen.\nDaniel picked up the milk there.\nJohn travelled to the bedroom.\nJohn moved to the hallway.\nJohn discarded the football.\n",
+          "target": "hallway",
+          "prediction": "hallway",
+          "correct": true,
+          "confidence": 1.0,
+          "top_two_margin": 1.0,
+          "probability_vector": [
+            1.0916189751654365e-69,
+            1.7303014454598394e-24,
+            1.0,
+            2.737944421721438e-44,
+            2.3696089490473857e-50
+          ],
+          "probabilities": {
+            "bedroom": 1.0916189751654365e-69,
+            "garden": 1.7303014454598394e-24,
+            "hallway": 1.0,
+            "kitchen": 2.737944421721438e-44,
+            "office": 2.3696089490473857e-50
+          },
+          "failure_category": "correct"
+        },
+        {
+          "story_index": 12,
+          "task": 2,
+          "question": "Where is the milk?",
+          "statements": [
+            "Mary picked up the apple there.",
+            "Mary dropped the apple.",
+            "Daniel went back to the garden.",
+            "Mary journeyed to the office.",
+            "John got the football there.",
+            "Mary went back to the kitchen.",
+            "Daniel picked up the milk there.",
+            "John travelled to the bedroom.",
+            "John moved to the hallway.",
+            "John discarded the football.",
+            "Daniel dropped the milk.",
+            "John got the football there."
+          ],
+          "raw_passage": "Mary picked up the apple there.\nMary dropped the apple.\nDaniel went back to the garden.\nMary journeyed to the office.\nJohn got the football there.\nMary went back to the kitchen.\nDaniel picked up the milk there.\nJohn travelled to the bedroom.\nJohn moved to the hallway.\nJohn discarded the football.\nDaniel dropped the milk.\nJohn got the football there.\n",
+          "target": "garden",
+          "prediction": "bedroom",
+          "correct": false,
+          "confidence": 0.9999999999999999,
+          "top_two_margin": 0.9999999999999998,
+          "probability_vector": [
+            0.9999999999999999,
+            4.894388244343466e-38,
+            1.2033872464423237e-16,
+            6.284323218119172e-32,
+            1.933145702249025e-40
+          ],
+          "probabilities": {
+            "bedroom": 0.9999999999999999,
+            "garden": 4.894388244343466e-38,
+            "hallway": 1.2033872464423237e-16,
+            "kitchen": 6.284323218119172e-32,
+            "office": 1.933145702249025e-40
+          },
+          "failure_category": "overconfident_wrong"
+        },
+        {
+          "story_index": 13,
+          "task": 2,
+          "question": "Where is the milk?",
+          "statements": [
+            "Mary picked up the apple there.",
+            "Mary dropped the apple.",
+            "Daniel went back to the garden.",
+            "Mary journeyed to the office.",
+            "John got the football there.",
+            "Mary went back to the kitchen.",
+            "Daniel picked up the milk there.",
+            "John travelled to the bedroom.",
+            "John moved to the hallway.",
+            "John discarded the football.",
+            "Daniel dropped the milk.",
+            "John got the football there.",
+            "Mary journeyed to the garden.",
+            "Daniel travelled to the bathroom."
+          ],
+          "raw_passage": "Mary picked up the apple there.\nMary dropped the apple.\nDaniel went back to the garden.\nMary journeyed to the office.\nJohn got the football there.\nMary went back to the kitchen.\nDaniel picked up the milk there.\nJohn travelled to the bedroom.\nJohn moved to the hallway.\nJohn discarded the football.\nDaniel dropped the milk.\nJohn got the football there.\nMary journeyed to the garden.\nDaniel travelled to the bathroom.\n",
+          "target": "garden",
+          "prediction": "bedroom",
+          "correct": false,
+          "confidence": 0.999964269839949,
+          "top_two_margin": 0.999928539679898,
+          "probability_vector": [
+            0.999964269839949,
+            6.440706627275508e-24,
+            3.573016005093308e-05,
+            2.0014016821718165e-27,
+            6.93526945844352e-33
+          ],
+          "probabilities": {
+            "bedroom": 0.999964269839949,
+            "garden": 6.440706627275508e-24,
+            "hallway": 3.573016005093308e-05,
+            "kitchen": 2.0014016821718165e-27,
+            "office": 6.93526945844352e-33
+          },
+          "failure_category": "overconfident_wrong"
+        },
+        {
+          "story_index": 14,
+          "task": 2,
+          "question": "Where is the apple?",
+          "statements": [
+            "Mary picked up the apple there.",
+            "Mary dropped the apple.",
+            "Daniel went back to the garden.",
+            "Mary journeyed to the office.",
+            "John got the football there.",
+            "Mary went back to the kitchen.",
+            "Daniel picked up the milk there.",
+            "John travelled to the bedroom.",
+            "John moved to the hallway.",
+            "John discarded the football.",
+            "Daniel dropped the milk.",
+            "John got the football there.",
+            "Mary journeyed to the garden.",
+            "Daniel travelled to the bathroom.",
+            "Sandra journeyed to the bathroom.",
+            "Mary went to the bathroom.",
+            "Mary took the apple there.",
+            "Mary dropped the apple."
+          ],
+          "raw_passage": "Mary picked up the apple there.\nMary dropped the apple.\nDaniel went back to the garden.\nMary journeyed to the office.\nJohn got the football there.\nMary went back to the kitchen.\nDaniel picked up the milk there.\nJohn travelled to the bedroom.\nJohn moved to the hallway.\nJohn discarded the football.\nDaniel dropped the milk.\nJohn got the football there.\nMary journeyed to the garden.\nDaniel travelled to the bathroom.\nSandra journeyed to the bathroom.\nMary went to the bathroom.\nMary took the apple there.\nMary dropped the apple.\n",
+          "target": "bathroom",
+          "prediction": "hallway",
+          "correct": false,
+          "confidence": 1.0,
+          "top_two_margin": 1.0,
+          "probability_vector": [
+            1.5276647528605004e-54,
+            3.9634412958659115e-35,
+            1.0,
+            4.820707705816479e-49,
+            7.68054843276965e-55
+          ],
+          "probabilities": {
+            "bedroom": 1.5276647528605004e-54,
+            "garden": 3.9634412958659115e-35,
+            "hallway": 1.0,
+            "kitchen": 4.820707705816479e-49,
+            "office": 7.68054843276965e-55
+          },
+          "failure_category": "overconfident_wrong"
+        },
+        {
+          "story_index": 15,
+          "task": 2,
+          "question": "Where is the milk?",
+          "statements": [
+            "Daniel journeyed to the office.",
+            "John took the football there.",
+            "John discarded the football.",
+            "John travelled to the garden.",
+            "Daniel travelled to the garden.",
+            "Sandra went to the garden.",
+            "Daniel travelled to the kitchen.",
+            "Daniel moved to the office.",
+            "Mary grabbed the milk there.",
+            "Daniel journeyed to the bedroom.",
+            "John travelled to the office.",
+            "Daniel travelled to the bathroom.",
+            "John travelled to the kitchen.",
+            "Mary travelled to the garden.",
+            "Mary dropped the milk.",
+            "John went back to the garden."
+          ],
+          "raw_passage": "Daniel journeyed to the office.\nJohn took the football there.\nJohn discarded the football.\nJohn travelled to the garden.\nDaniel travelled to the garden.\nSandra went to the garden.\nDaniel travelled to the kitchen.\nDaniel moved to the office.\nMary grabbed the milk there.\nDaniel journeyed to the bedroom.\nJohn travelled to the office.\nDaniel travelled to the bathroom.\nJohn travelled to the kitchen.\nMary travelled to the garden.\nMary dropped the milk.\nJohn went back to the garden.\n",
+          "target": "garden",
+          "prediction": "hallway",
+          "correct": false,
+          "confidence": 0.9999999977878322,
+          "top_two_margin": 0.9999999955756644,
+          "probability_vector": [
+            2.2121678240470035e-09,
+            1.4954012896182594e-23,
+            0.9999999977878322,
+            1.0612834200436928e-28,
+            1.2991179170259424e-35
+          ],
+          "probabilities": {
+            "bedroom": 2.2121678240470035e-09,
+            "garden": 1.4954012896182594e-23,
+            "hallway": 0.9999999977878322,
+            "kitchen": 1.0612834200436928e-28,
+            "office": 1.2991179170259424e-35
+          },
+          "failure_category": "overconfident_wrong"
+        },
+        {
+          "story_index": 16,
+          "task": 2,
+          "question": "Where is the milk?",
+          "statements": [
+            "Daniel journeyed to the office.",
+            "John took the football there.",
+            "John discarded the football.",
+            "John travelled to the garden.",
+            "Daniel travelled to the garden.",
+            "Sandra went to the garden.",
+            "Daniel travelled to the kitchen.",
+            "Daniel moved to the office.",
+            "Mary grabbed the milk there.",
+            "Daniel journeyed to the bedroom.",
+            "John travelled to the office.",
+            "Daniel travelled to the bathroom.",
+            "John travelled to the kitchen.",
+            "Mary travelled to the garden.",
+            "Mary dropped the milk.",
+            "John went back to the garden.",
+            "Sandra got the milk there.",
+            "Sandra put down the milk."
+          ],
+          "raw_passage": "Daniel journeyed to the office.\nJohn took the football there.\nJohn discarded the football.\nJohn travelled to the garden.\nDaniel travelled to the garden.\nSandra went to the garden.\nDaniel travelled to the kitchen.\nDaniel moved to the office.\nMary grabbed the milk there.\nDaniel journeyed to the bedroom.\nJohn travelled to the office.\nDaniel travelled to the bathroom.\nJohn travelled to the kitchen.\nMary travelled to the garden.\nMary dropped the milk.\nJohn went back to the garden.\nSandra got the milk there.\nSandra put down the milk.\n",
+          "target": "garden",
+          "prediction": "hallway",
+          "correct": false,
+          "confidence": 0.5018031664012572,
+          "top_two_margin": 0.0036063328025144337,
+          "probability_vector": [
+            0.4981968335987428,
+            5.371778632989631e-25,
+            0.5018031664012572,
+            5.444569854615713e-31,
+            7.584986137245571e-34
+          ],
+          "probabilities": {
+            "bedroom": 0.4981968335987428,
+            "garden": 5.371778632989631e-25,
+            "hallway": 0.5018031664012572,
+            "kitchen": 5.444569854615713e-31,
+            "office": 7.584986137245571e-34
+          },
+          "failure_category": "low_confidence_wrong"
+        },
+        {
+          "story_index": 17,
+          "task": 2,
+          "question": "Where is the milk?",
+          "statements": [
+            "Daniel journeyed to the office.",
+            "John took the football there.",
+            "John discarded the football.",
+            "John travelled to the garden.",
+            "Daniel travelled to the garden.",
+            "Sandra went to the garden.",
+            "Daniel travelled to the kitchen.",
+            "Daniel moved to the office.",
+            "Mary grabbed the milk there.",
+            "Daniel journeyed to the bedroom.",
+            "John travelled to the office.",
+            "Daniel travelled to the bathroom.",
+            "John travelled to the kitchen.",
+            "Mary travelled to the garden.",
+            "Mary dropped the milk.",
+            "John went back to the garden.",
+            "Sandra got the milk there.",
+            "Sandra put down the milk.",
+            "Mary went back to the bathroom.",
+            "Mary travelled to the bedroom."
+          ],
+          "raw_passage": "Daniel journeyed to the office.\nJohn took the football there.\nJohn discarded the football.\nJohn travelled to the garden.\nDaniel travelled to the garden.\nSandra went to the garden.\nDaniel travelled to the kitchen.\nDaniel moved to the office.\nMary grabbed the milk there.\nDaniel journeyed to the bedroom.\nJohn travelled to the office.\nDaniel travelled to the bathroom.\nJohn travelled to the kitchen.\nMary travelled to the garden.\nMary dropped the milk.\nJohn went back to the garden.\nSandra got the milk there.\nSandra put down the milk.\nMary went back to the bathroom.\nMary travelled to the bedroom.\n",
+          "target": "garden",
+          "prediction": "hallway",
+          "correct": false,
+          "confidence": 0.999999999996672,
+          "top_two_margin": 0.999999999993344,
+          "probability_vector": [
+            3.3279679858628994e-12,
+            1.429999962364126e-25,
+            0.999999999996672,
+            8.345248339135625e-30,
+            4.38852201493186e-38
+          ],
+          "probabilities": {
+            "bedroom": 3.3279679858628994e-12,
+            "garden": 1.429999962364126e-25,
+            "hallway": 0.999999999996672,
+            "kitchen": 8.345248339135625e-30,
+            "office": 4.38852201493186e-38
+          },
+          "failure_category": "overconfident_wrong"
+        },
+        {
+          "story_index": 18,
+          "task": 2,
+          "question": "Where is the apple?",
+          "statements": [
+            "Daniel journeyed to the office.",
+            "John took the football there.",
+            "John discarded the football.",
+            "John travelled to the garden.",
+            "Daniel travelled to the garden.",
+            "Sandra went to the garden.",
+            "Daniel travelled to the kitchen.",
+            "Daniel moved to the office.",
+            "Mary grabbed the milk there.",
+            "Daniel journeyed to the bedroom.",
+            "John travelled to the office.",
+            "Daniel travelled to the bathroom.",
+            "John travelled to the kitchen.",
+            "Mary travelled to the garden.",
+            "Mary dropped the milk.",
+            "John went back to the garden.",
+            "Sandra got the milk there.",
+            "Sandra put down the milk.",
+            "Mary went back to the bathroom.",
+            "Mary travelled to the bedroom.",
+            "John got the milk there.",
+            "Daniel went back to the office.",
+            "Daniel moved to the kitchen.",
+            "Daniel grabbed the apple there.",
+            "John left the milk.",
+            "Daniel discarded the apple."
+          ],
+          "raw_passage": "Daniel journeyed to the office.\nJohn took the football there.\nJohn discarded the football.\nJohn travelled to the garden.\nDaniel travelled to the garden.\nSandra went to the garden.\nDaniel travelled to the kitchen.\nDaniel moved to the office.\nMary grabbed the milk there.\nDaniel journeyed to the bedroom.\nJohn travelled to the office.\nDaniel travelled to the bathroom.\nJohn travelled to the kitchen.\nMary travelled to the garden.\nMary dropped the milk.\nJohn went back to the garden.\nSandra got the milk there.\nSandra put down the milk.\nMary went back to the bathroom.\nMary travelled to the bedroom.\nJohn got the milk there.\nDaniel went back to the office.\nDaniel moved to the kitchen.\nDaniel grabbed the apple there.\nJohn left the milk.\nDaniel discarded the apple.\n",
+          "target": "kitchen",
+          "prediction": "hallway",
+          "correct": false,
+          "confidence": 1.0,
+          "top_two_margin": 1.0,
+          "probability_vector": [
+            1.418995533287505e-57,
+            1.664251648587252e-33,
+            1.0,
+            7.170014771716854e-58,
+            3.42373263929547e-62
+          ],
+          "probabilities": {
+            "bedroom": 1.418995533287505e-57,
+            "garden": 1.664251648587252e-33,
+            "hallway": 1.0,
+            "kitchen": 7.170014771716854e-58,
+            "office": 3.42373263929547e-62
+          },
+          "failure_category": "overconfident_wrong"
+        },
+        {
+          "story_index": 19,
+          "task": 2,
+          "question": "Where is the apple?",
+          "statements": [
+            "Daniel journeyed to the office.",
+            "John took the football there.",
+            "John discarded the football.",
+            "John travelled to the garden.",
+            "Daniel travelled to the garden.",
+            "Sandra went to the garden.",
+            "Daniel travelled to the kitchen.",
+            "Daniel moved to the office.",
+            "Mary grabbed the milk there.",
+            "Daniel journeyed to the bedroom.",
+            "John travelled to the office.",
+            "Daniel travelled to the bathroom.",
+            "John travelled to the kitchen.",
+            "Mary travelled to the garden.",
+            "Mary dropped the milk.",
+            "John went back to the garden.",
+            "Sandra got the milk there.",
+            "Sandra put down the milk.",
+            "Mary went back to the bathroom.",
+            "Mary travelled to the bedroom.",
+            "John got the milk there.",
+            "Daniel went back to the office.",
+            "Daniel moved to the kitchen.",
+            "Daniel grabbed the apple there.",
+            "John left the milk.",
+            "Daniel discarded the apple.",
+            "John picked up the milk there.",
+            "Daniel went to the hallway."
+          ],
+          "raw_passage": "Daniel journeyed to the office.\nJohn took the football there.\nJohn discarded the football.\nJohn travelled to the garden.\nDaniel travelled to the garden.\nSandra went to the garden.\nDaniel travelled to the kitchen.\nDaniel moved to the office.\nMary grabbed the milk there.\nDaniel journeyed to the bedroom.\nJohn travelled to the office.\nDaniel travelled to the bathroom.\nJohn travelled to the kitchen.\nMary travelled to the garden.\nMary dropped the milk.\nJohn went back to the garden.\nSandra got the milk there.\nSandra put down the milk.\nMary went back to the bathroom.\nMary travelled to the bedroom.\nJohn got the milk there.\nDaniel went back to the office.\nDaniel moved to the kitchen.\nDaniel grabbed the apple there.\nJohn left the milk.\nDaniel discarded the apple.\nJohn picked up the milk there.\nDaniel went to the hallway.\n",
+          "target": "kitchen",
+          "prediction": "hallway",
+          "correct": false,
+          "confidence": 1.0,
+          "top_two_margin": 1.0,
+          "probability_vector": [
+            3.6603065673579925e-59,
+            1.2482041098811991e-33,
+            1.0,
+            4.493182890173222e-61,
+            6.667686066422158e-65
+          ],
+          "probabilities": {
+            "bedroom": 3.6603065673579925e-59,
+            "garden": 1.2482041098811991e-33,
+            "hallway": 1.0,
+            "kitchen": 4.493182890173222e-61,
+            "office": 6.667686066422158e-65
+          },
+          "failure_category": "overconfident_wrong"
+        }
+      ],
+      "diagnostics": {
+        "total": 20,
+        "correct": 6,
+        "accuracy": 0.3,
+        "target_distribution": {
+          "bathroom": 1,
+          "bedroom": 3,
+          "garden": 7,
+          "hallway": 5,
+          "kitchen": 4
+        },
+        "predicted_distribution": {
+          "bedroom": 3,
+          "hallway": 17
+        },
+        "per_class": {
+          "bedroom": {
+            "support": 3,
+            "predicted": 3,
+            "correct": 1,
+            "precision": 0.3333333333333333,
+            "recall": 0.3333333333333333,
+            "f1": 0.3333333333333333
+          },
+          "garden": {
+            "support": 7,
+            "predicted": 0,
+            "correct": 0,
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0
+          },
+          "hallway": {
+            "support": 5,
+            "predicted": 17,
+            "correct": 5,
+            "precision": 0.29411764705882354,
+            "recall": 1.0,
+            "f1": 0.45454545454545453
+          },
+          "kitchen": {
+            "support": 4,
+            "predicted": 0,
+            "correct": 0,
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0
+          },
+          "office": {
+            "support": 0,
+            "predicted": 0,
+            "correct": 0,
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0
+          }
+        },
+        "confusion_matrix": {
+          "bedroom": {
+            "bedroom": 1,
+            "garden": 0,
+            "hallway": 2,
+            "kitchen": 0,
+            "office": 0
+          },
+          "garden": {
+            "bedroom": 2,
+            "garden": 0,
+            "hallway": 5,
+            "kitchen": 0,
+            "office": 0
+          },
+          "hallway": {
+            "bedroom": 0,
+            "garden": 0,
+            "hallway": 5,
+            "kitchen": 0,
+            "office": 0
+          },
+          "kitchen": {
+            "bedroom": 0,
+            "garden": 0,
+            "hallway": 4,
+            "kitchen": 0,
+            "office": 0
+          },
+          "office": {
+            "bedroom": 0,
+            "garden": 0,
+            "hallway": 0,
+            "kitchen": 0,
+            "office": 0
+          }
+        },
+        "confidence": {
+          "mean": 0.9749753369302707,
+          "mean_on_errors": 0.9642511576171691,
+          "overconfident_error_count": 13,
+          "overconfident_error_fraction": 0.9285714285714286,
+          "mean_top_two_margin": 0.9499507890947679
+        },
+        "calibration": {
+          "expected_calibration_error": 0.6749753369302709,
+          "negative_log_likelihood": 18.946721359432512,
+          "multiclass_brier_score": 1.3247721358319289,
+          "bins": [
+            {
+              "lower": 0.0,
+              "upper": 0.1,
+              "count": 0,
+              "mean_confidence": 0.0,
+              "accuracy": 0.0,
+              "absolute_gap": 0.0
+            },
+            {
+              "lower": 0.1,
+              "upper": 0.2,
+              "count": 0,
+              "mean_confidence": 0.0,
+              "accuracy": 0.0,
+              "absolute_gap": 0.0
+            },
+            {
+              "lower": 0.2,
+              "upper": 0.3,
+              "count": 0,
+              "mean_confidence": 0.0,
+              "accuracy": 0.0,
+              "absolute_gap": 0.0
+            },
+            {
+              "lower": 0.3,
+              "upper": 0.4,
+              "count": 0,
+              "mean_confidence": 0.0,
+              "accuracy": 0.0,
+              "absolute_gap": 0.0
+            },
+            {
+              "lower": 0.4,
+              "upper": 0.5,
+              "count": 0,
+              "mean_confidence": 0.0,
+              "accuracy": 0.0,
+              "absolute_gap": 0.0
+            },
+            {
+              "lower": 0.5,
+              "upper": 0.6,
+              "count": 1,
+              "mean_confidence": 0.5018031664012572,
+              "accuracy": 0.0,
+              "absolute_gap": 0.5018031664012572
+            },
+            {
+              "lower": 0.6,
+              "upper": 0.7,
+              "count": 0,
+              "mean_confidence": 0.0,
+              "accuracy": 0.0,
+              "absolute_gap": 0.0
+            },
+            {
+              "lower": 0.7,
+              "upper": 0.8,
+              "count": 0,
+              "mean_confidence": 0.0,
+              "accuracy": 0.0,
+              "absolute_gap": 0.0
+            },
+            {
+              "lower": 0.8,
+              "upper": 0.9,
+              "count": 0,
+              "mean_confidence": 0.0,
+              "accuracy": 0.0,
+              "absolute_gap": 0.0
+            },
+            {
+              "lower": 0.9,
+              "upper": 1.0,
+              "count": 19,
+              "mean_confidence": 0.9998791353791663,
+              "accuracy": 0.3157894736842105,
+              "absolute_gap": 0.6840896616949558
+            }
+          ]
+        },
+        "failure_categories": {
+          "low_confidence_wrong": 1,
+          "overconfident_wrong": 13
+        }
+      },
+      "training": {
+        "epoch_mean_loss": [
+          13.96006085631256,
+          13.154340620154008
+        ],
+        "all_finite": true,
+        "initial_loss": 13.96006085631256,
+        "final_loss": 13.154340620154008,
+        "final_to_initial_ratio": 0.9422839023087627,
+        "max_loss": 13.96006085631256,
+        "non_finite_epochs": 0
+      }
+    }
+  ],
+  "diagnostics": {
+    "total": 20,
+    "correct": 6,
+    "accuracy": 0.3,
+    "target_distribution": {
+      "bathroom": 1,
+      "bedroom": 3,
+      "garden": 7,
+      "hallway": 5,
+      "kitchen": 4
+    },
+    "predicted_distribution": {
+      "bedroom": 3,
+      "hallway": 17
+    },
+    "per_class": {
+      "bedroom": {
+        "support": 3,
+        "predicted": 3,
+        "correct": 1,
+        "precision": 0.3333333333333333,
+        "recall": 0.3333333333333333,
+        "f1": 0.3333333333333333
+      },
+      "garden": {
+        "support": 7,
+        "predicted": 0,
+        "correct": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "hallway": {
+        "support": 5,
+        "predicted": 17,
+        "correct": 5,
+        "precision": 0.29411764705882354,
+        "recall": 1.0,
+        "f1": 0.45454545454545453
+      },
+      "kitchen": {
+        "support": 4,
+        "predicted": 0,
+        "correct": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "office": {
+        "support": 0,
+        "predicted": 0,
+        "correct": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      }
+    },
+    "confusion_matrix": {
+      "bedroom": {
+        "bedroom": 1,
+        "garden": 0,
+        "hallway": 2,
+        "kitchen": 0,
+        "office": 0
+      },
+      "garden": {
+        "bedroom": 2,
+        "garden": 0,
+        "hallway": 5,
+        "kitchen": 0,
+        "office": 0
+      },
+      "hallway": {
+        "bedroom": 0,
+        "garden": 0,
+        "hallway": 5,
+        "kitchen": 0,
+        "office": 0
+      },
+      "kitchen": {
+        "bedroom": 0,
+        "garden": 0,
+        "hallway": 4,
+        "kitchen": 0,
+        "office": 0
+      },
+      "office": {
+        "bedroom": 0,
+        "garden": 0,
+        "hallway": 0,
+        "kitchen": 0,
+        "office": 0
+      }
+    },
+    "confidence": {
+      "mean": 0.9749753369302707,
+      "mean_on_errors": 0.9642511576171691,
+      "overconfident_error_count": 13,
+      "overconfident_error_fraction": 0.9285714285714286,
+      "mean_top_two_margin": 0.9499507890947679
+    },
+    "calibration": {
+      "expected_calibration_error": 0.6749753369302709,
+      "negative_log_likelihood": 18.946721359432512,
+      "multiclass_brier_score": 1.3247721358319289,
+      "bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "count": 0,
+          "mean_confidence": 0.0,
+          "accuracy": 0.0,
+          "absolute_gap": 0.0
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 0,
+          "mean_confidence": 0.0,
+          "accuracy": 0.0,
+          "absolute_gap": 0.0
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "count": 0,
+          "mean_confidence": 0.0,
+          "accuracy": 0.0,
+          "absolute_gap": 0.0
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "count": 0,
+          "mean_confidence": 0.0,
+          "accuracy": 0.0,
+          "absolute_gap": 0.0
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 0,
+          "mean_confidence": 0.0,
+          "accuracy": 0.0,
+          "absolute_gap": 0.0
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "count": 1,
+          "mean_confidence": 0.5018031664012572,
+          "accuracy": 0.0,
+          "absolute_gap": 0.5018031664012572
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "count": 0,
+          "mean_confidence": 0.0,
+          "accuracy": 0.0,
+          "absolute_gap": 0.0
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "count": 0,
+          "mean_confidence": 0.0,
+          "accuracy": 0.0,
+          "absolute_gap": 0.0
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "mean_confidence": 0.0,
+          "accuracy": 0.0,
+          "absolute_gap": 0.0
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "count": 19,
+          "mean_confidence": 0.9998791353791663,
+          "accuracy": 0.3157894736842105,
+          "absolute_gap": 0.6840896616949558
+        }
+      ]
+    },
+    "failure_categories": {
+      "low_confidence_wrong": 1,
+      "overconfident_wrong": 13
+    }
+  },
+  "memory_config": {
+    "gamma": [
+      2.0,
+      0.5,
+      0.1
+    ],
+    "w": [
+      0.04,
+      0.08,
+      0.12
+    ],
+    "dt": 0.05,
+    "leak_rate": 1.0,
+    "form": "input_driven"
+  }
+}

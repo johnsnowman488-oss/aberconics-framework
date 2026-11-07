@@ -1,13 +1,16 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Aberconics Experiment Lab</title>
 <style>
-:root{color-scheme:dark;--bg:#0b1020;--panel:#141d31;--line:#263550;--muted:#9aabc5;--ink:#edf3ff;--accent:#70d6c4;--blue:#8ab4ff}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#172642,var(--bg) 55%);color:var(--ink);font:15px/1.5 system-ui,sans-serif}header{padding:26px max(22px,calc((100% - 1180px)/2));border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}h1{font-size:22px;margin:0}header p{margin:4px 0;color:var(--muted)}main{max-width:1180px;margin:26px auto;padding:0 20px;display:grid;grid-template-columns:330px 1fr;gap:18px}.panel{background:#121b2dcc;border:1px solid var(--line);border-radius:16px;padding:20px}h2{font-size:16px;margin:0 0 14px}.field{display:grid;gap:6px;margin:13px 0;color:var(--muted);font-size:13px}input,select{width:100%;background:#0c1425;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px;font:inherit}button{border:0;border-radius:9px;padding:11px 15px;background:var(--accent);color:#09201e;font-weight:700;cursor:pointer}button:disabled{opacity:.5}.status,.muted{color:var(--muted);font-size:13px}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:15px 0}.metric{background:#0d1729;border:1px solid var(--line);border-radius:10px;padding:13px}.metric small{display:block;color:var(--muted)}.metric strong{font-size:22px}.chart{width:100%;height:240px;background:#0c1526;border:1px solid var(--line);border-radius:12px}.tablewrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}td,th{text-align:left;padding:9px;border-bottom:1px solid var(--line)}th{color:var(--muted)}pre{white-space:pre-wrap;max-height:230px;overflow:auto;background:#091221;padding:12px;border-radius:9px;color:#bfd0e8;font-size:12px}.wide{grid-column:1/-1}.run{padding:12px;border:1px solid var(--line);border-radius:9px;margin:8px 0;cursor:pointer}.run:hover{border-color:var(--accent)}@media(max-width:800px){main{grid-template-columns:1fr}.wide{grid-column:auto}.cards{grid-template-columns:1fr 1fr}}
+:root{color-scheme:light;--paper:#fff;--surface:#f7f7f7;--silver:#d4d6d8;--silver-dark:#a8aaad;--muted:#666;--ink:#252525;--orange:#b94f1c;--orange-hover:#963d14;--soft-orange:#fff2eb;--grid:#e6e6e6}*{box-sizing:border-box}*[hidden]{display:none!important}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 system-ui,sans-serif}header{padding:24px max(22px,calc((100% - 1180px)/2));border-bottom:1px solid var(--silver);display:flex;justify-content:space-between;align-items:center;background:var(--paper)}h1{font-size:22px;margin:0}header p{margin:4px 0;color:var(--muted)}header>span{font-size:12px;letter-spacing:.08em;color:var(--muted)}nav{display:flex;gap:6px;max-width:1180px;margin:0 auto;padding:10px 20px;border-bottom:1px solid var(--silver)}nav a{padding:8px 12px;border-radius:6px;color:#555;text-decoration:none;font-size:14px}nav a[aria-current=page]{background:var(--soft-orange);color:var(--orange);font-weight:700}main{max-width:1180px;margin:26px auto;padding:0 20px}.page-view{display:grid;grid-template-columns:1fr;gap:18px}.page-view#page-experiment{max-width:760px;margin:0 auto}.page-view#page-results{grid-template-columns:minmax(0,1.8fr) minmax(280px,1fr);align-items:start}.panel{background:var(--paper);border:1px solid var(--silver);border-radius:12px;padding:20px}h2{font-size:16px;margin:0 0 14px}.field{display:grid;gap:6px;margin:13px 0;color:#555;font-size:13px}input,select{width:100%;background:var(--paper);color:var(--ink);border:1px solid var(--silver-dark);border-radius:7px;padding:10px;font:inherit}input:focus,select:focus,button:focus-visible,a:focus-visible{outline:2px solid var(--orange);outline-offset:2px}input:disabled,select:disabled{background:#f1f1f1;color:#777}.field input[type=checkbox]{width:auto}button{border:1px solid var(--orange);border-radius:7px;padding:10px 15px;background:var(--orange);color:white;font-weight:700;cursor:pointer}button:hover:not(:disabled){background:var(--orange-hover)}button:disabled{opacity:.5;cursor:not-allowed}.status,.muted{color:var(--muted);font-size:13px}.status{padding:8px 10px;background:var(--surface);border-left:3px solid var(--silver-dark);white-space:pre-line}.status.warning{background:var(--soft-orange);border-color:var(--orange);color:#73320f}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:15px 0}.metric{background:var(--surface);border:1px solid var(--silver);border-radius:8px;padding:13px}.metric small{display:block;color:var(--muted)}.metric strong{font-size:22px}.chart{width:100%;height:240px;background:var(--paper);border:1px solid var(--silver);border-radius:8px}.tablewrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}td,th{text-align:left;padding:9px;border-bottom:1px solid var(--silver);vertical-align:top}th{color:#555;background:var(--surface)}pre{white-space:pre-wrap;max-height:380px;overflow:auto;background:var(--surface);border:1px solid var(--silver);padding:12px;border-radius:8px;color:#333;font-size:12px}.run{padding:12px;border:1px solid var(--silver);border-radius:8px;margin:8px 0}.run:hover,.run.selected{border-color:var(--orange);background:var(--soft-orange)}.run small{display:block;color:var(--muted);margin:4px 0 0 28px}a{color:var(--orange)}.profile-card,.insight-card{padding:14px;border:1px solid var(--silver);border-radius:8px;margin:10px 0;background:var(--surface)}.insight-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}.insight-card strong{display:block;font-size:19px;overflow-wrap:anywhere}.insight-card small{color:var(--muted)}.section-title{margin:22px 0 10px}.toolbar{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin:10px 0}.toolbar label{display:grid;gap:4px;color:var(--muted);font-size:13px}.toolbar input,.toolbar select{min-width:170px}.danger-button{background:#fff;color:#8f2f17;border-color:#b94f1c;padding:6px 9px;font-size:12px}.danger-button:hover:not(:disabled){background:var(--soft-orange)}.example-detail{max-width:680px}.example-detail summary,.raw-details summary{cursor:pointer;color:var(--orange);font-weight:650}.claim{border-left:3px solid var(--orange);padding:10px 12px;background:var(--soft-orange);margin:12px 0}.empty-state{padding:14px;background:var(--surface);border-radius:8px;color:var(--muted)}.raw-details{margin-top:14px;border-top:1px solid var(--silver);padding-top:12px}.raw-details pre{max-height:450px}@media(max-width:800px){.page-view#page-results{grid-template-columns:1fr}nav{overflow-x:auto}.cards{grid-template-columns:1fr 1fr}}
 </style></head><body>
 <header><div><h1>Aberconics Experiment Lab</h1><p>Run · observe · compare · reproduce</p></div><span>LOCAL WORKSPACE</span></header>
+<nav aria-label="Experiment Lab pages"><a href="#experiment" data-page="experiment">Configure experiment</a><a href="#results" data-page="results">Results &amp; compare</a><a href="#datasets" data-page="datasets">Datasets &amp; protocols</a></nav>
 <main>
-<section class="panel"><h2>Configure experiment</h2>
-<label class="field">Experiment<select id="experiment"><option value="e0">E0 · Original baseline</option><option value="ef0" selected>E-F0 · Runtime-integrated</option><option value="g1">G1 · Explicit relational state (QA2 control)</option><option value="g1l">G1-L · Learned relational binding (QA2)</option><option value="g2">G2 · Relational composition (QA3 + QA5)</option></select></label>
-<label class="field">bAbI task<select id="task"><option value="1">QA1 · Single supporting fact</option><option value="2" selected>QA2 · Two supporting facts</option><option value="3">QA3 · Three supporting facts</option><option value="5">QA5 · Three argument relations</option><option value="6">QA6 · Yes/No</option><option value="11">QA11 · Basic coreference</option><option value="14">QA14 · Time reasoning</option></select></label><label class="field" id="g2-taskset-wrap" hidden>G2 benchmark coverage<select id="g2-taskset"><option value="3,5" selected>QA3 + QA5 · full G2</option><option value="3">QA3 only · partial qualification</option><option value="5">QA5 only · partial qualification</option></select></label><p class="status">QA2 tests linking two relevant facts across intervening story statements. G2 pairs E0 and isolated E-F0 on QA3/QA5 and separately validates structured relational fixtures.</p>
+<section class="page-view" id="page-experiment"><section class="panel"><h2>Configure experiment</h2>
+<label class="field">Experiment<select id="experiment"></select></label>
+<label class="field">Dataset profile<select id="dataset-profile"></select></label><p id="dataset" class="status">Checking registered datasets…</p>
+<label class="field" id="task-wrap">bAbI task<select id="task"><option value="1">QA1 · Single supporting fact</option><option value="2" selected>QA2 · Two supporting facts</option><option value="3">QA3 · Three supporting facts</option><option value="5">QA5 · Three argument relations</option><option value="6">QA6 · Yes/No</option><option value="11">QA11 · Basic coreference</option><option value="14">QA14 · Time reasoning</option></select></label>
+<label class="field" id="g2-taskset-wrap" hidden>G2 benchmark coverage<select id="g2-taskset"><option value="3,5">QA3 + QA5 · full G2</option><option value="3">QA3 only · partial qualification</option><option value="5">QA5 only · partial qualification</option></select></label><p id="experiment-help" class="status"></p>
 <label class="field">Memory dimension<input id="dim" type="number" min="4" max="512" value="64"></label>
 <label class="field">Seeds<input id="seeds" type="number" min="1" max="100" value="3"></label>
 <label class="field">Epochs<input id="epochs" type="number" min="1" max="100" value="5"></label>
@@ -17,112 +20,308 @@
 <label class="field">Readout<select id="readout"><option value="linear">Linear</option><option value="mlp">Nonlinear MLP</option></select></label>
 <label class="field">Learning rate<input id="learning-rate" type="number" min="0.000001" max="1" step="0.001" value="0.05"></label>
 <label class="field">Feature scale<input id="feature-scale" type="number" min="0.000001" max="10000" step="1" value="100"></label>
-<label class="field">Execution mode<select id="mode"><option value="isolated">Isolated · benchmark</option><option value="continuous">Continuous · stress test</option></select></label><label class="field"><span>F0 component audit</span><span><input id="spine" type="checkbox" checked style="width:auto"> Exercise all six phases, trace windows and checkpoint/restore</span></label>
-<button id="launch">Launch experiment</button><p id="dataset" class="status">Checking dataset…</p><p id="status" class="status">Ready.</p><h2 style="margin-top:24px">Previous runs</h2><div id="history" class="muted">Loading…</div>
-<button id="compare-button" type="button" style="margin-top:8px">Compare selected runs</button><div id="comparison" class="muted" style="margin-top:10px"></div>
-</section>
-<section class="panel"><h2>Results explorer</h2><div id="empty" class="muted">Launch or select a completed run to inspect its results.</div><div id="results" hidden>
-<div class="cards"><div class="metric"><small>Mean accuracy</small><strong id="accuracy">—</strong></div><div class="metric"><small>Standard error</small><strong id="error">—</strong></div><div class="metric"><small>Evaluation stories</small><strong id="stories">—</strong></div></div>
-<h2>Per-seed accuracy</h2><svg id="chart" class="chart" viewBox="0 0 700 240"></svg>
-<h2 style="margin-top:20px">Seed results</h2><div class="tablewrap"><table><thead><tr><th>Seed</th><th>Correct</th><th>Total</th><th>Accuracy</th><th>Holder retrieval / stability</th></tr></thead><tbody id="rows"></tbody></table></div>
-<h2 style="margin-top:20px">Calibration and failure profile</h2><pre id="calibration"></pre>
-<h2>Answer distributions and per-class scores</h2><pre id="distributions"></pre>
-<h2>Per-example failure evidence (first 20)</h2><pre id="evidence"></pre>
-<h2 style="margin-top:20px">F0 spine audit</h2><div id="spine-results" class="muted">Audit results appear for E-F0 runs.</div><h2 style="margin-top:20px">Run details</h2><pre id="details"></pre><h2>Logs</h2><pre id="logs"></pre><h2>Evidence files</h2><div id="files" class="muted"></div></div></section>
-<section class="panel wide"><h2>Using the Lab</h2><p class="muted">Choose E0, E-F0, G1, G1-L or G2, configure the run, then launch. G1 is a deterministic symbolic QA2 control; G1-L trains identity/role binding on parsed QA2 events and reports validation and held-out evidence separately. Each run is saved under runs/experiment-lab/ with configuration, metadata and logs. E0 is isolated by design; continuous mode is available only for E-F0 and is a separate interference stress test.</p><p class="muted">For a fair comparison, match task, dimension, seed count, dataset splits, readout and epoch count. The dashboard reports metrics emitted by the actual runners.</p></section>
+<label class="field" id="eval-split-wrap">Evaluation split<select id="eval-split"><option value="test">Test · locked evaluation</option><option value="valid">Validation · exploratory only</option></select></label>
+<label class="field" id="bootstrap-wrap" hidden>Story bootstrap samples<input id="bootstrap-samples" type="number" min="200" max="5000" step="100" value="400"></label>
+<label class="field" id="mode-wrap">Execution mode<select id="mode"><option value="isolated">Isolated · benchmark</option><option value="continuous">Continuous · stress test</option></select></label>
+<label class="field" id="spine-wrap"><span>F0 component audit</span><span><input id="spine" type="checkbox" checked> Exercise all six phases, trace windows and checkpoint/restore</span></label>
+<label class="field" id="quick-wrap"><span>Smoke test</span><span><input id="quick" type="checkbox"> Quick mode (20-story slice; E0/E-F0 use 2 epochs; not benchmark evidence)</span></label>
+<label class="field" id="confirmation-seeds-wrap" hidden>L2 confirmation seeds<input id="confirmation-seeds" type="number" min="1" max="10" value="3"></label>
+<button id="launch" disabled>Launch experiment</button><p id="status" class="status">Ready.</p></section></section>
+<section class="page-view" id="page-results" hidden><section class="panel"><h2>Results explorer</h2><div id="empty" class="muted">Launch or select a completed run to inspect its results.</div><div id="results" hidden>
+<div class="cards"><div class="metric"><small id="accuracy-label">Mean accuracy</small><strong id="accuracy">—</strong></div><div class="metric"><small id="error-label">Standard error</small><strong id="error">—</strong></div><div class="metric"><small id="stories-label">Evaluation stories</small><strong id="stories">—</strong></div></div>
+<div id="claim-boundary" class="claim" hidden></div>
+<h2 class="section-title">Experiment findings</h2><div id="experiment-insights"></div>
+<h2 class="section-title">Run outcomes</h2><div id="chart-legend" class="muted"></div><svg id="chart" class="chart" viewBox="0 0 700 240"></svg>
+<h2 class="section-title">Seed and arm outcomes</h2><div class="tablewrap"><table><thead><tr><th>Seed / arm</th><th>Correct</th><th>Total</th><th>Accuracy</th><th>Diagnostic</th></tr></thead><tbody id="rows"></tbody></table></div>
+<h2 class="section-title">Per-example evidence</h2><p id="example-summary" class="muted"></p><div class="toolbar"><label>Find text<input id="example-search" type="search" placeholder="Question, answer, prediction…"></label><label>Outcome<select id="example-filter"><option value="all">All examples</option><option value="errors">Incorrect or failed</option><option value="correct">Correct</option></select></label><label>Seed / arm<select id="example-arm"><option value="all">All seeds and arms</option></select></label></div><div class="tablewrap"><table><thead id="examples-head"></thead><tbody id="examples-body"></tbody></table></div><div class="toolbar"><button id="examples-previous" type="button">Previous</button><span id="examples-page" class="muted"></span><button id="examples-next" type="button">Next</button></div>
+<details class="raw-details"><summary>Calibration and confidence metrics</summary><pre id="calibration"></pre></details><details class="raw-details"><summary>Distributions, class scores, controls and audits</summary><pre id="distributions"></pre><pre id="spine-results"></pre></details>
+<details class="raw-details"><summary>Full result JSON and run configuration</summary><pre id="details"></pre></details><details class="raw-details"><summary>Run logs</summary><pre id="logs"></pre></details><h2 class="section-title">Evidence files</h2><div id="files" class="muted"></div></div></section>
+<aside><section class="panel"><h2>Saved runs</h2><div id="history" class="muted">Loading…</div><button id="compare-button" type="button" style="margin-top:8px">Compare selected runs</button><div id="comparison" class="muted" style="margin-top:10px"></div></section></aside></section>
+<section class="page-view" id="page-datasets" hidden><section class="panel"><h2>Registered dataset profiles</h2><p class="muted">Select a profile on the experiment page. Profiles are defined in <code>code/python/d2c/experiment_lab/dataset_profiles.json</code> using repository-relative directories and split filenames. The Lab rejects paths outside the repository, checks the required splits, and records SHA-256 fingerprints for every available split with each run.</p><div id="dataset-profiles-list"></div></section><section class="panel"><h2>Protocol guide</h2><p class="muted">Defaults follow each experiment’s documented protocol. Test is the locked evaluation split; validation is exploratory. G1 is a deterministic QA2 symbolic control. G1-L pilot results use validation and only the gated L2 stage opens test. G2 reports its internal matched E0/E-F0 task comparisons. Other runs are statistically compared only when the Lab confirms a matched E0/E-F0 configuration and matching dataset fingerprints.</p><p class="muted">Smoke mode is a small diagnostic slice, not benchmark evidence. Dataset identity and split hashes are part of each run’s configuration and manifest.</p></section></section>
 </main>
 <script>
-const $=id=>document.getElementById(id);let selected=null,timer=null;
-async function api(path,opts){const r=await fetch(path,opts);const j=await r.json();if(!r.ok)throw Error(j.error||r.statusText);return j}
-async function refresh(){const d=await api("/api/datasets");$("dataset").textContent="Dataset: "+(d.ready_for_g2?"QA3/QA5 train + test splits detected":d.ready_for_g1l?"train/validation/test splits detected":d.ready?"train/test splits detected":"bAbI train/test data missing; run downloader first");const h=await api("/api/runs");$("history").innerHTML=h.runs.length?h.runs.map(x=>'<div class="run" data-id="'+x.run_id+'"><div style="display:flex;gap:10px;align-items:center"><input class="compare-run" type="checkbox" value="'+x.run_id+'" style="width:auto"><a href="#" class="run-open" style="color:inherit;text-decoration:none"><b>'+x.experiment.toUpperCase()+'</b> · '+(x.config.tasks?'QA'+x.config.tasks.join('+'):'task '+x.config.task)+' · '+x.status+'<br><small>'+x.created_at+'</small></a></div></div>').join(""):"No saved runs yet.";document.querySelectorAll(".run-open").forEach(x=>x.onclick=e=>{e.preventDefault();show(x.closest(".run").dataset.id)});document.querySelectorAll(".compare-run").forEach(x=>x.onclick=e=>e.stopPropagation())}
-async function show(id){selected=id;const job=await api("/api/runs/"+id);$("empty").hidden=true;$("results").hidden=false;$("status").textContent=job.status+" · "+id;if(job.status==="running"){const l=await api("/api/runs/"+id+"/logs");$("logs").textContent=l.stdout+"\n"+l.stderr;return}try{const r=await api("/api/runs/"+id+"/results");if(r.pending){$("details").textContent="Result file not ready.";return}const g1=job.experiment==="g1";const seeds=r.seed_results||[];
-if(job.experiment==="g2"){
-const taskRows=Object.entries(r.tasks||{}),tableRows=[],confidenceView={};
-for(const [taskKey,task] of taskRows){
-confidenceView["QA"+taskKey]={};
-for(const armName of ["e0","ef0"]){
-const arm=task.arms[armName];confidenceView["QA"+taskKey][armName]=arm.confidence_summary;
-for(const seed of arm.seed_results||[]){
-tableRows.push({seed:"QA"+taskKey+" "+armName.toUpperCase()+" "+seed.seed,correct:seed.correct,total:seed.total,accuracy:seed.accuracy,holder_retrieval_accuracy:null,confidence_quality_flags:(seed.confidence_quality_flags||[]).join(", ")||"no flag"});
+const $=id=>document.getElementById(id);
+let selected=null,timer=null,catalogue=[],profiles=[];
+let exampleRows=[],examplePage=0;
+const EXAMPLES_PER_PAGE=25;
+const experimentNames={e0:"E0",ef0:"E-F0",g1:"G1",g1l:"G1-L",g2:"G2"};
+async function api(path,opts){const response=await fetch(path,opts);const result=await response.json();if(!response.ok)throw Error(result.error||response.statusText);return result}
+function setHidden(id,hidden){const element=$(id);(element.tagName==="LABEL"?element:element.closest("label")||element).hidden=hidden}
+function setValue(id,value){if(value!==undefined&&value!==null)$(id).value=String(value)}
+function currentProfile(){return profiles.find(item=>item.id===$("dataset-profile").value)}
+function currentExperiment(){return catalogue.find(item=>item.id===$("experiment").value)}
+function requiredSplits(exp){if(exp==="g1l")return ["train","valid","test"];if(exp==="g1")return ["train","test"];return ["train",$("eval-split").value]}
+function navigate(page){if(!["experiment","results","datasets"].includes(page))page="experiment";for(const name of ["experiment","results","datasets"]){$(`page-${name}`).hidden=name!==page;const link=document.querySelector(`[data-page="${name}"]`);if(name===page)link.setAttribute("aria-current","page");else link.removeAttribute("aria-current")}}
+function updateDatasetStatus(){
+ const profile=currentProfile(),exp=$("experiment").value;
+ if(!profile){$("dataset").textContent="No registered dataset profiles are available."; $("dataset").classList.add("warning");$("launch").disabled=true;return}
+ const missing=requiredSplits(exp).filter(split=>!profile.files[split]);
+ const labels=requiredSplits(exp).map(split=>split==="valid"?"validation":split);
+ $("dataset").textContent=missing.length
+  ?profile.name+" · missing "+missing.join(", ")+" split file(s)"
+  :profile.name+" · ready for "+(exp==="g1l"?"L1 validation and gated L2 test":labels.join(" + ")+" run");
+ $("dataset").classList.toggle("warning",missing.length>0);
+ $("launch").disabled=missing.length>0;
 }
+function renderDatasetProfiles(){
+ const root=$("dataset-profiles-list");root.replaceChildren();
+ for(const profile of profiles){const card=document.createElement("article");card.className="profile-card";const title=document.createElement("h3");title.textContent=profile.name;const path=document.createElement("p");path.textContent=profile.directory;const splits=document.createElement("p");splits.textContent=Object.entries(profile.files).map(([name,ready])=>`${name}: ${ready?"available":"missing"}`).join(" · ");card.append(title,path,splits);root.append(card)}
 }
+function setDefaults(){
+ const exp=currentExperiment();if(!exp)return;
+ const d=exp.defaults;
+ setValue("task",d.task);
+ setValue("dim",d.dim);
+ setValue("seeds",d.seeds);
+ if(exp.id==="g1l")setValue("confirmation-seeds",d.confirmation_seeds);
+ setValue("epochs",d.epochs);
+ setValue("learning-rate",d.learning_rate);
+ setValue("feature-scale",d.feature_scale);
+ setValue("readout",d.readout);
+ setValue("mode",d.mode||"isolated");
+ setValue("eval-split",d.eval_split);
+ setValue("g1l-stage",d.stage);
+ setValue("train-limit",d.train_limit);
+ setValue("eval-limit",d.eval_limit);
+ setValue("bootstrap-samples",d.bootstrap_samples);
+ setValue("g2-taskset",(d.tasks||[3,5]).join(","));
+ $("spine").checked=Boolean(d.exercise_spine);
+ $("quick").checked=Boolean(d.quick);
+ $("experiment-help").textContent=exp.description;
 }
-const meanAccuracy=tableRows.length?tableRows.reduce((sum,row)=>sum+row.accuracy,0)/tableRows.length:null;
-$("accuracy").parentElement.querySelector("small").textContent="Mean accuracy across G2 cells";
-$("error").parentElement.querySelector("small").textContent="Paired E-F0 − E0 comparison";
-$("rows").closest(".tablewrap").querySelector("thead th:last-child").textContent="Confidence flags";
-$("accuracy").textContent=meanAccuracy==null?"—":(100*meanAccuracy).toFixed(1)+"%";
-$("error").textContent=taskRows.map(([k,v])=>{const d=v.paired_accuracy_difference_ef0_minus_e0;return "QA"+k+" Δ "+(100*d.mean).toFixed(2)+"pp; CI "+(d.ci95_two_sided_t||[]).map(x=>(100*x).toFixed(2)+"pp").join(" to ")+"; exact p="+d.exact_two_sided_sign_test_p.toFixed(3)+"; Holm="+d.holm_adjusted_exact_sign_test_p.toFixed(3)}).join(" · ");
-$("stories").textContent=taskRows.map(([k,v])=>"QA"+k+": "+v.evaluation_stories).join(" · ");
-$("rows").innerHTML=tableRows.map(x=>'<tr><td>'+x.seed+'</td><td>'+x.correct+'</td><td>'+x.total+'</td><td>'+(100*x.accuracy).toFixed(1)+'%</td><td>'+x.confidence_quality_flags+'</td></tr>').join("");
-draw(tableRows);
-$("calibration").textContent=JSON.stringify({per_task:confidenceView,paired_seed_differences:Object.fromEntries(taskRows.map(([k,v])=>["QA"+k,v.paired_accuracy_difference_ef0_minus_e0]))},null,2);
-$("distributions").textContent=JSON.stringify({fixture_control:{passed:r.fixture_control?.passed,total:r.fixture_control?.total,by_category:r.fixture_control?.by_category},acceptance:r.acceptance,claim_boundary:r.claim_boundary},null,2);
-const modelErrors=[];for(const [taskKey,task] of taskRows){for(const armName of ["e0","ef0"]){for(const seed of task.arms[armName].seed_results||[]){for(const prediction of seed.predictions||[]){if(!prediction.correct)modelErrors.push({task:"QA"+taskKey,arm:armName,seed:seed.seed,...prediction});}}}}modelErrors.sort((a,b)=>b.confidence-a.confidence);$("evidence").textContent=JSON.stringify({failed_fixtures:(r.fixture_control?.results||[]).filter(x=>!x.passed),high_confidence_model_errors:modelErrors.slice(0,20)},null,2);
-const spineAudits=taskRows.flatMap(([taskKey,task])=>(task.arms.ef0.seed_results||[]).map(seed=>({task:"QA"+taskKey,seed:seed.seed,audit:seed.spine_exercise})));
-$("spine-results").textContent=spineAudits.map(item=>{const a=item.audit||{};return item.task+" seed "+item.seed+": "+(a.status||"missing")+" · phases "+Object.entries(a.phase_coverage||{}).filter(entry=>entry[1]).map(entry=>entry[0]).join(", ")+" · SOE unchanged "+a.maintenance?.kernel_unchanged+" · trace contiguous "+a.trace_store?.sample_is_contiguous+" · checkpoint "+a.checkpoint_restore?.snapshot_round_trip_equal+" · stability violations "+a.diagnostics?.stability_violations;}).join("\\n")+"\\nRuntime ablation remains deferred; fixtures are structured semantic controls, not model predictions.";
-$("details").textContent=JSON.stringify({experiment:job.experiment,config:job.config,dataset:r.dataset,acceptance:r.acceptance,claim_boundary:r.claim_boundary},null,2);
-const log=await api("/api/runs/"+id+"/logs");$("logs").textContent=log.stdout+"\n"+log.stderr;
-$("files").innerHTML=["summary.json","summary.md","per_seed_metrics.csv","fixtures.jsonl","per_example.csv","per_example.jsonl","manifest.json","config.json","experiment_lab_register.json"].map(f=>'<a href="/api/runs/'+id+'/files/'+f+'" target="_blank">'+f+'</a>').join(" · ");
-return;
+function updateControls(){
+ const exp=$("experiment").value,g1=exp==="g1",g1l=exp==="g1l",g2=exp==="g2",learnedBaseline=exp==="e0"||exp==="ef0";
+ setHidden("task-wrap",g1||g1l||g2);
+ setHidden("g2-taskset-wrap",!g2);
+ setHidden("seeds",!learnedBaseline&&!g2);
+ setHidden("epochs",!learnedBaseline&&!g2&&!g1l);
+ setHidden("readout",!learnedBaseline&&!g2);
+ setHidden("learning-rate",!learnedBaseline&&!g2&&!g1l);
+ setHidden("feature-scale",!learnedBaseline&&!g2);
+ setHidden("eval-split-wrap",!learnedBaseline&&!g2);
+ setHidden("bootstrap-wrap",!g2);
+ setHidden("mode-wrap",exp!=="ef0");
+ setHidden("spine-wrap",exp!=="ef0");
+ setHidden("quick-wrap",!(learnedBaseline||g1));
+ setHidden("g1l-stage-wrap",!g1l);
+ setHidden("train-limit-wrap",!g1l);
+ setHidden("eval-limit-wrap",!g1l);
+ setHidden("confirmation-seeds-wrap",!g1l||$("g1l-stage").value!=="all");
+ $("epochs").disabled=learnedBaseline&&$("quick").checked;
+ $("task").disabled=g1||g1l||g2;
+ updateDatasetStatus();
 }
-if(job.experiment==="g1l"){
-const stages=r.stages||{},l1=stages.L1||{},l2=stages.L2||{},v=l1.validation_after_training||{};
-const finalRows=l2.status==="completed"?(l2.per_example||[]):(l1.validation_predictions||[]);
-const accuracy=l2.status==="completed"?l2.mean_accuracy:v.accuracy;
-const mean=xs=>xs.length?xs.reduce((a,b)=>a+b,0)/xs.length:null;
-const seedRows=l2.status==="completed"?(l2.seed_results||[]).map(x=>{
-const p=x.predictions||[],held=p.filter(y=>y.query_relation==="object_holder_to_person_location"),fixed=p.filter(y=>y.query_relation==="fixed_object_location"),holders=held.filter(y=>y.holder_correct!==null);
-return {...x,held_query_accuracy:x.held_query_accuracy??mean(held.map(y=>y.correct?1:0)),fixed_location_accuracy:x.fixed_location_accuracy??mean(fixed.map(y=>y.correct?1:0)),holder_retrieval_accuracy:x.holder_retrieval_accuracy??mean(holders.map(y=>y.holder_correct?1:0))};
-}):[];
-const relationMetrics=l2.status==="completed"?{
-held_query_accuracy:l2.mean_held_query_accuracy??mean(seedRows.map(x=>x.held_query_accuracy).filter(x=>x!=null)),
-fixed_location_accuracy:l2.mean_fixed_location_accuracy??mean(seedRows.map(x=>x.fixed_location_accuracy).filter(x=>x!=null)),
-holder_retrieval_accuracy:l2.mean_holder_retrieval_accuracy??mean(seedRows.map(x=>x.holder_retrieval_accuracy).filter(x=>x!=null))
-}:(v.relation_metrics||{});
-$("accuracy").textContent=accuracy==null?"—":(100*accuracy).toFixed(1)+"%";
-$("error").textContent=l2.status==="completed"?(100*(l2.standard_error||0)).toFixed(2)+" pp":"pilot";
-$("stories").textContent=l2.status==="completed"?((l2.seed_results?.[0]?.total??"—")+" per seed × "+(l2.seed_results?.length??0)+" seeds"):(v.total??"—");
-$("rows").innerHTML=seedRows.length?seedRows.map(x=>'<tr><td>'+x.seed+'</td><td>'+x.correct+'</td><td>'+x.total+'</td><td>'+(100*x.accuracy).toFixed(1)+'%</td><td>'+(x.holder_retrieval_accuracy==null?"—":(100*x.holder_retrieval_accuracy).toFixed(1)+'%')+'</td></tr>').join(""):'<tr><td>L1 pilot</td><td>'+v.correct+'</td><td>'+v.total+'</td><td>'+(100*(v.accuracy||0)).toFixed(1)+'%</td><td>'+(v.holder_retrieval_accuracy==null?"—":(100*v.holder_retrieval_accuracy).toFixed(1)+'%')+'</td></tr>';
-draw(seedRows.length?seedRows:[{seed:"L1",accuracy:v.accuracy||0}]);
-$("calibration").textContent=JSON.stringify({L0:stages.L0,L1:{status:l1.status,training:l1.training,before:l1.validation_before_training,after:v,confidence_diagnostics:l1.validation_confidence_diagnostics,random_holder_baseline:l1.random_holder_baseline},L2:{status:l2.status,reason:l2.reason,per_seed_accuracy:l2.per_seed_accuracy,mean_held_query_accuracy:l2.mean_held_query_accuracy,mean_fixed_location_accuracy:l2.mean_fixed_location_accuracy,mean_holder_retrieval_accuracy:l2.mean_holder_retrieval_accuracy,per_seed_confidence_diagnostics:(l2.seed_results||[]).map(x=>({seed:x.seed,confidence_diagnostics:x.confidence_diagnostics})),per_seed_holder_retrieval:seedRows.map(x=>({seed:x.seed,holder_retrieval_accuracy:x.holder_retrieval_accuracy,held_query_accuracy:x.held_query_accuracy,fixed_location_accuracy:x.fixed_location_accuracy}))}},null,2);
-$("distributions").textContent=JSON.stringify({entity_vocabulary:r.entity_vocabulary,preprocessing:r.preprocessing,relation_metrics:relationMetrics,f0_companion:r.f0_companion},null,2);
-const failures=finalRows.filter(x=>!x.correct||x.holder_correct===false).slice(0,20);
-$("evidence").textContent=JSON.stringify(failures,null,2);
-$("spine-results").textContent="Full F0/SOE sidecar: "+JSON.stringify({stories:r.f0_companion?.stories_exercised,stability_checks:r.f0_companion?.stability_checks,stability_violations:r.f0_companion?.stability_violations,trace_records:r.f0_companion?.trace_records,learned_path_uses_F0_vectors:r.f0_companion?.learning_path_uses_f0_features},null,2);
-$("details").textContent=JSON.stringify({experiment:job.experiment,config:job.config,method:r.method,claim_boundary:r.claim_boundary,dataset:r.dataset,stages:{L0:stages.L0?.passed,L1:l1.status,L2:l2.status},duration_seconds:r.duration_seconds},null,2);
-const l=await api("/api/runs/"+id+"/logs");$("logs").textContent=l.stdout+"\n"+l.stderr;
-$("files").innerHTML=["summary.json","summary.md","per_example.csv","per_example.jsonl","manifest.json","config.json","experiment_lab_register.json"].map(f=>'<a href="/api/runs/'+id+'/files/'+f+'" target="_blank">'+f+'</a>').join(" · ");
-return;
+function fillTable(columns,rows){
+ const body=$("rows");body.replaceChildren();
+ for(const row of rows){const tr=document.createElement("tr");for(const column of columns){const td=document.createElement("td");td.textContent=row[column]??"—";tr.append(td)}body.append(tr)}
 }
-if(g1){
-$("accuracy").textContent=(100*(r.mean_accuracy??0)).toFixed(1)+"%";
-$("error").textContent=r.standard_error==null?"not applicable":(100*r.standard_error).toFixed(2)+" pp";
-$("stories").textContent=r.test_stories??"—";
-$("rows").innerHTML='<tr><td>G1 deterministic</td><td>'+r.correct+'</td><td>'+r.test_stories+'</td><td>'+(100*r.mean_accuracy).toFixed(1)+'%</td><td>'+(r.runtime?.stability_violations??"not recorded")+'</td></tr>';
-draw([{seed:"G1",accuracy:r.mean_accuracy}]);
-$("calibration").textContent="G1 is a deterministic symbolic diagnostic; it does not train learned weights. Wilson 95% CI: "+JSON.stringify(r.wilson_95_ci)+"\\nClaim boundary: "+r.claim_boundary;
-$("distributions").textContent=JSON.stringify({parse_coverage:r.parse_coverage,parsed_statements:r.parsed_statements,total_statements:r.total_statements,query_resolution_coverage:r.query_resolution_coverage,event_counts:r.event_counts,failure_counts:r.failure_counts,runtime:r.runtime},null,2);
-$("evidence").textContent="Per-example evidence is available in the run files below.";
-$("spine-results").textContent="F0/SOE stability checks: "+(r.runtime?.stability_checks??"—")+" · violations: "+(r.runtime?.stability_violations??"—")+" · trace records: "+(r.runtime?.trace_records??"—");
-$("details").textContent=JSON.stringify({experiment:job.experiment,config:job.config,method:r.method,learning_performed:r.learning_performed,claim_boundary:r.claim_boundary,dataset:r.dataset,runtime:r.runtime},null,2);
-$("logs").textContent=(await api("/api/runs/"+id+"/logs")).stdout+"\\n"+(await api("/api/runs/"+id+"/logs")).stderr;
-$("files").innerHTML=["summary.json","summary.md","per_example.csv","per_example.jsonl","manifest.json","config.json"].map(f=>'<a href="/api/runs/'+id+'/files/'+f+'" target="_blank">'+f+'</a>').join(" · ");
-return;
+function draw(points){
+ const svg=$("chart"),W=700,H=240,L=55,R=20,T=20,B=40;
+ svg.replaceChildren();
+ const make=(name,attrs,text)=>{const node=document.createElementNS("http://www.w3.org/2000/svg",name);for(const [key,value]of Object.entries(attrs))node.setAttribute(key,value);if(text!==undefined)node.textContent=text;svg.append(node);return node};
+ for(let i=0;i<=4;i++){const y=T+(H-T-B)*i/4;make("line",{x1:L,y1:y,x2:W-R,y2:y,stroke:"#e6e6e6"});make("text",{x:8,y:y+4,fill:"#666","font-size":12},`${100-25*i}%`)}
+ points.forEach((point,index)=>{const x=L+(W-L-R)*(points.length===1?.5:index/(points.length-1)),y=T+(H-T-B)*(1-point.accuracy);make("circle",{cx:x,cy:y,r:7,fill:point.color||"#b94f1c"});make("text",{x,y:y-13,"text-anchor":"middle",fill:"#252525","font-size":12},`${(100*point.accuracy).toFixed(1)}%`);make("text",{x,y:H-12,"text-anchor":"middle",fill:"#666","font-size":12},point.seed)})
 }
-$("accuracy").textContent=(100*r.mean_accuracy).toFixed(1)+"%";$("error").textContent=(100*(r.standard_error??r.se_accuracy??0)).toFixed(2)+" pp";$("stories").textContent=r.test_stories??(seeds[0]?.total??"—");$("rows").innerHTML=seeds.map(s=>'<tr><td>'+s.seed+'</td><td>'+s.correct+'</td><td>'+s.total+'</td><td>'+(100*s.accuracy).toFixed(1)+'%</td><td>'+(s.test_runtime?.stability_violations??"not recorded")+'</td></tr>').join("");draw(seeds);const diag=r.diagnostics||{};const cal=diag.calibration||{};const confidence=diag.confidence||{};$("calibration").textContent=JSON.stringify({expected_calibration_error:cal.expected_calibration_error,negative_log_likelihood:cal.negative_log_likelihood,multiclass_brier_score:cal.multiclass_brier_score,mean_confidence:confidence.mean,mean_confidence_on_errors:confidence.mean_on_errors,overconfident_error_count:confidence.overconfident_error_count,failure_categories:diag.failure_categories},null,2);$("distributions").textContent=JSON.stringify({target:diag.target_distribution,predicted:diag.predicted_distribution,per_class:diag.per_class,confusion_matrix:diag.confusion_matrix},null,2);const failures=seeds.flatMap(seed=>(seed.predictions||[]).filter(x=>!x.correct).map(x=>({seed:seed.seed,...x}))).slice(0,20);$("evidence").textContent=JSON.stringify(failures,null,2);const audits=seeds.map(s=>s.spine_exercise).filter(Boolean);$("spine-results").textContent=audits.length?audits.map(a=>"Seed "+a.seed+": "+a.status+" · phases "+Object.entries(a.phase_coverage||{}).filter(x=>x[1]).map(x=>x[0]).join(", ")+" · kernel unchanged "+a.maintenance?.kernel_unchanged+" · trace contiguous "+a.trace_store?.sample_is_contiguous+" · checkpoint restored "+a.checkpoint_restore?.snapshot_round_trip_equal+" · stability violations "+a.diagnostics?.stability_violations).join("\n"):"No F0 spine audit recorded for this run."; $("details").textContent=JSON.stringify({experiment:r.experiment||job.experiment,config:job.config,train_stories:r.train_stories,test_stories:r.test_stories,answer_count:r.answer_count,memory_config:r.memory_config,runtime_config:r.runtime_config,notes:r.notes},null,2);const l=await api("/api/runs/"+id+"/logs");$("logs").textContent=l.stdout+"\n"+l.stderr}catch(e){$("details").textContent=e.message}}
-function draw(seeds){const svg=$("chart");if(!seeds.length){svg.innerHTML="";return}const W=700,H=240,L=55,R=20,T=20,B=40;let html="";for(let i=0;i<=4;i++){let y=T+(H-T-B)*i/4;html+='<line x1="'+L+'" y1="'+y+'" x2="'+(W-R)+'" y2="'+y+'" stroke="#263550"/><text x="8" y="'+(y+4)+'" fill="#9aabc5" font-size="12">'+(100-25*i)+'%</text>'}seeds.forEach((s,i)=>{let x=L+(W-L-R)*(seeds.length===1?.5:i/(seeds.length-1));let y=T+(H-T-B)*(1-s.accuracy);html+='<circle cx="'+x+'" cy="'+y+'" r="7" fill="#70d6c4"/><text x="'+x+'" y="'+(y-13)+'" text-anchor="middle" fill="#edf3ff" font-size="12">'+(100*s.accuracy).toFixed(1)+'%</text><text x="'+x+'" y="'+(H-12)+'" text-anchor="middle" fill="#9aabc5" font-size="12">seed '+s.seed+'</text>'});svg.innerHTML=html}
-$("experiment").onchange=()=>{
-const exp=$("experiment").value,g1=exp==="g1",g1l=exp==="g1l",g2=exp==="g2",e0=exp==="e0";
-$("mode").value="isolated";$("mode").disabled=e0||g1||g1l||g2;$("spine").disabled=e0||g1||g1l||g2;$("g2-taskset-wrap").hidden=!g2;
-["seeds","epochs","learning-rate"].forEach(id=>$(id).closest("label").hidden=g1);
-$("seeds").closest("label").childNodes[0].textContent=g1l?"L2 confirmation seeds":"Seeds";
-["readout","feature-scale"].forEach(id=>$(id).closest("label").hidden=g1||g1l);
-["g1l-stage-wrap","train-limit-wrap","eval-limit-wrap"].forEach(id=>$(id).hidden=!g1l);
-$("task").disabled=g1||g1l||g2;$("task").closest("label").hidden=g1||g1l||g2;if(g1||g1l){$("task").value="2";$("task").closest("label").querySelector("select").title="G1/G1-L support QA2 only";}
-if(e0){$("spine").checked=false;}else if(exp==="ef0"){$("spine").checked=true;}
-};$("experiment").onchange();
-$("launch").onclick=async()=>{try{$("launch").disabled=true;$("status").textContent="Launching…";const j=await api("/api/runs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({experiment:$("experiment").value,task:+$("task").value,dim:+$("dim").value,seeds:+$("seeds").value,epochs:+$("epochs").value,mode:$("mode").value,readout:$("readout").value,learning_rate:+$("learning-rate").value,feature_scale:+$("feature-scale").value,exercise_spine:$("spine").checked,stage:$("g1l-stage").value,train_limit:+$("train-limit").value,eval_limit:+$("eval-limit").value,g2_tasks:$("g2-taskset").value})});selected=j.run_id;$("status").textContent="Running · "+j.run_id;await refresh();if(timer)clearInterval(timer);timer=setInterval(async()=>{try{await show(selected);const x=await api("/api/runs/"+selected);if(x.status!=="running"){clearInterval(timer);timer=null;$("launch").disabled=false;await refresh()}}catch(e){$("status").textContent=e.message}},2000)}catch(e){$("status").textContent=e.message;$("launch").disabled=false}};
-$("compare-button").onclick=async()=>{try{const ids=[...document.querySelectorAll(".compare-run:checked")].map(x=>x.value);if(ids.length<2||ids.length>5)throw Error("Select two to five runs.");const c=await api("/api/compare?ids="+encodeURIComponent(ids.join(",")));$("comparison").innerHTML='<div class="tablewrap"><table><thead><tr><th>Run</th><th>Experiment</th><th>Accuracy / split</th><th>Held-query</th><th>Holder retrieval</th><th>Fixed-location</th><th>G2 paired deltas</th><th>L1</th><th>L2</th></tr></thead><tbody>'+c.runs.map(x=>'<tr><td>'+x.run_id.slice(0,8)+'</td><td>'+x.experiment+'</td><td>'+(x.mean_accuracy==null?"—":(100*x.mean_accuracy).toFixed(1)+"%")+'</td><td>'+(x.held_query_accuracy==null?"—":(100*x.held_query_accuracy).toFixed(1)+"%")+'</td><td>'+(x.holder_retrieval_accuracy==null?"—":(100*x.holder_retrieval_accuracy).toFixed(1)+"%")+'</td><td>'+(x.fixed_location_accuracy==null?"—":(100*x.fixed_location_accuracy).toFixed(1)+"%")+'</td><td>'+(x.l1_status||"—")+'</td><td>'+(x.l2_status||"—")+'</td></tr>').join("")+'</tbody></table></div>'}catch(e){$("comparison").textContent=e.message}};
-refresh().catch(e=>$("dataset").textContent=e.message);
+function showFiles(id,names){
+ const root=$("files");root.replaceChildren();
+ names.forEach((name,index)=>{if(index)root.append(document.createTextNode(" · "));const link=document.createElement("a");link.href=`/api/runs/${id}/files/${name}`;link.target="_blank";link.rel="noopener";link.textContent=name;root.append(link)})
+}
+function setMetricLabels(a,b,c){$("accuracy-label").textContent=a;$("error-label").textContent=b;$("stories-label").textContent=c}
+function makeTable(columns,rows){
+ const table=document.createElement("table"),head=document.createElement("thead"),body=document.createElement("tbody"),header=document.createElement("tr");
+ for(const column of columns){const th=document.createElement("th");th.textContent=column.label;header.append(th)}
+ head.append(header);table.append(head,body);
+ for(const row of rows){const tr=document.createElement("tr");for(const column of columns){const td=document.createElement("td");const value=column.value?column.value(row):row[column.key];td.textContent=value==null?"—":String(value);tr.append(td)}body.append(tr)}
+ return table;
+}
+function addInsightSection(root,title,columns,rows,emptyMessage){
+ const heading=document.createElement("h3");heading.textContent=title;heading.className="section-title";root.append(heading);
+ if(!rows.length){const empty=document.createElement("p");empty.className="empty-state";empty.textContent=emptyMessage||"No evidence reported for this section.";root.append(empty);return}
+ const wrap=document.createElement("div");wrap.className="tablewrap";wrap.append(makeTable(columns,rows));root.append(wrap);
+}
+function addInsightCards(root,items){
+ const grid=document.createElement("div");grid.className="insight-grid";
+ for(const [label,value]of items){const card=document.createElement("div");card.className="insight-card";const small=document.createElement("small");small.textContent=label;const strong=document.createElement("strong");strong.textContent=value==null?"Not reported":String(value);card.append(small,strong);grid.append(card)}
+ root.append(grid);
+}
+function renderExamples(){
+ const filter=$("example-filter").value,search=$("example-search").value.trim().toLowerCase(),arm=$("example-arm").value;
+ const filtered=exampleRows.filter(row=>{
+  if(filter==="errors"&&row.correct!==false)return false;
+  if(filter==="correct"&&row.correct!==true)return false;
+  if(arm!=="all"&&row.arm!==arm)return false;
+  return !search||row.searchText.includes(search);
+ });
+ const pageCount=Math.max(1,Math.ceil(filtered.length/EXAMPLES_PER_PAGE));examplePage=Math.min(examplePage,pageCount-1);
+ const pageRows=filtered.slice(examplePage*EXAMPLES_PER_PAGE,(examplePage+1)*EXAMPLES_PER_PAGE);
+ $("example-summary").textContent=`Showing ${filtered.length?examplePage*EXAMPLES_PER_PAGE+1:0}–${Math.min((examplePage+1)*EXAMPLES_PER_PAGE,filtered.length)} of ${filtered.length} matching examples (${exampleRows.length} total).`;
+ $("examples-page").textContent=`Page ${examplePage+1} of ${pageCount}`;
+ $("examples-previous").disabled=examplePage===0;$("examples-next").disabled=examplePage>=pageCount-1;
+ const header=$("examples-head"),body=$("examples-body");header.replaceChildren();body.replaceChildren();
+ const rowHead=document.createElement("tr");for(const label of ["Seed / arm","Example","Question","Expected","Predicted","Outcome","Evidence"]){const th=document.createElement("th");th.textContent=label;rowHead.append(th)}header.append(rowHead);
+ for(const row of pageRows){
+  const tr=document.createElement("tr");
+  for(const value of [row.arm||"—",row.example??"—",row.question||"—",row.target||"—",row.prediction||"—",row.correct===true?"Correct":row.correct===false?"Incorrect":"Failed / unresolved"]){const td=document.createElement("td");td.textContent=String(value);tr.append(td)}
+  const evidence=document.createElement("td"),details=document.createElement("details"),summary=document.createElement("summary"),pre=document.createElement("pre");
+  details.className="example-detail";summary.textContent="Inspect evidence";pre.textContent=JSON.stringify(row.evidence,null,2);details.append(summary,pre);evidence.append(details);tr.append(evidence);body.append(tr)
+ }
+ if(!pageRows.length){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=7;td.textContent="No examples match these filters.";tr.append(td);body.append(tr)}
+}
+function setExamples(rows){
+ exampleRows=rows.map(row=>({...row,searchText:[row.arm,row.example,row.task,row.question,row.target,row.prediction].join(" ").toLowerCase()}));examplePage=0;
+ const selector=$("example-arm"),arms=[...new Set(rows.map(row=>row.arm).filter(Boolean))];selector.replaceChildren();
+ const all=document.createElement("option");all.value="all";all.textContent="All seeds and arms";selector.append(all);
+ for(const value of arms){const option=document.createElement("option");option.value=value;option.textContent=value;selector.append(option)}
+ renderExamples();
+}
+function formatPercent(value,digits=1){return value==null?"—":`${(100*value).toFixed(digits)}%`}
+function renderConfusionMatrix(diagnostics){
+ if(!diagnostics?.confusion_matrix)return [];
+ const labels=Object.keys(diagnostics.confusion_matrix);
+ return labels.map(label=>({label,...diagnostics.confusion_matrix[label]}));
+}
+async function refresh(){
+ const history=await api("/api/runs"),root=$("history");root.replaceChildren();
+ if(!history.runs.length){root.textContent="No saved runs yet.";return}
+ for(const run of history.runs){
+  const card=document.createElement("div");card.className="run"+(run.run_id===selected?" selected":"");
+  const row=document.createElement("div");row.style.cssText="display:flex;flex-wrap:wrap;gap:10px;align-items:center";
+  const checkbox=document.createElement("input");checkbox.type="checkbox";checkbox.className="compare-run";checkbox.value=run.run_id;checkbox.setAttribute("aria-label",`Select ${run.experiment} for comparison`);checkbox.style.width="auto";checkbox.addEventListener("click",event=>event.stopPropagation());
+  const open=document.createElement("button");open.type="button";open.textContent="Open";open.addEventListener("click",()=>show(run.run_id));
+  const remove=document.createElement("button");remove.type="button";remove.className="danger-button";remove.textContent="Delete";remove.setAttribute("aria-label",`Delete ${run.experiment} run ${run.run_id.slice(0,8)}`);remove.addEventListener("click",async()=>{
+   if(!window.confirm(`Permanently delete this ${run.experiment} run and its saved result files?`))return;
+   try{await api(`/api/runs/${run.run_id}`,{method:"DELETE"});if(selected===run.run_id){selected=null;$("results").hidden=true;$("empty").hidden=false}await refresh()}
+   catch(error){$("status").textContent=`Could not delete run: ${error.message}`;$("status").classList.add("warning")}
+  });
+  const summary=document.createElement("span");summary.style.flex="1";const config=run.config||{},dataset=config.dataset?.name||"legacy dataset";const task=config.tasks?`QA${config.tasks.join(" + QA")}`:`QA${config.task??"?"}`;
+  summary.textContent=`${experimentNames[run.experiment]||run.experiment} · ${task} · ${dataset} · ${run.status}`;
+  const timestamp=document.createElement("small");timestamp.textContent=run.created_at||"";
+  row.append(checkbox,open,remove,summary);card.append(row,timestamp);root.append(card)
+ }
+}
+async function show(id){
+ selected=id;navigate("results");if(location.hash!=="#results")location.hash="results";
+ const job=await api("/api/runs/"+id),result=await api("/api/runs/"+id+"/results");
+ $("empty").hidden=true;$("results").hidden=false;$("status").textContent=job.status+" · "+id;
+ $("claim-boundary").hidden=!result.claim_boundary;$("claim-boundary").textContent=result.claim_boundary||"";
+ if(job.status==="running"){$("logs").textContent=(await api("/api/runs/"+id+"/logs")).stdout;return}
+ if(result.pending){$("details").textContent="Result file not ready.";return}
+ const exp=job.experiment,config=job.config||{},points=[],outcomeRows=[],insights=$("experiment-insights");
+ insights.replaceChildren();let examples=[];
+ if(exp==="g2"){
+  const taskRows=Object.entries(result.tasks||{}),all=[],confidenceRows=[],pairedRows=[],fixtureResults=result.fixture_control?.results||[];
+  $("accuracy-label").textContent="Descriptive mean across benchmark cells";
+  $("error-label").textContent="Paired E-F0 − E0 effects by task";
+  $("stories-label").textContent="Held-out examples per task";
+  for(const [task,entry]of taskRows){
+   const effect=entry.paired_accuracy_difference_ef0_minus_e0||{};
+   pairedRows.push({task:`QA${task} · ${entry.task_label||""}`,stories:entry.evaluation_stories,e0:formatPercent(entry.arms?.e0?.mean_accuracy_over_seeds),ef0:formatPercent(entry.arms?.ef0?.mean_accuracy_over_seeds),delta:effect.mean==null?"—":`${(100*effect.mean).toFixed(2)} pp`,interval:(effect.ci95_two_sided_t||[]).map(value=>(100*value).toFixed(2)).join(" to ")+" pp",p:effect.exact_two_sided_sign_test_p?.toFixed(3)??"—",holm:effect.holm_adjusted_exact_sign_test_p?.toFixed(3)??"—"});
+   for(const armName of ["e0","ef0"]){
+    const arm=entry.arms?.[armName]||{};
+    const confidence=arm.confidence_summary||{};
+    confidenceRows.push({task:`QA${task}`,arm:armName.toUpperCase(),ece:formatPercent(confidence.mean_fixed_bin_top_label_ece_over_seeds,2),adaptive:formatPercent(confidence.mean_adaptive_top_label_ece_over_seeds,2),nll:confidence.mean_nll_over_seeds?.toFixed(3)??"—",brier:confidence.mean_brier_over_seeds?.toFixed(3)??"—",aurc:confidence.mean_aurc_over_seeds?.toFixed(3)??"—"});
+    for(const seed of arm.seed_results||[]){
+     const label=`QA${task} ${armName.toUpperCase()} seed ${seed.seed}`;
+     outcomeRows.push({seed:label,correct:seed.correct,total:seed.total,accuracy:formatPercent(seed.accuracy),audit:(seed.confidence_quality_flags||[]).join(", ")||"No confidence warning"});
+     points.push({seed:label,accuracy:seed.accuracy,color:armName==="e0"?"#a8aaad":"#b94f1c"});all.push(seed.accuracy);
+     examples.push(...(seed.predictions||[]).map((row,index)=>({arm:label,example:row.example_index??index,task:`QA${task}`,question:row.question,target:row.target,prediction:row.prediction,correct:row.correct,evidence:row})));
+    }
+   }
+  }
+  $("accuracy").textContent=all.length?formatPercent(all.reduce((a,b)=>a+b,0)/all.length):"—";
+  $("error").textContent=pairedRows.map(row=>`${row.task}: Δ ${row.delta}; CI ${row.interval}; Holm p=${row.holm}`).join("\n");
+  $("stories").textContent=taskRows.map(([task,entry])=>`QA${task}: ${entry.evaluation_stories}`).join(" · ");$("chart-legend").textContent="E0 · silver    E-F0 · deep orange";
+  fillTable(["seed","correct","total","accuracy","audit"],outcomeRows);draw(points);
+  addInsightCards(insights,[["Fixture checks",`${result.fixture_control?.passed??0}/${result.fixture_control?.total??0} passed`],["QA3/QA5 coverage",result.acceptance?.qa3_qa5_benchmark_coverage?.passed?"Complete":"Incomplete"],["Seed/example pairing",result.acceptance?.matched_seed_and_example_controls?.passed?"Verified":"Not verified"],["Confidence evidence",result.acceptance?.confidence_evidence?.passed?"Complete":"Incomplete"]]);
+  addInsightSection(insights,"Paired benchmark effects",[{label:"Task",key:"task"},{label:"Stories",key:"stories"},{label:"E0 mean",key:"e0"},{label:"E-F0 mean",key:"ef0"},{label:"Paired Δ",key:"delta"},{label:"95% seed interval",key:"interval"},{label:"Exact p",key:"p"},{label:"Holm p",key:"holm"}],pairedRows);
+  addInsightSection(insights,"Confidence by task and arm",[{label:"Task",key:"task"},{label:"Arm",key:"arm"},{label:"Fixed-bin ECE",key:"ece"},{label:"Adaptive ECE",key:"adaptive"},{label:"NLL",key:"nll"},{label:"Brier",key:"brier"},{label:"AURC",key:"aurc"}],confidenceRows);
+  addInsightSection(insights,"Semantic fixture failures",[{label:"Fixture",key:"fixture_id"},{label:"Category",key:"category"},{label:"Expected location",key:"expected_location"},{label:"Actual location",key:"actual_location"},{label:"Status",value:row=>row.passed?"Passed":"Failed"}],fixtureResults.filter(row=>!row.passed),`All ${result.fixture_control?.total??fixtureResults.length} structured semantic fixtures passed.`);
+  const audits=taskRows.flatMap(([task,entry])=>(entry.arms?.ef0?.seed_results||[]).map(seed=>({task:`QA${task}`,seed:seed.seed,status:seed.spine_exercise?.status||"missing",stability:seed.spine_exercise?.diagnostics?.stability_violations??"—"})));
+  addInsightSection(insights,"F0 spine audits",[{label:"Task",key:"task"},{label:"Seed",key:"seed"},{label:"Audit",key:"status"},{label:"Stability violations",key:"stability"}],audits);
+  $("calibration").textContent=JSON.stringify(confidenceRows,null,2);$("distributions").textContent=JSON.stringify({fixture_control:result.fixture_control,acceptance:result.acceptance,claim_boundary:result.claim_boundary},null,2);$("spine-results").textContent="Fixtures are structured semantic controls, not model predictions. G2 intervals and p-values measure seed-level paired effects and are reported separately from story-bootstrap confidence metrics.";
+  showFiles(id,["summary.json","summary.md","per_seed_metrics.csv","fixtures.jsonl","per_example.csv","per_example.jsonl","manifest.json","config.json","experiment_lab_register.json"]);
+ }else if(exp==="g1l"){
+  const stages=result.stages||{},l0=stages.L0||{},l1=stages.L1||{},l2=stages.L2||{},pilot=l1.validation_after_training||{},confirmed=l2.status==="completed",seedResults=confirmed?(l2.seed_results||[]):[];
+  const accuracy=confirmed?l2.mean_accuracy:pilot.accuracy;
+  setMetricLabels(confirmed?"L2 held-out test accuracy":"L1 validation accuracy",confirmed?"Across confirmation seeds":"Pilot only · no inferential estimate",confirmed?"Test examples per seed":"Validation stories");
+  $("accuracy").textContent=formatPercent(accuracy);$("error").textContent=confirmed?`${(100*(l2.standard_error||0)).toFixed(2)} pp`:"Not estimated for one-seed pilot";$("stories").textContent=confirmed?`${seedResults[0]?.total??"—"} × ${seedResults.length} seeds`:String(pilot.total??"—");
+  const outcomeRows=confirmed?seedResults.map(seed=>({seed:`Seed ${seed.seed}`,correct:seed.correct,total:seed.total,accuracy:formatPercent(seed.accuracy),audit:seed.holder_retrieval_accuracy==null?"—":`holder retrieval ${formatPercent(seed.holder_retrieval_accuracy)}`})):[{seed:"L1 validation",correct:pilot.correct,total:pilot.total,accuracy:formatPercent(accuracy),audit:pilot.holder_retrieval_accuracy==null?"—":`holder retrieval ${formatPercent(pilot.holder_retrieval_accuracy)}`}];
+  fillTable(["seed","correct","total","accuracy","audit"],outcomeRows);draw(outcomeRows.map(row=>({seed:row.seed,accuracy:accuracy||0})));$("chart-legend").textContent="Validation pilot or confirmation seed outcomes · deep orange";
+  addInsightCards(insights,[["L0 mechanism checks",l0.passed?"Passed":"Failed"],["L1 pilot",l1.status||"Not reported"],["L1 validation before",formatPercent(l1.validation_before_training?.accuracy)],["L1 validation after",formatPercent(pilot.accuracy)],["L1 holder retrieval",formatPercent(pilot.holder_retrieval_accuracy)],["L2 confirmation",l2.status||"Not reported"]]);
+  addInsightSection(insights,"Stage and gate details",[{label:"Stage",key:"stage"},{label:"Status",key:"status"},{label:"Evidence",key:"evidence"}],[{stage:"L0",status:l0.passed?"Passed":"Failed",evidence:JSON.stringify(l0.checks||{})},{stage:"L1",status:l1.status||"Not reported",evidence:`Gate ${l1.gate_passed?"passed":"not passed"}; ${l1.reason||"validation pilot"}`},{stage:"L2",status:l2.status||"Not reported",evidence:l2.reason||"Confirmation completed"}]);
+  const relationRows=Object.entries(confirmed?{held_query:l2.mean_held_query_accuracy,fixed_location:l2.mean_fixed_location_accuracy,holder_retrieval:l2.mean_holder_retrieval_accuracy}:pilot.relation_metrics||{}).map(([relation,value])=>({relation,accuracy:typeof value==="number"?formatPercent(value):value?.accuracy==null?"—":formatPercent(value.accuracy),correct:value?.correct??"—",total:value?.total??"—"}));
+  addInsightSection(insights,"Relational retrieval",[{label:"Relation",key:"relation"},{label:"Accuracy",key:"accuracy"},{label:"Correct",key:"correct"},{label:"Total",key:"total"}],relationRows);
+  const training=l1.training||{};addInsightSection(insights,"Training progress",[{label:"Epoch",key:"epoch"},{label:"Mean loss",key:"loss"}],(training.epoch_mean_losses||[]).map((loss,index)=>({epoch:index+1,loss:Number(loss).toFixed(5)})));
+  const g1lRows=confirmed?(l2.per_example||[]).map(row=>({arm:`Seed ${row.seed??"—"}`,example:row.example_index,question:row.question,target:row.target,prediction:row.prediction,correct:row.correct,evidence:row})): (l1.validation_predictions||[]).map(row=>({arm:"L1 validation",example:row.example_index,question:row.question,target:row.target,prediction:row.prediction,correct:row.correct,evidence:row}));
+  examples=g1lRows; $("calibration").textContent=JSON.stringify({L1:l1.validation_confidence_diagnostics,L2:seedResults.map(seed=>({seed:seed.seed,diagnostics:seed.confidence_diagnostics}))},null,2);$("distributions").textContent=JSON.stringify({relation_metrics:relationRows,f0_companion:result.f0_companion,claim_boundary:result.claim_boundary},null,2);$("spine-results").textContent="F0 companion is a fixed audit; learned G1-L path does not consume F0 hidden-state vectors.";
+  showFiles(id,["summary.json","summary.md","per_example.csv","per_example.jsonl","manifest.json","config.json","experiment_lab_register.json"]);
+ }else{
+  const seeds=result.seed_results||[],g1=exp==="g1",accuracy=result.mean_accuracy??result.accuracy;
+  setMetricLabels(g1?"Deterministic QA2 diagnostic accuracy":"Mean learned-model accuracy",g1?"Wilson interval; no training seeds":`${seeds.length} seed(s)`,`${result.evaluation_stories??result.test_stories??seeds[0]?.total??"—"} ${config.evaluation_split||"test"} examples`);
+  $("accuracy").textContent=formatPercent(accuracy);$("error").textContent=g1?(result.wilson_95_ci||[]).map(value=>formatPercent(value,2)).join(" to "):`${(100*(result.standard_error??result.se_accuracy??0)).toFixed(2)} pp`;$("stories").textContent=String(result.evaluation_stories??result.test_stories??seeds[0]?.total??"—");
+  const outcomeRows=g1?[{seed:"Deterministic G1",correct:result.correct,total:result.test_stories,accuracy:formatPercent(accuracy),audit:`parse ${formatPercent(result.parse_coverage)}; resolution ${formatPercent(result.query_resolution_coverage)}`}]:seeds.map(seed=>({seed:`Seed ${seed.seed}`,correct:seed.correct,total:seed.total,accuracy:formatPercent(seed.accuracy),audit:`stability violations ${seed.test_runtime?.stability_violations??"—"}`}));
+  fillTable(["seed","correct","total","accuracy","audit"],outcomeRows);draw(g1?[{seed:"G1 diagnostic",accuracy:accuracy||0,color:"#a8aaad"}]:seeds.map(seed=>({seed:`Seed ${seed.seed}`,accuracy:seed.accuracy})));$("chart-legend").textContent=g1?"Deterministic diagnostic · silver":"Seed outcomes · deep orange";
+  if(g1){
+   addInsightCards(insights,[["Statement parse coverage",formatPercent(result.parse_coverage)],["Query resolution",formatPercent(result.query_resolution_coverage)],["F0 runtime steps",result.runtime?.step_count??"—"],["Stability checks",result.runtime?.stability_checks??"—"],["Stability violations",result.runtime?.stability_violations??"—"]]);
+   addInsightSection(insights,"Relational event counts",[{label:"Moves",key:"moves"},{label:"Pickups",key:"pickups"},{label:"Releases",key:"releases"},{label:"Actors",key:"actors_seen"},{label:"Objects",key:"objects_seen"}],[result.event_counts||{}]);
+   addInsightSection(insights,"Failure categories",[{label:"Category",key:"category"},{label:"Examples",key:"count"}],Object.entries(result.failure_counts||{}).map(([category,count])=>({category,count})));
+   examples=(result.per_example||[]).map(row=>({arm:"Deterministic G1",example:row.example_index,question:row.question,target:row.target,prediction:row.prediction,correct:row.correct,evidence:row}));
+   $("calibration").textContent="G1 is a deterministic symbolic control, not trained-model accuracy. Wilson interval: "+JSON.stringify(result.wilson_95_ci);
+  }else{
+   const allTraining=seeds.flatMap(seed=>(seed.training?.epoch_mean_loss||[]).map((loss,index)=>({seed:seed.seed,epoch:index+1,loss:Number(loss).toFixed(5)})));
+   addInsightSection(insights,"Training loss by seed and epoch",[{label:"Seed",key:"seed"},{label:"Epoch",key:"epoch"},{label:"Mean loss",key:"loss"}],allTraining);
+   const diagnostics=result.diagnostics||{},classRows=Object.entries(diagnostics.per_class||{}).map(([label,score])=>({label,support:score.support,precision:formatPercent(score.precision),recall:formatPercent(score.recall),f1:formatPercent(score.f1)}));
+   addInsightSection(insights,"Per-class performance",[{label:"Answer",key:"label"},{label:"Support",key:"support"},{label:"Precision",key:"precision"},{label:"Recall",key:"recall"},{label:"F1",key:"f1"}],classRows);
+   addInsightSection(insights,"Confusion matrix · actual rows, predicted columns",[{label:"Actual / predicted",key:"label"},...Object.keys(diagnostics.confusion_matrix||{}).map(label=>({label,key:label}))],renderConfusionMatrix(diagnostics));
+   addInsightSection(insights,"Training diagnostics",[{label:"Seed",key:"seed"},{label:"Initial loss",key:"initial"},{label:"Final loss",key:"final"},{label:"Loss decreased",key:"decreased"},{label:"Stability violations",key:"stability"}],seeds.map(seed=>({seed:seed.seed,initial:seed.training?.initial_loss?.toFixed(5)??"—",final:seed.training?.final_loss?.toFixed(5)??"—",decreased:seed.training?.final_to_initial_ratio==null?"—":seed.training.final_to_initial_ratio<1?"Yes":"No",stability:seed.test_runtime?.stability_violations??"Not reported"})));
+   examples=seeds.flatMap(seed=>(seed.predictions||[]).map(row=>({arm:`Seed ${seed.seed}`,example:row.story_index,question:row.question,target:row.target,prediction:row.prediction,correct:row.correct,evidence:row})));
+   $("calibration").textContent=JSON.stringify({confidence:diagnostics.confidence,calibration:diagnostics.calibration,failure_categories:diagnostics.failure_categories},null,2);
+  }
+  $("distributions").textContent=JSON.stringify(g1?{parse_coverage:result.parse_coverage,query_resolution_coverage:result.query_resolution_coverage,event_counts:result.event_counts,runtime:result.runtime}: {target_distribution:result.diagnostics?.target_distribution,predicted_distribution:result.diagnostics?.predicted_distribution,per_class:result.diagnostics?.per_class,confusion_matrix:result.diagnostics?.confusion_matrix},null,2);
+  $("spine-results").textContent=g1?`F0 runtime stability checks: ${result.runtime?.stability_checks??"—"}; violations: ${result.runtime?.stability_violations??"—"}`:seeds.map(seed=>`Seed ${seed.seed}: ${seed.spine_exercise?.status||"no component audit"}; stability violations ${seed.test_runtime?.stability_violations??"—"}`).join("\n");
+  showFiles(id,g1?["summary.json","summary.md","per_example.csv","per_example.jsonl","manifest.json","config.json"]:["summary.json","per_example.csv","manifest.json","config.json"]);
+ }
+ $("details").textContent=JSON.stringify({experiment:exp,config,dataset:result.dataset,claim_boundary:result.claim_boundary,acceptance:result.acceptance},null,2);
+ $("logs").textContent=(await api("/api/runs/"+id+"/logs")).stdout+"\n"+(await api("/api/runs/"+id+"/logs")).stderr;
+ setExamples(examples);await refresh();
+}
+function renderComparison(comparison){
+ const root=$("comparison");root.replaceChildren();
+ const note=document.createElement("p");note.className="status";note.textContent=comparison.pairwise.length?comparison.pairwise.map(pair=>`${pair.left_run_id.slice(0,8)} vs ${pair.right_run_id.slice(0,8)}: ${pair.matched_ef0_pair?"MATCHED E0/E-F0":"Descriptive only"} · ${pair.interpretation}`).join("\n"):"No pairwise comparison available.";root.append(note);
+ const table=document.createElement("table"),head=document.createElement("thead"),body=document.createElement("tbody"),header=document.createElement("tr");
+ ["Run","Experiment","Dataset","Task / stage","Evaluation split","Score meaning","Accuracy","Uncertainty"].forEach(label=>{const th=document.createElement("th");th.textContent=label;header.append(th)});head.append(header);table.append(head,body);
+ for(const run of comparison.runs){const row=document.createElement("tr"),config=run;const values=[run.run_id.slice(0,8),run.experiment,run.dataset?.name||"legacy",run.tasks?`QA${run.tasks.join(" + QA")}`:`QA${run.task??"—"}${run.stage?" · "+run.stage:""}`,run.evaluation_split,run.claim_type,run.accuracy==null?"—":`${(100*run.accuracy).toFixed(1)}%`,run.uncertainty==null?"not estimated":`${(100*run.uncertainty).toFixed(2)} pp`];for(const value of values){const td=document.createElement("td");td.textContent=value;row.append(td)}body.append(row)}
+ root.append(table);
+ for(const pair of comparison.pairwise){const line=document.createElement("p");line.className="status";const paired=pair.paired_seed_comparison;line.textContent=`${pair.left_run_id.slice(0,8)} vs ${pair.right_run_id.slice(0,8)}: ${paired.comparable?`descriptive paired E0/E-F0 seed delta ${(100*paired.mean_delta).toFixed(2)} pp across ${paired.seed_differences.length} seeds; no significance test`:`not paired · ${paired.reason}`}`;root.append(line)}
+ for(const run of comparison.runs){if(!Object.keys(run.g2_paired_results||{}).length)continue;const heading=document.createElement("h3");heading.textContent=`${run.run_id.slice(0,8)} · G2 internal paired arm effects`;root.append(heading);for(const [task,effect]of Object.entries(run.g2_paired_results)){const line=document.createElement("p");const percent=value=>value==null?"not reported":`${(100*value).toFixed(1)}%`;const points=value=>value==null?"not reported":`${(100*value).toFixed(2)} pp`;line.textContent=`QA${task}: E0 ${percent(effect.e0_mean_accuracy)}, E-F0 ${percent(effect.ef0_mean_accuracy)}, paired Δ ${points(effect.paired_delta)}, Holm-adjusted p=${effect.holm_adjusted_p==null?"not reported":effect.holm_adjusted_p.toFixed(3)}`;root.append(line)}}
+}
+function launchPayload(){
+ const exp=$("experiment").value,payload={experiment:exp,dataset_profile:$("dataset-profile").value,dim:+$("dim").value};
+ if(["e0","ef0"].includes(exp))Object.assign(payload,{task:+$("task").value,seeds:+$("seeds").value,epochs:+$("epochs").value,learning_rate:+$("learning-rate").value,feature_scale:+$("feature-scale").value,readout:$("readout").value,eval_split:$("eval-split").value,mode:$("mode").value,quick:$("quick").checked,exercise_spine:$("spine").checked});
+ else if(exp==="g1")Object.assign(payload,{task:2,quick:$("quick").checked});
+ else if(exp==="g1l")Object.assign(payload,{task:2,stage:$("g1l-stage").value,epochs:+$("epochs").value,learning_rate:+$("learning-rate").value,train_limit:+$("train-limit").value,eval_limit:+$("eval-limit").value,confirmation_seeds:+$("confirmation-seeds").value});
+ else Object.assign(payload,{tasks:$("g2-taskset").value,seeds:+$("seeds").value,epochs:+$("epochs").value,learning_rate:+$("learning-rate").value,feature_scale:+$("feature-scale").value,readout:$("readout").value,eval_split:$("eval-split").value,bootstrap_samples:+$("bootstrap-samples").value});
+ return payload
+}
+async function initialize(){
+ const [experiments,datasets]=await Promise.all([api("/api/experiments"),api("/api/datasets")]);catalogue=experiments.experiments;profiles=datasets.profiles;
+ $("experiment").replaceChildren(...catalogue.map(item=>{const option=document.createElement("option");option.value=item.id;option.textContent=item.name;return option}));
+ $("dataset-profile").replaceChildren(...profiles.map(item=>{const option=document.createElement("option");option.value=item.id;option.textContent=item.name;return option}));renderDatasetProfiles();
+ $("experiment").value="ef0";$("experiment").addEventListener("change",()=>{setDefaults();updateControls()});
+ $("dataset-profile").addEventListener("change",updateDatasetStatus);$("eval-split").addEventListener("change",updateDatasetStatus);
+ $("g1l-stage").addEventListener("change",updateControls);
+ $("quick").addEventListener("change",()=>{const defaults=currentExperiment()?.defaults;if(defaults?.epochs)setValue("epochs",$("quick").checked?2:defaults.epochs);updateControls()});
+ window.addEventListener("hashchange",()=>navigate(location.hash.slice(1)));
+ document.querySelectorAll("[data-page]").forEach(link=>link.addEventListener("click",()=>navigate(link.dataset.page)));
+ setDefaults();updateControls();await refresh();
+ navigate(location.hash.slice(1)||"experiment");
+}
+$("launch").addEventListener("click",async()=>{try{$("launch").disabled=true;$("status").textContent="Launching…";const job=await api("/api/runs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(launchPayload())});selected=job.run_id;$("status").textContent="Running · "+job.run_id;await refresh();if(timer)clearInterval(timer);timer=setInterval(async()=>{try{await show(selected);const current=await api("/api/runs/"+selected);if(current.status!=="running"){clearInterval(timer);timer=null;updateDatasetStatus()}}catch(error){$("status").textContent=error.message}},2000)}catch(error){$("status").textContent=error.message;updateDatasetStatus()}});
+$("compare-button").addEventListener("click",async()=>{try{const ids=[...document.querySelectorAll(".compare-run:checked")].map(input=>input.value);if(ids.length<2||ids.length>5)throw Error("Select two to five runs.");renderComparison(await api("/api/compare?ids="+encodeURIComponent(ids.join(","))))}catch(error){$("comparison").textContent=error.message}});
+$("example-search").addEventListener("input",()=>{examplePage=0;renderExamples()});
+$("example-filter").addEventListener("change",()=>{examplePage=0;renderExamples()});
+$("example-arm").addEventListener("change",()=>{examplePage=0;renderExamples()});
+$("examples-previous").addEventListener("click",()=>{examplePage=Math.max(0,examplePage-1);renderExamples()});
+$("examples-next").addEventListener("click",()=>{examplePage+=1;renderExamples()});
+initialize().catch(error=>{$("dataset").textContent=error.message;$("dataset").classList.add("warning");$("launch").disabled=true});
 </script></body></html>

@@ -1,3 +1,7 @@
+ we can delete  for selected runs   and other details that we have seen matter in analysing the results in the graphics
+
+
+
 
 Physics-grounded memory-kernel tooling and runtime infrastructure for Aberconics / HierAberConic-D2C experiments.
 
@@ -168,3 +172,60 @@ PYTHONPATH=code/python python -m d2c.experiments.babi_f0 --quick
 
 The downloader validates all JSONL splits and reuses valid files unless
 `--force` is supplied.
+
+## Experiment Lab
+
+The local-first browser Lab runs the registered Python experiments without
+requiring a C++ build. From the repository root, install the Python
+dependencies and download the bAbI splits if they are not already present.
+
+### Windows PowerShell
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+$env:PYTHONPATH = "code\python"
+.\.venv\Scripts\python.exe -m d2c.digital.download_babi
+.\.venv\Scripts\python.exe -m d2c.experiment_lab.server
+```
+
+### Linux
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+export PYTHONPATH=code/python
+python -m d2c.digital.download_babi
+python -m d2c.experiment_lab.server
+```
+
+Open <http://127.0.0.1:8765> while the server is running. Stop it with
+Ctrl+C. To use another local port, set `D2C_LAB_PORT` before starting the
+server (`$env:D2C_LAB_PORT = "8766"` in PowerShell or
+`D2C_LAB_PORT=8766 python -m d2c.experiment_lab.server` on Linux).
+
+The Lab has separate **Configure experiment**, **Results & compare**, and
+**Datasets & protocols** pages. Choose an experiment and a registered dataset
+profile, adjust the settings shown for that protocol, and launch. Use the
+**Smoke test** option for a fast 20-story check (E0/E-F0 use two epochs); it is
+diagnostic only, not benchmark evidence. Test evaluation is the default locked evaluation;
+validation is explicitly exploratory. Saved runs, manifests, logs, hashes,
+and result bundles are written to `runs/experiment-lab/`.
+
+The Results page presents experiment-specific findings, readable metric and
+stage summaries, and searchable/filterable per-example evidence with paging.
+Expand the raw result and log sections when needed. Use **Delete** beside a
+saved run to permanently remove its run record and files; running experiments
+cannot be deleted.
+
+Dataset profiles are maintained in
+[`code/python/d2c/experiment_lab/dataset_profiles.json`](code/python/d2c/experiment_lab/dataset_profiles.json).
+Add each local profile with a unique ID, a repository-relative directory, and
+the expected filenames `babi_train.jsonl`, `babi_valid.jsonl`, and
+`babi_test.jsonl`. The Lab rejects unregistered profiles and directories
+outside the repository and records hashes for available splits. See
+[`docs/EXPERIMENT_LAB_PLAN.md`](docs/EXPERIMENT_LAB_PLAN.md) for profile,
+protocol-default, and comparison details.

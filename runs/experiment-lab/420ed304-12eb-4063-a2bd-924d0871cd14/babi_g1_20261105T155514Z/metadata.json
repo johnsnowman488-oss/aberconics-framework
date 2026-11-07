@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "run_id": "babi_g1_20261105T155514Z",
+  "experiment": "babi_g1_explicit_relational_state",
+  "created_at": "2026-11-05T15:55:15.484714+00:00",
+  "completed_at": "2026-11-05T15:55:15.484714+00:00",
+  "status": "completed",
+  "exit_code": 0,
+  "code_revision": null,
+  "configuration": {
+    "task": 2,
+    "dim": 64,
+    "variant": "full",
+    "trace_capacity": 20000,
+    "mode": "isolated",
+    "readout": "relational_state_resolution",
+    "training_epochs": 0,
+    "seed": null
+  },
+  "dataset": {
+    "train_stories": 900,
+    "test_stories": 1000,
+    "train_sha256": "faa5d639178ff7a6a082e6766918949b3a154cc567c5b7c903389ff6e11232a6",
+    "test_sha256": "775f4a74059f24fc0f62750ab12cb80e5a9ecbb63f8f44d6d629b2958d19c84c",
+    "task": 2
+  },
+  "result_files": [
+    "summary.json",
+    "summary.md",
+    "per_example.csv",
+    "per_example.jsonl"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "profiles": [
+    {
+      "id": "babi_canonical",
+      "name": "bAbI canonical (Hugging Face mirror)",
+      "directory": "code/python/d2c/progress/babi_data",
+      "splits": {
+        "train": "babi_train.jsonl",
+        "valid": "babi_valid.jsonl",
+        "test": "babi_test.jsonl"
+      }
+    }
+  ]
+}

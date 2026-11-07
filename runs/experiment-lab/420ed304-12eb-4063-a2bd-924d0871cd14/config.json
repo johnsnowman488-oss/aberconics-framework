@@ -1,0 +1,31 @@
+{
+  "experiment": "g1",
+  "dataset": {
+    "id": "babi_canonical",
+    "name": "bAbI canonical (Hugging Face mirror)",
+    "directory": "code/python/d2c/progress/babi_data"
+  },
+  "dataset_fingerprints": {
+    "train": {
+      "sha256": "faa5d639178ff7a6a082e6766918949b3a154cc567c5b7c903389ff6e11232a6",
+      "bytes": 6996625
+    },
+    "valid": {
+      "sha256": "259236ebfb13ce337bde221e90777e98ea7258e5e08a80d130ccd3ab00159952",
+      "bytes": 769568
+    },
+    "test": {
+      "sha256": "775f4a74059f24fc0f62750ab12cb80e5a9ecbb63f8f44d6d629b2958d19c84c",
+      "bytes": 7791502
+    }
+  },
+  "task": 2,
+  "tasks": null,
+  "dim": 64,
+  "mode": "isolated",
+  "variant": "full",
+  "evaluation_split": "test",
+  "learning_performed": false,
+  "readout": "relational_state_resolution",
+  "quick": false
+}
