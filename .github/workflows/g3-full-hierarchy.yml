@@ -13,6 +13,7 @@ on:
       - "code/python/tests/test_babi_g3.py"
       - "code/python/tests/test_hierarchy_director.py"
       - "code/python/tests/test_download_babi.py"
+      - "code/python/tests/test_experiment_lab.py"
       - "docs/G3_FULL_HIERARCHY.md"
   workflow_dispatch:
 
