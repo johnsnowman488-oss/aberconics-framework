@@ -504,9 +504,9 @@ def _run_summary(job: dict) -> dict:
             diagnostics = task.get("hierarchy_mechanism_audit", {}).get("per_seed", [])
             hierarchy_accuracies.append(hierarchy.get("mean_accuracy_over_seeds", 0.0))
             stability_values = [
-                row.get("fast_active_stability_ratio_max")
+                row.get("max_hierarchy_active_stability_ratio")
                 for row in diagnostics
-                if row.get("fast_active_stability_ratio_max") is not None
+                if row.get("max_hierarchy_active_stability_ratio") is not None
             ]
             g3_summary[task_key] = {
                 "flat_mean_accuracy": flat.get("mean_accuracy_over_seeds"),
@@ -524,7 +524,7 @@ def _run_summary(job: dict) -> dict:
                     if diagnostics else None
                 ),
                 "max_active_stability_ratio": max(stability_values) if stability_values else None,
-                "active_stability_pass": all(row.get("fast_active_stability_pass", False) for row in diagnostics),
+                "active_stability_pass": all(row.get("all_active_stability_pass", False) for row in diagnostics),
             }
         accuracy = (
             sum(hierarchy_accuracies) / len(hierarchy_accuracies)
