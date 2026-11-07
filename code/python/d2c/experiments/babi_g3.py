@@ -26,10 +26,10 @@ from ..digital.babi import (
     BabiDataset, babi_story_to_episode, build_babi_answer_set,
     build_babi_bridge, build_babi_vocabulary,
 )
-from ..digital.readout import LinearReadout, QueryConditionedMLPReadout, query_conditioned_features
+from ..digital.readout import LinearReadout, query_conditioned_features
 from ..ffi import load_library
-from ...runtime.digital_runtime import DigitalRuntimeConfig
-from ...runtime.phase_controller import DigitalPhaseConfig
+from ..runtime.digital_runtime import DigitalRuntimeConfig
+from ..runtime.phase_controller import DigitalPhaseConfig
 from .babi_f0 import BabiF0Config, exercise_f0_spine
 from .confidence_metrics import summarize_confidence
 from .g0_diagnostics import build_prediction_record, summarize_training_losses
@@ -468,9 +468,12 @@ def _verify_pair(flat: dict[str, Any], hierarchy: dict[str, Any]) -> bool:
     if flat["seed"] != hierarchy["seed"] or flat["total"] != hierarchy["total"]:
         return False
     fields = ("story_index", "task", "raw_passage", "question", "target")
-    return all(
-        all(a.get(field) == b.get(field) for field in fields)
-        for a, b in zip(flat["predictions"], hierarchy["predictions"])
+    return (
+        flat.get("initial_readout_sha256") == hierarchy.get("initial_readout_sha256")
+        and all(
+            all(a.get(field) == b.get(field) for field in fields)
+            for a, b in zip(flat["predictions"], hierarchy["predictions"])
+        )
     )
 
 
