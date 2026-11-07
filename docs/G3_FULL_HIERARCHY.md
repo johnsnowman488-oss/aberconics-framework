@@ -137,4 +137,6 @@ Locked test evaluation:
       --lr 0.05 --feature-scale 10 --bootstrap-samples 400 \
       --eval-split test --output-dir runs/experiment-lab/g3
 
-CI builds the shared C++ core, runs G3 and hierarchy regression tests, performs the validation preflight, executes the locked 20-seed test evaluation and uploads the complete Lab bundle. Julia remains skipped.
+A push to the G3 branch builds the shared C++ core, runs the hierarchy/G2/G3/Lab tests, performs only the validation preflight, and uploads its validation bundle. It does not download, fingerprint or evaluate the test split.
+
+The 20-seed locked evaluation is gated behind a deliberate GitHub Actions **workflow_dispatch** with the boolean input **run_locked_test=true**. The job repeats the validation preflight first; only if its mechanism, stability and F0 gates pass does it download test and execute the locked evaluation. Leave the input false for ordinary validation runs. This explicit gate prevents later code pushes from repeatedly opening the held-out split. Julia remains skipped.
