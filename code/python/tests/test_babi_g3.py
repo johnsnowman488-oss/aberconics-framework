@@ -43,7 +43,10 @@ def test_g3_has_only_flat_and_full_bidirectional_hierarchy_arms():
         GFE_C_HIERARCHICAL_RELATION_BOTTOM_UP,
         GFE_C_HIERARCHICAL_RELATION_TOP_DOWN,
     }
-    assert all(edge["normalize_weights"] is True for edge in hier_edges)
+    bottom_up = next(edge for edge in hier_edges if edge["relation"] == GFE_C_HIERARCHICAL_RELATION_BOTTOM_UP)
+    top_down = next(edge for edge in hier_edges if edge["relation"] == GFE_C_HIERARCHICAL_RELATION_TOP_DOWN)
+    assert bottom_up["normalize_weights"] is True
+    assert top_down["normalize_weights"] is False
 
 
 def test_g3_readout_broadcasts_scalar_abi_chi_to_feature_dimension():
@@ -98,4 +101,8 @@ def test_full_hierarchy_executes_both_couplings_and_reports_finite_state():
     assert report["top_down_coupling_configured"]
     assert report["finite_state_and_spectral_evidence"]
     assert report["fast_level_active_kernel"]["all_positive"]
+    assert report["fast_active_stability_pass"]
+    assert report["fast_active_stability_ratio_max"] <= report["fast_active_stability_margin"]
+    assert report["base_fast_weight_sum"] == pytest.approx(sum(memory.w))
+    assert report["first_active_fast_weight_sum"] == pytest.approx(sum(memory.w), rel=1e-9, abs=1e-9)
     assert all(math.isfinite(row["mean_state_norm"]) for row in report["levels"])
