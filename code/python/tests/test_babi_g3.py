@@ -118,3 +118,102 @@ def test_full_hierarchy_executes_both_couplings_and_reports_finite_state():
     assert report["base_fast_weight_sum"] == pytest.approx(sum(memory.w))
     assert report["first_active_fast_weight_sum"] == pytest.approx(sum(memory.w), rel=1e-9, abs=1e-9)
     assert all(math.isfinite(row["mean_state_norm"]) for row in report["levels"])
+
+
+def test_flat_arm_collects_baseline_diagnostics_for_each_eval_story(monkeypatch):
+    """The flat control must populate its one-level diagnostics before aggregation."""
+    from types import SimpleNamespace
+    import d2c.experiments.babi_g3 as g3
+
+    config = G3Config(dim=8, seeds=3)
+    memory = memory_config_for_variant("full")
+    stories = [
+        SimpleNamespace(answer="yes"),
+        SimpleNamespace(answer="no"),
+    ]
+
+    class _HashBytes:
+        def tobytes(self):
+            return b"g3-flat-regression"
+
+    class _Readout:
+        W = _HashBytes()
+        b = _HashBytes()
+
+        def train_step(self, features, target_index, *, learning_rate):
+            return 0.1
+
+        def probabilities(self, features):
+            return [0.7, 0.3]
+
+    class _Director:
+        def __init__(self, *, lib, levels, edges, state_dim, memory_config):
+            self.levels = levels
+            self.state_dim = state_dim
+            self.memory = memory_config
+
+        def run_episode(self, episode, *, experiment_name):
+            traces = []
+            for level in self.levels:
+                step = SimpleNamespace(
+                    u=[0.25] * self.state_dim,
+                    metadata={"spectral": {
+                        "deff": 1.0, "mcap": 1.0,
+                        "mscale": 1.0, "hmem": 1.0,
+                    }},
+                )
+                traces.append(SimpleNamespace(steps=[step]))
+            active_kernels = [[
+                {"gamma": list(level["gamma"]), "w": list(level["w"])}
+                for level in self.levels
+            ]]
+            return SimpleNamespace(
+                level_traces=traces,
+                active_kernels=active_kernels,
+                final_state=DigitalMemoryState(
+                    u=[0.0] * self.state_dim,
+                    chi=[[0.0] for _ in self.memory.gamma],
+                    t=0.05,
+                ),
+                query=[0.0] * self.state_dim,
+            )
+
+    monkeypatch.setattr(g3, "HierarchicalDigitalDirector", _Director)
+    monkeypatch.setattr(g3, "_new_readout", lambda *args: _Readout())
+    monkeypatch.setattr(g3, "babi_story_to_episode", lambda story, bridge, answers: story)
+    monkeypatch.setattr(
+        g3, "query_conditioned_features",
+        lambda state, *args, **kwargs: [0.0],
+    )
+    monkeypatch.setattr(
+        g3, "build_prediction_record",
+        lambda story, index, answer_set, probabilities: {
+            "correct": True, "story_index": index,
+        },
+    )
+    monkeypatch.setattr(
+        g3, "summarize_confidence",
+        lambda *args, **kwargs: {"regression_stub": True},
+    )
+
+    result = g3._run_arm(
+        arm=ARM_FLAT,
+        task=3,
+        seed=0,
+        train_stories=stories,
+        eval_stories=stories,
+        answer_set=["yes", "no"],
+        bridge=None,
+        memory=memory,
+        config=config,
+        orders=[[0, 1]],
+        lib=object(),
+    )
+
+    diagnostics = result["hierarchy_diagnostics"]
+    assert diagnostics["evaluation_examples"] == len(stories)
+    assert diagnostics["level_count"] == 1
+    assert len(diagnostics["levels"]) == 1
+    assert diagnostics["levels"][0]["mean_state_norm"] > 0.0
+    assert diagnostics["fast_active_kernel"]["samples"] == len(stories)
+    assert diagnostics["top_down_dynamic_gamma_fraction"] == 0.0

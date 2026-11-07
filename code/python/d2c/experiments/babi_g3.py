@@ -404,19 +404,20 @@ def _run_arm(
         prediction = build_prediction_record(story, story_index, answer_set, probabilities)
         predictions.append(prediction)
         correct += int(prediction["correct"])
-        if arm == ARM_HIER:
-            hierarchy_rows.append(
-                _episode_hierarchy_diagnostics(
-                    episode_result,
-                    arm,
-                    base_weight_sum=sum(memory.w),
-                    level_leak_rates=(
-                        [memory.leak_rate]
-                        if arm == ARM_FLAT
-                        else [memory.leak_rate, config.context_leak]
-                    ),
-                )
+        # Capture the flat ABI baseline as well as the hierarchy arm. The
+        # aggregator reports one level for flat_abi and two for hier_bu_td.
+        hierarchy_rows.append(
+            _episode_hierarchy_diagnostics(
+                episode_result,
+                arm,
+                base_weight_sum=sum(memory.w),
+                level_leak_rates=(
+                    [memory.leak_rate]
+                    if arm == ARM_FLAT
+                    else [memory.leak_rate, config.context_leak]
+                ),
             )
+        )
 
     accuracy = correct / len(eval_stories) if eval_stories else 0.0
     confidence = summarize_confidence(
