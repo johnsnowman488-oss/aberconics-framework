@@ -109,7 +109,7 @@ jobs:
           if not result["acceptance"]["matched_seed_example_and_training_order"]["passed"]:
               raise SystemExit("G3 preflight failed matched-arm identity controls")
           if not result["acceptance"]["full_bottom_up_top_down_mechanism"]["passed"]:
-              raise SystemExit("G3 preflight failed hierarchy activity, positive-kernel, finite-state or stability gates")
+              raise SystemExit("G3 preflight failed hierarchy activity, per-level positive-kernel, finite-state or stability gates")
           if not result["acceptance"]["f0_six_phase_spine_audit"]["passed"]:
               raise SystemExit("G3 preflight failed F0 six-phase spine audit")
           print("G3 validation preflight, mechanism, stability, F0 spine and test-split isolation passed.")
