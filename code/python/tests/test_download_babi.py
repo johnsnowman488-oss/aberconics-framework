@@ -79,3 +79,40 @@ def test_invalid_download_is_not_installed_and_temporary_file_is_removed(tmp_pat
 
     assert not (tmp_path / "babi_train.jsonl").exists()
     assert list(tmp_path.glob("*.part")) == []
+
+
+def test_selected_splits_do_not_touch_unselected_test_split(tmp_path, monkeypatch) -> None:
+    payload = (
+        json.dumps({
+            "passage": "Mary moved to kitchen.",
+            "question": "Where is Mary?",
+            "answer": "kitchen",
+            "task": 1,
+        }) + "\n"
+    ).encode("utf-8")
+    requested = []
+
+    def fake_urlopen(url, timeout):
+        requested.append(url)
+        return FakeResponse(payload)
+
+    # An invalid test file is a sentinel: selected train/valid preparation
+    # must neither validate, replace, nor otherwise read it.
+    test_path = tmp_path / "babi_test.jsonl"
+    test_path.write_text("deliberately unread test sentinel", encoding="utf-8")
+    monkeypatch.setattr(download_babi, "urlopen", fake_urlopen)
+
+    result = download_babi.download_babi_dataset(
+        tmp_path, timeout=3.0, splits=("train", "valid")
+    )
+
+    assert set(result) == {"train", "valid"}
+    assert len(requested) == 2
+    assert all("babi_test.jsonl" not in url for url in requested)
+    assert test_path.read_text(encoding="utf-8") == "deliberately unread test sentinel"
+
+
+def test_selected_splits_reject_empty_unknown_or_duplicate_names(tmp_path) -> None:
+    for invalid in ((), ("missing",), ("train", "train")):
+        with pytest.raises(ValueError, match="splits must be"):
+            download_babi.download_babi_dataset(tmp_path, splits=invalid)
