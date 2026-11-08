@@ -779,14 +779,34 @@ def run_g3_experiment(
             and row.get("diagnostics", {}).get("stability_violations") == 0
             for row in f0_spines
         )
+        # Mechanism execution and stability qualification are separate.
+        # G3-N intentionally probes unit-sum top-down normalization, which
+        # may violate the unchanged runtime stability margin. That is a
+        # reportable experimental outcome, not a failed execution.
         hierarchy_audit_passed = all(
             row["hierarchy_diagnostics"]["finite_state_and_spectral_pass"]
             and row["hierarchy_diagnostics"]["positive_active_kernel_pass"]
             and row["hierarchy_diagnostics"]["bottom_up_context_activity"] > 0
             and row["hierarchy_diagnostics"]["top_down_coupling_configured"] is True
             and row["hierarchy_diagnostics"]["top_down_dynamic_gamma_fraction"] > 0
-            and row["hierarchy_diagnostics"]["fast_active_stability_pass"]
+            for row in hierarchy["seed_results"]
+        )
+        hierarchy_stability_passed = all(
+            row["hierarchy_diagnostics"]["fast_active_stability_pass"]
             and row["hierarchy_diagnostics"]["all_active_stability_pass"]
+            for row in hierarchy["seed_results"]
+        )
+        hierarchy_stability_evidence_recorded = all(
+            row["hierarchy_diagnostics"]["max_hierarchy_active_stability_ratio"] is not None
+            and row["hierarchy_diagnostics"]["fast_active_stability_margin"] is not None
+            for row in hierarchy["seed_results"]
+        )
+        max_hierarchy_stability_ratio = max(
+            row["hierarchy_diagnostics"]["max_hierarchy_active_stability_ratio"]
+            for row in hierarchy["seed_results"]
+        )
+        stability_margin = max(
+            row["hierarchy_diagnostics"]["fast_active_stability_margin"]
             for row in hierarchy["seed_results"]
         )
         all_confidence_complete = all(
@@ -860,6 +880,17 @@ def run_g3_experiment(
         "qa3_qa5_coverage": {"passed": full_coverage, "tasks": sorted(all_task_results)},
         "matched_seed_example_and_training_order": {"passed": pairing, "arms": list(ARMS)},
         "full_bottom_up_top_down_mechanism": {"passed": hierarchy_audit},
+        "hierarchy_stability_qualification": {
+            "passed": hierarchy_stability_passed,
+            "evidence_recorded": hierarchy_stability_evidence_recorded,
+            "max_observed_stability_ratio": max_hierarchy_stability_ratio,
+            "stability_margin": stability_margin,
+            "interpretation": (
+                "Stable within the frozen margin."
+                if hierarchy_stability_passed
+                else "Executed and measured, but not stability-qualified; the frozen runtime margin is intentionally unchanged."
+            ),
+        },
         "f0_six_phase_spine_audit": {"passed": spine_audit, "audits_per_task": cfg.seeds},
         "confidence_evidence": {"passed": confidence_complete},
         "structured_relational_fixtures": {"passed": fixture_passed, "passed_count": fixture_control["passed"], "total": fixture_control["total"]},
