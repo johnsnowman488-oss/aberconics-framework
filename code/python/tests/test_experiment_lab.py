@@ -352,7 +352,7 @@ def test_g3_lab_launch_registers_two_arm_frozen_protocol(tmp_path, monkeypatch):
     assert config["seeds"] == 20
     assert config["epochs"] == 3
     assert config["feature_scale"] == 10.0
-    assert config["arms"] == ["flat_abi", "hier_bu_td"]
+    assert config["arms"] == ["ef0_vectorized", "hier_bu_td"]
     assert config["f0_spine_audit"] is True
     assert fingerprints["train"]["sha256"]
 
@@ -405,7 +405,7 @@ def test_g3_run_summary_preserves_task_wise_paired_effects(tmp_path):
         "tasks": {
             "3": {
                 "arms": {
-                    "flat_abi": {"mean_accuracy_over_seeds": 0.20},
+                    "ef0_vectorized": {"mean_accuracy_over_seeds": 0.20},
                     "hier_bu_td": {"mean_accuracy_over_seeds": 0.25},
                 },
                 "paired_effects": {
@@ -429,7 +429,7 @@ def test_g3_run_summary_preserves_task_wise_paired_effects(tmp_path):
             },
             "5": {
                 "arms": {
-                    "flat_abi": {"mean_accuracy_over_seeds": 0.60},
+                    "ef0_vectorized": {"mean_accuracy_over_seeds": 0.60},
                     "hier_bu_td": {"mean_accuracy_over_seeds": 0.70},
                 },
                 "paired_effects": {"accuracy": {"mean": 0.10}},
