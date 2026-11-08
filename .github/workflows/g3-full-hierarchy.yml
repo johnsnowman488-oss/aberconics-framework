@@ -5,24 +5,18 @@ on:
     paths:
       - ".github/workflows/g3-full-hierarchy.yml"
       - "code/python/d2c/experiments/babi_g3.py"
+      - "code/python/d2c/experiments/babi_f0.py"
       - "code/python/d2c/experiments/babi_g2.py"
       - "code/python/d2c/experiments/confidence_metrics.py"
       - "code/python/d2c/digital/download_babi.py"
       - "code/python/d2c/experiment_lab/server.py"
       - "code/python/d2c/experiment_lab/index.html"
       - "code/python/tests/test_babi_g3.py"
+      - "code/python/tests/test_babi_f0.py"
       - "code/python/tests/test_hierarchy_director.py"
       - "code/python/tests/test_download_babi.py"
       - "code/python/tests/test_experiment_lab.py"
       - "docs/G3_FULL_HIERARCHY.md"
-  workflow_dispatch:
-    inputs:
-      run_locked_test:
-        description: "Open the held-out bAbI test split and run the 20-seed benchmark after reviewing the passing validation preflight."
-        required: true
-        type: boolean
-        default: false
-
 permissions:
   contents: read
 
@@ -71,6 +65,7 @@ jobs:
             code/python/tests/test_hierarchy_director.py \
             code/python/tests/test_download_babi.py \
             code/python/tests/test_babi_g2.py \
+            code/python/tests/test_babi_f0.py \
             code/python/tests/test_babi_g3.py \
             code/python/tests/test_experiment_lab.py
 
@@ -78,6 +73,7 @@ jobs:
         run: |
           python -m compileall -q \
             code/python/d2c/experiments/babi_g3.py \
+            code/python/d2c/experiments/babi_f0.py \
             code/python/d2c/experiments/babi_g2.py \
             code/python/d2c/digital/download_babi.py \
             code/python/d2c/experiment_lab/server.py
@@ -121,12 +117,10 @@ jobs:
           print("G3 validation preflight, mechanism, stability, F0 spine and test-split isolation passed.")
           PY
 
-      - name: Prepare locked test split only after validation preflight
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_locked_test }}
+      - name: Prepare held-out test split only after validation preflight
         run: python -m d2c.digital.download_babi --splits test
 
-      - name: Locked G3 test evaluation (20 matched seeds)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_locked_test }}
+      - name: Full G3 held-out test evaluation (20 matched seeds)
         run: |
           mkdir -p "$G3_TEST_OUTPUT"
           python -m d2c.experiments.babi_g3 \
@@ -135,7 +129,6 @@ jobs:
             --eval-split test --output-dir "$G3_TEST_OUTPUT"
 
       - name: Enforce G3 evidence-integrity gates
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_locked_test }}
         run: |
           python - <<'PY'
           import json, pathlib
