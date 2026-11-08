@@ -584,7 +584,7 @@ def _f0_vectorized_seed_rows(
         epochs=config.epochs, hidden_dim=32,
         learning_rate=config.learning_rate, readout_type=config.readout,
         feature_scale=config.feature_scale, mode="isolated",
-        exercise_spine=True,
+        exercise_spine=config.f0_spine_audit,
     )
     result = run_babi_f0_experiment(
         f0_config, data_dir=data_dir, eval_split=eval_split
