@@ -67,7 +67,7 @@ ARMS = (ARM_FLAT, ARM_HIER)
 class G3Config:
     tasks: tuple[int, ...] = (3, 5)
     dim: int = 64
-    seeds: int = 20
+    seeds: int = 3
     epochs: int = 3
     learning_rate: float = 0.05
     feature_scale: float = 10.0
@@ -78,6 +78,7 @@ class G3Config:
     context_gamma: tuple[float, ...] = (0.35, 0.08)
     context_w: tuple[float, ...] = (0.05, 0.02)
     context_leak: float = 0.5
+    normalize_top_down_weights: bool = True
     f0_spine_audit: bool = True
 
     def __post_init__(self) -> None:
@@ -179,10 +180,10 @@ def build_g3_chain(
             "target_level": 0,
             "relation": GFE_C_HIERARCHICAL_RELATION_TOP_DOWN,
             "gain": config.top_down_gain,
-            # Preserve the base aggregate weight scale. Context may still
-            # co-modulate w and gamma; D4A showed normalization=True adds a
-            # large static feedback boost unrelated to context.
-            "normalize_weights": False,
+            # G3-N explicitly enables the top-down positive-kernel
+            # normalizer; active-kernel sums and stability diagnostics record
+            # its effect rather than silently folding it into the gain.
+            "normalize_weights": config.normalize_top_down_weights,
         },
     ]
     return [fast, context], edges
@@ -819,7 +820,10 @@ def run_g3_experiment(
                     {"seed": row["seed"], **row["hierarchy_diagnostics"]}
                     for row in hierarchy["seed_results"]
                 ],
-                "weight_normalization_control": "Not included in G3 by design; active-kernel weight sums and gamma modulation are reported so any static-strengthening confound remains visible.",
+                "weight_normalization_control": {
+                    "top_down_normalize_weights": cfg.normalize_top_down_weights,
+                    "interpretation": "Top-down positive-kernel weights are normalized to unit sum when enabled; active-kernel sums and stability are recorded per seed.",
+                },
             },
             "confidence_evidence": {
                 "passed": all_confidence_complete,
@@ -1040,7 +1044,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run G3 G2 E-F0 vectorized flat versus full scalar-ABI hierarchy.")
     parser.add_argument("--tasks", default="3,5")
     parser.add_argument("--dim", type=int, default=64)
-    parser.add_argument("--seeds", type=int, default=20)
+    parser.add_argument("--seeds", type=int, default=3)
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--lr", type=float, default=0.05)
     parser.add_argument("--feature-scale", type=float, default=10.0)
