@@ -68,6 +68,7 @@ The existing C++ hierarchy arm is retained:
 - context leak 0.5;
 - Form-B negative-feedback ABI stepping;
 - top-down positive-kernel weight normalization enabled (G3-N); active fast-level kernel is normalized to unit total weight;
+- the existing 0.9 stability margin is retained. For the configured fast kernel, unit-sum normalization raises the zero-context stability ratio from 0.8 to approximately 2.56; G3-N is therefore a diagnostic of the normalization/stability interaction, not presumed to be a stable performance candidate.
 - active per-level kernels, state norms, spectral diagnostics and stability ratios captured.
 
 The hierarchy's scalar-ABI stability contract remains unchanged. The flat E-F0 memory kernel is not silently substituted into the hierarchy, since it belongs to a different vectorized/input-driven execution formulation.
