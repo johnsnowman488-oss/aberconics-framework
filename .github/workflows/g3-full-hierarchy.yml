@@ -111,10 +111,18 @@ jobs:
           if not result["acceptance"]["matched_seed_example_and_training_order"]["passed"]:
               raise SystemExit("G3 preflight failed matched-arm identity controls")
           if not result["acceptance"]["full_bottom_up_top_down_mechanism"]["passed"]:
-              raise SystemExit("G3 preflight failed hierarchy activity, per-level positive-kernel, finite-state or stability gates")
+              raise SystemExit("G3 preflight failed hierarchy activity, positive-kernel or finite-state mechanism checks")
+          stability = result["acceptance"]["hierarchy_stability_qualification"]
+          if not stability["evidence_recorded"]:
+              raise SystemExit("G3 preflight did not record the hierarchy stability qualification")
           if not result["acceptance"]["f0_six_phase_spine_audit"]["passed"]:
               raise SystemExit("G3 preflight failed F0 six-phase spine audit")
-          print("G3 validation preflight, mechanism, stability, F0 spine and test-split isolation passed.")
+          print(
+              "G3 validation execution, mechanism, F0 spine and test-split isolation passed; "
+              f"stability_qualified={stability['passed']} "
+              f"(max_ratio={stability['max_observed_stability_ratio']:.4f}, "
+              f"margin={stability['stability_margin']:.4f})."
+          )
           PY
 
       - name: Upload G3-N validation evidence bundle
