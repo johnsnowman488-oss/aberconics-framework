@@ -35,14 +35,14 @@ def test_g3_config_requires_full_qa3_qa5_and_matched_seed_count():
         G3Config(feature_scale=100.0)
 
 
-def test_g3_has_only_flat_and_full_bidirectional_hierarchy_arms():
+def test_g3_flat_arm_is_existing_ef0_path_and_abi_builder_is_hierarchy_only():
     config = G3Config(dim=8, seeds=3)
     memory = memory_config_for_variant("full")
-    flat_levels, flat_edges = build_g3_chain(memory, config, ARM_FLAT)
+    with pytest.raises(ValueError, match="existing G2 E-F0 vectorized runner"):
+        build_g3_chain(memory, config, ARM_FLAT)
     hier_levels, hier_edges = build_g3_chain(memory, config, ARM_HIER)
 
-    assert len(flat_levels) == 1
-    assert flat_edges == []
+    assert ARM_FLAT == "ef0_vectorized"
     assert len(hier_levels) == 2
     assert len(hier_edges) == 2
     assert {edge["relation"] for edge in hier_edges} == {
@@ -120,119 +120,71 @@ def test_full_hierarchy_executes_both_couplings_and_reports_finite_state():
     assert all(math.isfinite(row["mean_state_norm"]) for row in report["levels"])
 
 
-def test_flat_arm_collects_baseline_diagnostics_for_each_eval_story(monkeypatch):
-    """The flat control must populate its one-level diagnostics before aggregation."""
-    from types import SimpleNamespace
+def test_flat_arm_calls_existing_g2_ef0_runner(monkeypatch, tmp_path):
+    import hashlib
+    import json
     import d2c.experiments.babi_g3 as g3
 
-    config = G3Config(dim=8, seeds=3)
-    memory = memory_config_for_variant("full")
-    stories = [
-        SimpleNamespace(answer="yes"),
-        SimpleNamespace(answer="no"),
-    ]
+    cfg = G3Config(dim=8, seeds=3)
+    orders = {seed: [[0, 1], [1, 0]] for seed in range(3)}
+    order_hash = lambda rows: hashlib.sha256(
+        json.dumps(rows, separators=(",", ":")).encode()
+    ).hexdigest()
+    fingerprints = {}
 
-    class _HashBytes:
-        def tobytes(self):
-            return b"g3-flat-regression"
+    def fake_runner(config, *, data_dir, eval_split):
+        fingerprints["config"] = config
+        seeds = []
+        for seed in range(3):
+            seeds.append({
+                "seed": seed,
+                "correct": 1,
+                "total": 1,
+                "accuracy": 1.0,
+                "training": {"epochs": 3},
+                "initial_readout_sha256": "a" * 64,
+                "training_order_sha256": order_hash(orders[seed]),
+                "predictions": [{
+                    "story_index": 0, "task": 3, "raw_passage": "Mary moved.",
+                    "question": "Where?", "target": "hallway",
+                    "prediction": "hallway", "correct": True,
+                    "probability_vector": [0.9, 0.1],
+                }],
+                "spine_exercise": {"status": "passed"},
+                "train_runtime": {"step_count": 12},
+                "test_runtime": {"step_count": 4},
+            })
+        return {"seed_results": seeds, "train_stories": 2, "evaluation_stories": 1}
 
-    class _Readout:
-        W = _HashBytes()
-        b = _HashBytes()
-
-        def train_step(self, features, target_index, *, learning_rate):
-            return 0.1
-
-        def probabilities(self, features):
-            return [0.7, 0.3]
-
-    class _Director:
-        def __init__(self, *, lib, levels, edges, state_dim, memory_config):
-            self.levels = levels
-            self.state_dim = state_dim
-            self.memory = memory_config
-
-        def run_episode(self, episode, *, experiment_name):
-            traces = []
-            for level in self.levels:
-                step = SimpleNamespace(
-                    u=[0.25] * self.state_dim,
-                    metadata={"spectral": {
-                        "deff": 1.0, "mcap": 1.0,
-                        "mscale": 1.0, "hmem": 1.0,
-                    }},
-                )
-                traces.append(SimpleNamespace(steps=[step]))
-            active_kernels = [[
-                {"gamma": list(level["gamma"]), "w": list(level["w"])}
-                for level in self.levels
-            ]]
-            return SimpleNamespace(
-                level_traces=traces,
-                active_kernels=active_kernels,
-                final_state=DigitalMemoryState(
-                    u=[0.0] * self.state_dim,
-                    chi=[[0.0] for _ in self.memory.gamma],
-                    t=0.05,
-                ),
-                query=[0.0] * self.state_dim,
-            )
-
-    monkeypatch.setattr(g3, "HierarchicalDigitalDirector", _Director)
-    monkeypatch.setattr(g3, "_new_readout", lambda *args: _Readout())
-    monkeypatch.setattr(g3, "babi_story_to_episode", lambda story, bridge, answers: story)
-    monkeypatch.setattr(
-        g3, "query_conditioned_features",
-        lambda state, *args, **kwargs: [0.0],
-    )
-    monkeypatch.setattr(
-        g3, "build_prediction_record",
-        lambda story, index, answer_set, probabilities: {
-            "correct": True, "story_index": index,
-        },
-    )
-    monkeypatch.setattr(
-        g3, "summarize_confidence",
-        lambda *args, **kwargs: {"regression_stub": True},
+    monkeypatch.setattr(g3, "run_babi_f0_experiment", fake_runner)
+    rows = g3._f0_vectorized_seed_rows(
+        task=3, train_orders=orders, answer_set=["hallway", "kitchen"],
+        config=cfg, data_dir=tmp_path, eval_split="valid",
     )
 
-    result = g3._run_arm(
-        arm=ARM_FLAT,
-        task=3,
-        seed=0,
-        train_stories=stories,
-        eval_stories=stories,
-        answer_set=["yes", "no"],
-        bridge=None,
-        memory=memory,
-        config=config,
-        orders=[[0, 1]],
-        lib=object(),
-    )
+    assert fingerprints["config"].mode == "isolated"
+    assert fingerprints["config"].exercise_spine is True
+    assert fingerprints["config"].epochs == 3
+    assert fingerprints["config"].learning_rate == 0.05
+    assert fingerprints["config"].feature_scale == 10.0
+    assert [row["seed"] for row in rows] == [0, 1, 2]
+    assert rows[0]["runtime_diagnostics"]["backend"].startswith("G2 E-F0")
+    assert rows[0]["f0_spine_audit"]["status"] == "passed"
+    assert rows[0]["hierarchy_diagnostics"]["level_count"] == 0
 
-    diagnostics = result["hierarchy_diagnostics"]
-    assert diagnostics["evaluation_examples"] == len(stories)
-    assert diagnostics["level_count"] == 1
-    assert len(diagnostics["levels"]) == 1
-    assert diagnostics["levels"][0]["mean_state_norm"] > 0.0
-    assert diagnostics["fast_active_kernel"]["samples"] == len(stories)
-    assert diagnostics["top_down_coupling_configured"] is False
-    assert diagnostics["top_down_dynamic_gamma_fraction"] == 0.0
 
-    hierarchy_result = g3._run_arm(
-        arm=ARM_HIER,
-        task=3,
-        seed=0,
-        train_stories=stories,
-        eval_stories=stories,
-        answer_set=["yes", "no"],
-        bridge=None,
-        memory=memory,
-        config=config,
-        orders=[[0, 1]],
-        lib=object(),
-    )
-    hierarchy_diagnostics = hierarchy_result["hierarchy_diagnostics"]
-    assert hierarchy_diagnostics["evaluation_examples"] == len(stories)
-    assert hierarchy_diagnostics["level_count"] == 2
-    assert hierarchy_diagnostics["top_down_coupling_configured"] is True
+def test_g3_pair_rejects_readout_or_training_order_mismatch():
+    from d2c.experiments.babi_g3 import _verify_pair
+
+    row = {
+        "seed": 2, "total": 1,
+        "initial_readout_sha256": "same-readout",
+        "training_order_sha256": "same-order",
+        "predictions": [{
+            "story_index": 0, "task": 3, "raw_passage": "Mary moved.",
+            "question": "Where?", "target": "hallway",
+        }],
+    }
+    assert _verify_pair(row, dict(row))
+    assert not _verify_pair(row, dict(row, training_order_sha256="different-order"))
+    assert not _verify_pair(row, dict(row, initial_readout_sha256="different-readout"))
