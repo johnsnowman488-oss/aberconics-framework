@@ -1,97 +1,109 @@
-# G3: Flat ABI versus Full Bidirectional Hierarchy
+# G3: G2 E-F0 Vectorized Runtime versus Full Scalar-ABI Hierarchy
 
-**Status:** registered experiment; implementation on branch g3/full-hierarchy-relational  
+**Status:** implementation and execution on branch `g3/full-hierarchy-relational`  
 **Experiment ID:** G3-FULL-HIERARCHY  
-**Scope:** QA3 + QA5, matched flat ABI versus full bottom-up + top-down hierarchy.
+**Scope:** QA3 + QA5; two matched arms only.
 
-## 1. Question and claim boundary
+## 1. Research question and claim boundary
 
-G3 tests whether a slower relational-context level, connected through bottom-up event coupling and top-down kernel modulation, improves learned relational retrieval over the established flat ABI path.
+G3 asks whether the full bottom-up/top-down scalar-ABI hierarchy package improves relational QA over the established G2 E-F0 vectorized runtime package.
 
-The benchmark is deliberately restricted to two arms:
+The two arms are:
 
-1. **flat_abi** — one-level C++ ABI scalar-chi reference, with no hierarchy edges.
-2. **hier_bu_td** — the same lower-level C++ ABI substrate plus a slower context level and both bottom-up and top-down couplings.
+1. **`ef0_vectorized` — flat control.** Reuse the existing G2 E-F0 runner directly: `d2c.experiments.babi_f0.run_babi_f0_experiment`. This is the existing Python-vectorized `DigitalRuntime.step → step_memory` execution path with the six-phase F0 runtime spine active, in isolated mode. Its token bridge, memory kernel, readout extraction, episode reset semantics, phase coordination and runtime configuration are not reimplemented for G3.
+2. **`hier_bu_td` — hierarchy.** The existing two-level C++ hierarchy chain-spec ABI with scalar chi per channel, a fast event-memory level, a slower relational-context level, and both bottom-up and top-down coupling.
 
-There is no G3 static weight-strengthening arm. The active lower-level kernel weights and decay rates are nevertheless recorded at every episode so that the normalization side effect observed in D4A is visible. Results must not attribute an improvement to context adaptation alone if the active weight sum indicates that the hierarchy also changed aggregate feedback strength. A dedicated static-strengthening control may be added later if this first two-arm comparison warrants it.
+There is no E0-only arm, no scalar-ABI flat third arm, and no static weight-strengthening arm. Runtime ablation and static strengthening are deferred.
 
-The F0 six-phase runtime spine is exercised once per seed as a companion qualification audit. It does not replace the hierarchy state engine or change the benchmark's ABI dynamics. Both learned benchmark arms use the same C++ ABI scalar-chi substrate, avoiding a flat-Python-vector versus hierarchy-ABI mismatch.
+**Interpretation boundary:** the arms are two complete execution packages. They differ in backend and memory feedback formulation as well as hierarchy. A positive result supports the scalar-ABI bidirectional hierarchy package over the G2 E-F0 vectorized package under this protocol; it does not isolate hierarchy as the only causal difference. Do not make a hierarchy-only causal claim from G3.
 
-G3 is not a natural-language parser test, not a general language-reasoning claim, and not an implementation of the later F-series learning mechanisms.
+The existing per-task/per-seed F0 spine exercise is also retained as a companion qualification audit. It does not replace the F0 runtime that is actively used to compute the flat arm's predictions.
 
 ## 2. Frozen protocol
 
 | Setting | G3 value |
 |---|---|
 | Tasks | QA3 and QA5; both required |
-| Seeds | 20 matched seeds, numbered 0–19 |
+| Arms | G2 E-F0 vectorized flat; full scalar-ABI bottom-up/top-down hierarchy |
+| Seeds | 20 matched seeds, numbered 0–19 (3 for validation preflight) |
 | Epochs | 3 |
 | State dimension | 64 |
 | Readout | Linear |
 | Learning rate | 0.05 |
 | Feature scale | 10 |
-| Evaluation | Locked test split, once |
-| Confidence bootstrap | 400 story-bootstrap replicates per seed |
+| Evaluation | 3-seed validation preflight, then 20-seed held-out test |
+| Confidence bootstrap | 200 replicates in preflight; 400 in held-out test |
 | Mode | Isolated episode per story |
-| Memory variant | Full |
-| F0 spine | All six phases, trace continuity and checkpoint/restore, every seed |
 | Runtime ablation | Deferred |
 | Static weight-strengthening arm | Deferred |
 
-The three-epoch and feature-scale-10 settings follow the provisional G2 validation readout. G3 does not re-select these settings using its held-out test results. The numerical environment is pinned in CI: Python 3.11.18, NumPy 2.4.6, single-thread numerical libraries, and the same OpenBLAS/NumPy dispatch constraints used for the G2 repeatability diagnostic.
+The 3-epoch and feature-scale-10 settings are the frozen G3 checkpoint. Both arms use the same number of epochs, learning rate, feature scale, readout architecture, readout seed, bridge vocabulary, task split and story order.
 
-Train and evaluation split fingerprints, exact protocol, training-order hashes, initial readout fingerprints, code revision and Python version are saved in the run bundle.
+## 3. Arm execution details
 
-## 3. Hierarchy configuration
+### Flat: existing G2 E-F0
 
-The lower level uses the existing full ABI memory kernel, negative-feedback Form-B stepping, external token forcing at level 0, and coupling index 0.
+The G3 flat path calls the existing `run_babi_f0_experiment` implementation rather than creating a second vectorized runner. It preserves:
 
-The hierarchy arm adds one slower context level and two edges:
+- `BabiF0Config(mode="isolated", exercise_spine=True)`;
+- existing `DigitalRuntime` defaults and the full six-phase controller;
+- existing `build_babi_memory_config("full")` memory kernel;
+- existing vectorized Python `step_memory` updates;
+- the existing bAbI bridge, feature extraction and linear readout;
+- separate training and evaluation runtimes, with episodic memory reset before each story;
+- per-task and per-seed F0 maintenance/trace/checkpoint audit.
 
-- Bottom-up: level 0 → level 1; gain 0.4; normalized positive kernel materialization.
-- Top-down: level 1 → level 0; gain 0.5; positive kernel materialization with weight normalization disabled so the base aggregate weight scale is preserved at zero context drive.
+The only G3-specific settings passed into this existing runner are the frozen seed count, dimension, 3 epochs, learning rate 0.05, feature scale 10, linear readout, QA3/QA5 task and selected evaluation split.
 
-The context level uses gamma [0.35, 0.08], weights [0.05, 0.02], and leak 0.5. Both levels use the same state dimension and timestep. The level-0 active kernel is captured throughout every episode.
+### Hierarchy: scalar ABI
 
-The top-down edge uses normalize_weights=False. This corrects the D4A confound: normalization had increased aggregate fast-level feedback to a constant sum independent of context. The G3 top-down gain is conservatively set to 0.5 so the unnormalized co-modulation has room to vary while retaining the 0.9 active-kernel stability margin. G3 instead starts from the same base weights as flat ABI and permits context-dependent co-modulation of weights and decay rates. Both active weight sums and per-channel gamma ranges are recorded. The C++ Form-B stability ratio sum(w / (gamma * leak)) is computed for every active kernel at both levels using that level's leak rate; every observed ratio must remain at or below the 0.9 safety margin. A performance gain is not sufficient evidence for context-dependent hierarchy if the modulation is inactive or destabilizes the lower level.
+The existing C++ hierarchy arm is retained:
 
-## 4. Matching and training controls
+- level 0: fast event memory, using the established G3 stable full kernel;
+- level 1: slow relational context;
+- bottom-up level 0 → level 1, gain 0.4;
+- top-down level 1 → level 0, gain 0.5;
+- context gamma `[0.35, 0.08]`;
+- context weights `[0.05, 0.02]`;
+- context leak 0.5;
+- Form-B negative-feedback ABI stepping;
+- top-down weight normalization disabled to preserve base aggregate weight scale;
+- active per-level kernels, state norms, spectral diagnostics and stability ratios captured.
+
+The hierarchy's scalar-ABI stability contract remains unchanged. The flat E-F0 memory kernel is not silently substituted into the hierarchy, since it belongs to a different vectorized/input-driven execution formulation.
+
+## 4. Pairing and training controls
 
 For each task and seed:
 
-- Both arms receive the same train and evaluation stories in the same order.
-- The training shuffle order is generated once and reused across arms; its hash is recorded.
-- Both arms start from the same seeded readout initialization; the weight/bias fingerprint is checked.
-- The tokenizer bridge, answer classes, readout, training epochs, learning rate and feature scale are identical.
-- Every story starts from a fresh episode state in both arms.
-- The held-out split is not used for training, model selection or confidence calibration.
-- Prediction identity is checked using story index, task, passage, question and target before paired metrics are computed.
+- Both arms receive the same ordered training and evaluation stories.
+- The E-F0 runner's actual epoch permutations are hashed and checked against the G3 precomputed order schedule.
+- Both arms start from the same seeded linear-readout initialization; initial weight/bias fingerprints must match.
+- Both use the same token vocabulary, bridge dimension, answer classes, epoch count, learning rate and feature scale.
+- Each story begins with fresh episodic memory in both arms.
+- The held-out test split is not used for training, model selection or confidence calibration.
+- Prediction identity is checked by seed, story index, task, passage, question and target before paired statistics are computed.
 
-A failed identity check invalidates the paired comparison and is recorded as an acceptance failure.
+A failed pairing, training-order, readout-fingerprint or example-identity check invalidates the paired comparison.
 
 ## 5. Metrics
 
 ### Task outcome
-
-Per-seed correct/total and accuracy; task-wise mean accuracy; hierarchy-minus-flat paired seed differences; 95% paired-seed t intervals; exact two-sided sign tests and Holm correction across QA3 and QA5.
+Per-seed correct/total and accuracy; mean task accuracy; hierarchy-minus-E-F0 paired seed differences; 95% paired-seed t intervals; exact two-sided sign tests and Holm correction across QA3 and QA5.
 
 ### Confidence quality
-
 Per-seed NLL, multiclass Brier, fixed-bin and adaptive equal-mass ECE, classwise diagnostics, confidence-on-errors, high-confidence error fraction, risk/coverage and AURC, Wilson accuracy intervals and story-bootstrap intervals.
 
 Story-bootstrap uncertainty and between-seed paired uncertainty are kept separate.
 
 ### Hierarchy mechanism
+Per-level state norm, D_eff, M_cap, M_scale and H_mem where emitted; lower-level active kernel weight and gamma ranges; bottom-up context activity; top-down gamma variation; positive-kernel and finite-state checks at both levels; and per-level stability ratios.
 
-Per-level state norm, D_eff, M_cap, M_scale, and H_mem where emitted; lower-level active kernel weight and gamma ranges; weight-sum normalization; top-down gamma variation; bottom-up context activity; positive-kernel and finite-state checks for both levels, plus per-level stability ratios.
-
-### F0 spine companion
-
-WARMUP, EXPLORE, CONSOLIDATE, EVALUATE, PRUNE and GROW coverage; kernel immutability; contiguous trace sampling; checkpoint round-trip; deterministic continuation; and zero runtime stability violations.
+### F0 runtime and spine
+The flat arm reports its actual train/evaluation runtime counters and stability violations. The companion audit checks WARMUP, EXPLORE, CONSOLIDATE, EVALUATE, PRUNE and GROW coverage; kernel immutability; contiguous trace sampling; checkpoint round-trip; deterministic continuation; and zero runtime stability violations.
 
 ### Semantic fixtures
-
-The existing 12 structured relational fixtures are replayed and reported separately. They check object-holder-location semantics and are not learned QA3/QA5 predictions.
+The existing 12 structured relational fixtures are replayed and reported separately. They check explicit object-holder-location event semantics; they are not learned QA3/QA5 predictions.
 
 ## 6. Acceptance criteria
 
@@ -99,44 +111,35 @@ A technically valid G3 evidence bundle requires:
 
 1. Both QA3 and QA5 complete.
 2. Matched seed IDs, initial readout fingerprints, training-order hashes and evaluation example identities.
-3. Both bottom-up and top-down hierarchy edges are active; context activity is non-zero; state/spectral outputs remain finite; active kernels at both levels remain finite and positive; top-down gamma variation is non-zero; the per-step stability ratio at each level remains at or below 0.9.
-4. All F0 six-phase audits pass for every seed, with no stability violations and successful checkpoint/trace checks.
+3. Both bottom-up and top-down hierarchy edges are active; context activity is non-zero; states and spectral outputs remain finite; active kernels at both levels remain finite and positive; top-down gamma variation is non-zero; and the per-step stability ratio at each hierarchy level remains at or below 0.9.
+4. All per-task/per-seed F0 spine audits pass, with no stability violations and successful checkpoint/trace checks.
 5. Complete confidence evidence for both arms and both tasks.
 6. All 12 structured relational fixtures pass.
 
-The experiment does not hard-code a required accuracy uplift. Whether hierarchy improves accuracy, calibration or selective risk is an empirical result, not a CI pass/fail condition. The paired effects, confidence intervals and seed directions determine the scientific interpretation.
-
-A hierarchy advantage is strongest when it is repeatable across seeds, appears on QA3 without materially regressing QA5, improves confidence quality or accuracy, and is accompanied by active context-dependent kernel changes rather than only a normalized weight-sum shift.
+CI enforces technical validity, not a required accuracy uplift. Whether hierarchy improves accuracy, calibration or selective risk is an empirical result.
 
 ## 7. Result bundle and Lab integration
 
-The runner is python -m d2c.experiments.babi_g3. It writes:
+The runner is `python -m d2c.experiments.babi_g3`. It writes:
 
-- summary.json and summary.md
-- per_seed_metrics.csv
-- per_example.csv and per_example.jsonl
-- config.json
-- manifest.json and metadata.json
-- experiment_lab_register.json
+- `summary.json` and `summary.md`;
+- `per_seed_metrics.csv`;
+- `per_example.csv` and `per_example.jsonl`;
+- `config.json`;
+- `manifest.json` and `metadata.json`;
+- `experiment_lab_register.json`.
 
-The Experiment Lab registers G3 with fixed tasks, three epochs, linear readout, learning rate 0.05 and feature scale 10. Seeds, dimension, evaluation split and bootstrap sample count remain visible controls. The Results page displays paired task effects, confidence comparisons, per-seed outcomes, hierarchy mechanism diagnostics, F0 companion audits and per-example evidence.
+The Lab catalogue describes the G2 E-F0 vectorized flat arm against the scalar-ABI bidirectional hierarchy. The result bundle records the backend for every seed, flat-arm runtime counters, F0 spine audits, hierarchy mechanism diagnostics, paired outcomes, confidence metrics and per-example evidence.
 
-## 8. Execution
+## 8. Unified execution
 
-Validation-only preflight:
+One GitHub Actions workflow owns the full sequence. There is no separate manual boolean input or second locked-test workflow path.
 
-    PYTHONPATH=code/python python -m d2c.experiments.babi_g3 \
-      --tasks 3,5 --dim 64 --seeds 5 --epochs 3 \
-      --lr 0.05 --feature-scale 10 --bootstrap-samples 400 \
-      --eval-split valid --output-dir runs/experiment-lab/g3-validation
+1. Build the shared C++ runtime.
+2. Prepare train and validation only; do not download or open test.
+3. Run F0, hierarchy, G2 fixture, G3 and Lab tests; compile Python modules and validate Lab JavaScript.
+4. Run the 3-seed QA3/QA5 validation preflight.
+5. Stop on any technical failure. If the validation gates pass, download the test split and run the 20-seed QA3/QA5 test evaluation.
+6. Enforce evidence-integrity gates and upload one artifact containing both validation and test bundles.
 
-Locked test evaluation:
-
-    PYTHONPATH=code/python python -m d2c.experiments.babi_g3 \
-      --tasks 3,5 --dim 64 --seeds 20 --epochs 3 \
-      --lr 0.05 --feature-scale 10 --bootstrap-samples 400 \
-      --eval-split test --output-dir runs/experiment-lab/g3
-
-A push to the G3 branch builds the shared C++ core, runs the hierarchy/G2/G3/Lab tests, performs only the validation preflight, and uploads its validation bundle. It does not download, fingerprint or evaluate the test split.
-
-The 20-seed locked evaluation is gated behind a deliberate GitHub Actions **workflow_dispatch** with the boolean input **run_locked_test=true**. The job repeats the validation preflight first; only if its mechanism, stability and F0 gates pass does it download test and execute the locked evaluation. Leave the input false for ordinary validation runs. This explicit gate prevents later code pushes from repeatedly opening the held-out split. Julia remains skipped.
+Julia remains out of scope and is skipped. The workflow does not gate on an observed accuracy improvement.
