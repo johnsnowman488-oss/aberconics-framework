@@ -9,6 +9,7 @@ not the official independent-story benchmark.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import random
@@ -299,10 +300,15 @@ def run_babi_f0_experiment(
             memory_config,
             session_id=f"babi-train-task{config.task}-seed{seed}",
         )
+        initial_readout_sha256 = hashlib.sha256(
+            readout.W.tobytes() + readout.b.tobytes()
+        ).hexdigest()
         training_epoch_losses: list[float] = []
+        training_orders: list[list[int]] = []
         for epoch in range(epochs):
             order = list(enumerate(train_dataset.stories))
             rng.shuffle(order)
+            training_orders.append([int(story_index) for story_index, _ in order])
             epoch_losses: list[float] = []
             for story_index, story in order:
                 episode = babi_story_to_episode(
@@ -385,6 +391,10 @@ def run_babi_f0_experiment(
         )
         seed_results.append({
             "seed": seed,
+            "initial_readout_sha256": initial_readout_sha256,
+            "training_order_sha256": hashlib.sha256(
+                json.dumps(training_orders, separators=(",", ":")).encode()
+            ).hexdigest(),
             "spine_exercise": spine_exercise,
             "correct": correct,
             "total": total,
