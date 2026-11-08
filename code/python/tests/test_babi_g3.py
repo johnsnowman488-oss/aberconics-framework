@@ -52,7 +52,12 @@ def test_g3_flat_arm_is_existing_ef0_path_and_abi_builder_is_hierarchy_only():
     bottom_up = next(edge for edge in hier_edges if edge["relation"] == GFE_C_HIERARCHICAL_RELATION_BOTTOM_UP)
     top_down = next(edge for edge in hier_edges if edge["relation"] == GFE_C_HIERARCHICAL_RELATION_TOP_DOWN)
     assert bottom_up["normalize_weights"] is True
-    assert top_down["normalize_weights"] is False
+    assert top_down["normalize_weights"] is True
+    assert G3Config().seeds == 3
+    disabled = G3Config(dim=8, seeds=3, normalize_top_down_weights=False)
+    _, disabled_edges = build_g3_chain(memory, disabled, ARM_HIER)
+    disabled_top_down = next(edge for edge in disabled_edges if edge["relation"] == GFE_C_HIERARCHICAL_RELATION_TOP_DOWN)
+    assert disabled_top_down["normalize_weights"] is False
 
 
 def test_g3_readout_broadcasts_scalar_abi_chi_to_feature_dimension():
@@ -116,7 +121,7 @@ def test_full_hierarchy_executes_both_couplings_and_reports_finite_state():
     assert len(report["stability_by_level"]) == 2
     assert all(row["passed"] for row in report["stability_by_level"])
     assert report["base_fast_weight_sum"] == pytest.approx(sum(memory.w))
-    assert report["first_active_fast_weight_sum"] == pytest.approx(sum(memory.w), rel=1e-9, abs=1e-9)
+    assert report["first_active_fast_weight_sum"] == pytest.approx(1.0, rel=1e-9, abs=1e-9)
     assert all(math.isfinite(row["mean_state_norm"]) for row in report["levels"])
 
 
