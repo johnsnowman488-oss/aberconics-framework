@@ -767,7 +767,7 @@ def run_g3_experiment(
                 [float(b) - float(a) for a, b in zip(left, right)],
                 f"{metric}: hierarchy minus flat (negative favours hierarchy for loss/calibration/risk)",
             )
-        f0_spines = [row.get("f0_spine_audit", {}) for row in flat["seed_results"]]
+        f0_spines = [row.get("f0_spine_audit") or {} for row in flat["seed_results"]]
         spine_passed = all(
             row.get("status") == "passed"
             and all(row.get("phase_coverage", {}).values())
