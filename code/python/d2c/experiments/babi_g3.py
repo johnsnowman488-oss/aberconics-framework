@@ -1,9 +1,11 @@
-"""G3: flat ABI versus full bidirectional hierarchy on bAbI QA3/QA5.
+"""G3: G2 E-F0 vectorized runtime versus full scalar-ABI hierarchy.
 
-Both arms use the same C++ ABI scalar-chi substrate, token bridge, readout,
-training orders, seeds and held-out examples. The F0 runtime spine is exercised
-as a per-seed companion audit; it is not misrepresented as the hierarchy's
-state engine. No static weight-strengthening arm is included in G3.
+The flat arm directly reuses the established G2 E-F0 DigitalRuntime runner.
+The hierarchy arm uses the C++ ABI scalar-chi substrate with bottom-up and
+top-down coupling. Both arms share stories, readout initialization, seed and
+training-order identities. The F0 spine is active in the flat arm and is also
+qualified with the existing per-seed companion audit. No static
+weight-strengthening arm is included in G3.
 """
 from __future__ import annotations
 
@@ -28,9 +30,7 @@ from ..digital.babi import (
 )
 from ..digital.readout import LinearReadout, query_conditioned_features
 from ..ffi import load_library
-from ..runtime.digital_runtime import DigitalRuntimeConfig
-from ..runtime.phase_controller import DigitalPhaseConfig
-from .babi_f0 import BabiF0Config, exercise_f0_spine
+from .babi_f0 import BabiF0Config, run_babi_f0_experiment
 from .confidence_metrics import summarize_confidence
 from .g0_diagnostics import build_prediction_record, summarize_training_losses
 from .symbolic_induction import memory_config_for_variant
@@ -58,7 +58,7 @@ _T95 = {
     13: 2.160, 14: 2.145, 15: 2.131, 16: 2.120, 17: 2.110, 18: 2.101,
     19: 2.093, 20: 2.086,
 }
-ARM_FLAT = "flat_abi"
+ARM_FLAT = "ef0_vectorized"
 ARM_HIER = "hier_bu_td"
 ARMS = (ARM_FLAT, ARM_HIER)
 
@@ -149,8 +149,10 @@ def build_g3_chain(
         "form": GFE_C_COUPLING_FORM_B,
         "coupling_index": 0,
     }
-    if arm == ARM_FLAT:
-        return [fast], []
+    if arm != ARM_HIER:
+        raise ValueError(
+            "the flat G3 arm is the existing G2 E-F0 vectorized runner, not an ABI chain"
+        )
 
     context = {
         "name": "slow_relational_context",
@@ -362,6 +364,8 @@ def _run_arm(
     orders: list[list[int]],
     lib,
 ) -> dict[str, Any]:
+    if arm != ARM_HIER:
+        raise ValueError("_run_arm is reserved for the scalar-ABI hierarchy")
     levels, edges = build_g3_chain(memory, config, arm)
     director = HierarchicalDigitalDirector(
         lib=lib, levels=levels, edges=edges, state_dim=config.dim,
@@ -565,8 +569,86 @@ def _arm_summary(seed_rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _f0_vectorized_seed_rows(
+    *,
+    task: int,
+    train_orders: dict[int, list[list[int]]],
+    answer_set: list[str],
+    config: G3Config,
+    data_dir: Path,
+    eval_split: str,
+) -> list[dict[str, Any]]:
+    """Adapt the existing G2 E-F0 runner without rebuilding its stepping path."""
+    f0_config = BabiF0Config(
+        task=task, variant="full", dim=config.dim, seeds=config.seeds,
+        epochs=config.epochs, hidden_dim=32,
+        learning_rate=config.learning_rate, readout_type=config.readout,
+        feature_scale=config.feature_scale, mode="isolated",
+        exercise_spine=True,
+    )
+    result = run_babi_f0_experiment(
+        f0_config, data_dir=data_dir, eval_split=eval_split
+    )
+    if len(result["seed_results"]) != config.seeds:
+        raise AssertionError("G2 E-F0 runner returned an unexpected number of seeds")
+    if result["train_stories"] <= 0 or result["evaluation_stories"] <= 0:
+        raise AssertionError("G2 E-F0 runner returned an empty task split")
+
+    rows: list[dict[str, Any]] = []
+    for seed_row in result["seed_results"]:
+        seed = int(seed_row["seed"])
+        expected_order_hash = hashlib.sha256(
+            json.dumps(train_orders[seed], separators=(",", ":")).encode()
+        ).hexdigest()
+        if seed_row.get("training_order_sha256") != expected_order_hash:
+            raise AssertionError(f"G2 E-F0 training order mismatch for QA{task}, seed {seed}")
+        if not seed_row.get("initial_readout_sha256"):
+            raise AssertionError(f"G2 E-F0 readout fingerprint missing for QA{task}, seed {seed}")
+        predictions = seed_row["predictions"]
+        confidence = summarize_confidence(
+            predictions, answer_set, calibration_bins=10,
+            bootstrap_samples=config.bootstrap_samples,
+            bootstrap_seed=task * 10_000 + seed * 101,
+        )
+        if confidence.get("correct") != int(seed_row["correct"]):
+            raise AssertionError("G2 E-F0 confidence diagnostics disagree with runner correctness")
+        rows.append({
+            "seed": seed, "arm": ARM_FLAT,
+            "correct": int(seed_row["correct"]), "total": int(seed_row["total"]),
+            "accuracy": float(seed_row["accuracy"]),
+            "training": seed_row["training"],
+            "initial_readout_sha256": seed_row["initial_readout_sha256"],
+            "training_order_sha256": seed_row["training_order_sha256"],
+            "predictions": predictions, "confidence": confidence,
+            "f0_spine_audit": seed_row.get("spine_exercise"),
+            "runtime_diagnostics": {
+                "backend": "G2 E-F0 DigitalRuntime -> Python vectorized step_memory",
+                "train": seed_row.get("train_runtime", {}),
+                "evaluation": seed_row.get("test_runtime", {}),
+            },
+            "hierarchy_diagnostics": {
+                "backend": "python_vectorized_f0_flat",
+                "evaluation_examples": len(predictions), "level_count": 0,
+                "levels": [], "bottom_up_context_activity": 0.0,
+                "top_down_coupling_configured": False,
+                "top_down_dynamic_gamma_fraction": 0.0,
+                "base_fast_weight_sum": None, "mean_active_fast_weight_sum": None,
+                "max_fast_active_stability_ratio": None,
+                "max_hierarchy_active_stability_ratio": None,
+                "fast_active_stability_pass": True, "all_active_stability_pass": True,
+            },
+        })
+    if [row["seed"] for row in rows] != list(range(config.seeds)):
+        raise AssertionError("G2 E-F0 seed identities are not the registered sequence")
+    return rows
+
+
 def _verify_pair(flat: dict[str, Any], hierarchy: dict[str, Any]) -> bool:
     if flat["seed"] != hierarchy["seed"] or flat["total"] != hierarchy["total"]:
+        return False
+    if flat.get("initial_readout_sha256") != hierarchy.get("initial_readout_sha256"):
+        return False
+    if flat.get("training_order_sha256") != hierarchy.get("training_order_sha256"):
         return False
     fields = ("story_index", "task", "raw_passage", "question", "target")
     flat_predictions = flat.get("predictions", [])
@@ -575,7 +657,6 @@ def _verify_pair(flat: dict[str, Any], hierarchy: dict[str, Any]) -> bool:
         len(flat_predictions) == flat["total"]
         and len(hierarchy_predictions) == hierarchy["total"]
         and len(flat_predictions) == len(hierarchy_predictions)
-        and flat.get("initial_readout_sha256") == hierarchy.get("initial_readout_sha256")
         and all(
             all(a.get(field) == b.get(field) for field in fields)
             for a, b in zip(flat_predictions, hierarchy_predictions)
@@ -610,18 +691,6 @@ def run_g3_experiment(
     fixture_control = run_fixture_suite(_FIXTURE_PATH)
     runtime_library = lib or load_library(None)
     memory = memory_config_for_variant("full")
-    f0_audit_config = BabiF0Config(
-        task=3, dim=cfg.dim, seeds=cfg.seeds, epochs=cfg.epochs,
-        learning_rate=cfg.learning_rate, feature_scale=cfg.feature_scale,
-        mode="isolated", exercise_spine=True,
-        runtime=DigitalRuntimeConfig(
-            trace_capacity=20_000,
-            phase=DigitalPhaseConfig(
-                warmup_steps=8, explore_steps=64, consolidate_steps=8,
-                evaluation_interval=128,
-            ),
-        ),
-    )
     orders_by_seed: dict[str, Any] = {}
     all_task_results: dict[str, Any] = {}
     started_at = datetime.now(timezone.utc).isoformat()
@@ -638,32 +707,33 @@ def run_g3_experiment(
         bridge = build_babi_bridge(vocabulary, dim=cfg.dim)
         training_orders = _orders(len(train_stories), cfg.seeds, cfg.epochs)
         arm_rows: dict[str, list[dict[str, Any]]] = {arm: [] for arm in ARMS}
-        paired_ok = True
-        task_seed_orders = {}
-
-        for seed in range(cfg.seeds):
-            seed_order = training_orders[seed]
-            order_hash = hashlib.sha256(
-                json.dumps(seed_order, separators=(",", ":")).encode()
+        training_order_hashes = {
+            seed: hashlib.sha256(
+                json.dumps(order, separators=(",", ":")).encode()
             ).hexdigest()
-            task_seed_orders[str(seed)] = order_hash
-            per_arm = {}
-            for arm in ARMS:
-                result = _run_arm(
-                    arm=arm, task=task, seed=seed,
-                    train_stories=train_stories, eval_stories=eval_stories,
-                    answer_set=answer_set, bridge=bridge, memory=memory,
-                    config=cfg, orders=seed_order, lib=runtime_library,
-                )
-                per_arm[arm] = result
-                arm_rows[arm].append(result)
-            paired_ok = paired_ok and _verify_pair(per_arm[ARM_FLAT], per_arm[ARM_HIER])
-            if cfg.f0_spine_audit:
-                spine = exercise_f0_spine(f0_audit_config, memory, seed=seed)
-            else:
-                spine = {"status": "not_requested"}
-            per_arm[ARM_FLAT]["f0_spine_audit"] = spine
-            per_arm[ARM_HIER]["f0_spine_audit"] = spine
+            for seed, order in training_orders.items()
+        }
+        task_seed_orders = {
+            str(seed): digest for seed, digest in training_order_hashes.items()
+        }
+
+        # The flat arm is the existing G2 E-F0 vectorized runtime runner.
+        arm_rows[ARM_FLAT] = _f0_vectorized_seed_rows(
+            task=task, train_orders=training_orders, answer_set=answer_set,
+            config=cfg, data_dir=data_dir, eval_split=eval_split,
+        )
+        flat_by_seed = {row["seed"]: row for row in arm_rows[ARM_FLAT]}
+        paired_ok = True
+        for seed in range(cfg.seeds):
+            hierarchy_row = _run_arm(
+                arm=ARM_HIER, task=task, seed=seed,
+                train_stories=train_stories, eval_stories=eval_stories,
+                answer_set=answer_set, bridge=bridge, memory=memory,
+                config=cfg, orders=training_orders[seed], lib=runtime_library,
+            )
+            hierarchy_row["training_order_sha256"] = training_order_hashes[seed]
+            arm_rows[ARM_HIER].append(hierarchy_row)
+            paired_ok = paired_ok and _verify_pair(flat_by_seed[seed], hierarchy_row)
 
         flat = _arm_summary(arm_rows[ARM_FLAT])
         hierarchy = _arm_summary(arm_rows[ARM_HIER])
@@ -697,7 +767,7 @@ def run_g3_experiment(
                 [float(b) - float(a) for a, b in zip(left, right)],
                 f"{metric}: hierarchy minus flat (negative favours hierarchy for loss/calibration/risk)",
             )
-        f0_spines = [row.get("f0_spine_audit", {}) for row in hierarchy["seed_results"]]
+        f0_spines = [row.get("f0_spine_audit", {}) for row in flat["seed_results"]]
         spine_passed = all(
             row.get("status") == "passed"
             and all(row.get("phase_coverage", {}).values())
@@ -741,7 +811,7 @@ def run_g3_experiment(
                 "passed": spine_passed,
                 "audits_required": cfg.seeds,
                 "audits_passed": sum(row.get("status") == "passed" for row in f0_spines),
-                "interpretation": "The E-F0 six-phase runtime spine is exercised as a per-seed companion audit; the benchmark's matched task dynamics use the ABI scalar-chi substrate in both arms.",
+                "interpretation": "The existing G2 E-F0 six-phase runtime is the vectorized flat benchmark arm; its per-task/per-seed spine audit is retained.",
             },
             "hierarchy_mechanism_audit": {
                 "passed": hierarchy_audit_passed,
@@ -802,12 +872,14 @@ def run_g3_experiment(
             **asdict(cfg),
             "arms": list(ARMS),
             "arm_descriptions": {
-                ARM_FLAT: "Flat single-level ABI scalar-chi reference; no hierarchy edges.",
-                ARM_HIER: "Two-level ABI scalar-chi runtime with full bottom-up and top-down coupling.",
+                ARM_FLAT: "Existing G2 E-F0 Python-vectorized DigitalRuntime/step_memory path, isolated mode, six-phase runtime spine active.",
+                ARM_HIER: "Two-level C++ ABI scalar-chi runtime with full bottom-up and top-down coupling.",
             },
-            "substrate": "C++ hierarchy chain-spec ABI; scalar chi per channel; pre-step Form-B feedback at coupling_index 0.",
-            "f0_spine": "Full six-phase E-F0 audit executed once per seed as a companion; it does not replace or alter the ABI benchmark path.",
-            "hierarchy_control_boundary": "No static weight-strengthening arm in G3; active kernel weights and gamma changes are reported. A separate strength-control experiment may follow only if results warrant it.",
+            "substrate": "Two packages: G2 E-F0 Python-vectorized step_memory flat arm; C++ hierarchy chain-spec ABI with scalar chi and pre-step Form-B feedback at coupling_index 0 for hierarchy.",
+            "flat_baseline_source": "d2c.experiments.babi_f0.run_babi_f0_experiment; build_babi_memory_config('full'); isolated episodes; default G2 DigitalRuntime configuration.",
+            "hierarchy_kernel_source": "d2c.experiments.symbolic_induction.memory_config_for_variant('full'); C++ ABI Form-B hierarchy with frozen two-level gains and context kernel.",
+            "f0_spine": "Existing six-phase E-F0 runtime is used directly as the vectorized flat benchmark arm; the existing per-seed F0 spine exercise is also retained as a companion qualification check.",
+            "hierarchy_control_boundary": "No static weight-strengthening arm in G3. This compares complete G2 E-F0 vectorized and scalar-ABI bidirectional hierarchy packages; it does not isolate hierarchy alone because backend and memory feedback formulation differ. Active hierarchy kernels are fully reported.",
             "evaluation_split": eval_split,
             "test_split_opened": eval_split == "test",
             "locked_test_policy": "The test split is evaluated once after implementation and validation checks; it is not used to tune the hierarchy.",
@@ -821,11 +893,12 @@ def run_g3_experiment(
         "tasks": all_task_results,
         "acceptance": acceptance,
         "claim_boundary": (
-            "G3 compares a flat ABI memory path with a full bidirectional two-level hierarchy on bAbI QA3/QA5. "
-            "The F0 runtime spine is a companion per-seed audit. It does not establish that the F0 Python runtime "
-            "is the hierarchy state engine. Static weight strengthening is not controlled in this run; kernel "
-            "weight sums and gamma modulation are exposed to qualify that confound. Passing G3 does not establish "
-            "general language reasoning or close later F-series learning mechanisms."
+            "G3 compares the established G2 E-F0 vectorized Python runtime, including its six-phase F0 spine, "
+            "against a full bidirectional two-level scalar-ABI hierarchy on bAbI QA3/QA5. This is a package-level "
+            "comparison, not a pure hierarchy-only causal ablation: the backend and memory feedback formulation "
+            "differ. Per-task/per-seed F0 spine audits qualify the existing flat runtime. Static weight strengthening "
+            "and runtime ablation remain deferred. Passing G3 does not establish general language reasoning or "
+            "close the later F-series learning mechanisms."
         ),
     }
 
@@ -849,7 +922,10 @@ def save_g3_bundle(result: dict[str, Any], output_dir: Path) -> Path:
                     "fixed_ece": seed["confidence"]["calibration"]["fixed_bin_top_label_ece"],
                     "adaptive_ece": seed["confidence"]["calibration"]["adaptive_equal_mass_top_label_ece"],
                     "aurc": seed["confidence"]["selective_prediction"]["area_under_risk_coverage_curve"],
-                    "f0_spine": seed["f0_spine_audit"]["status"],
+                    "f0_spine": seed.get("f0_spine_audit", {}).get("status", "not_run"),
+                    "runtime_backend": seed.get("runtime_diagnostics", {}).get(
+                        "backend", seed.get("hierarchy_diagnostics", {}).get("backend", "scalar_abi_hierarchy")
+                    ),
                     "hierarchy_levels": seed["hierarchy_diagnostics"]["level_count"],
                     "context_activity": seed["hierarchy_diagnostics"]["bottom_up_context_activity"],
                     "top_down_dynamic_gamma_fraction": seed["hierarchy_diagnostics"]["top_down_dynamic_gamma_fraction"],
@@ -961,7 +1037,7 @@ def save_g3_bundle(result: dict[str, Any], output_dir: Path) -> Path:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run the G3 flat-ABI versus full hierarchy bAbI benchmark.")
+    parser = argparse.ArgumentParser(description="Run G3 G2 E-F0 vectorized flat versus full scalar-ABI hierarchy.")
     parser.add_argument("--tasks", default="3,5")
     parser.add_argument("--dim", type=int, default=64)
     parser.add_argument("--seeds", type=int, default=20)
