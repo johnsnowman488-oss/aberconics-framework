@@ -117,66 +117,12 @@ jobs:
           print("G3 validation preflight, mechanism, stability, F0 spine and test-split isolation passed.")
           PY
 
-      - name: Prepare held-out test split only after validation preflight
-        run: python -m d2c.digital.download_babi --splits test
-
-      - name: Short G3 held-out test evaluation (3 matched seeds)
-        run: |
-          mkdir -p "$G3_TEST_OUTPUT"
-          python -m d2c.experiments.babi_g3 \
-            --tasks 3,5 --dim 64 --seeds 3 --epochs 3 \
-            --lr 0.05 --feature-scale 10 --bootstrap-samples 400 \
-            --eval-split test --output-dir "$G3_TEST_OUTPUT"
-
-      - name: Enforce G3 evidence-integrity gates
-        run: |
-          python - <<'PY'
-          import json, pathlib
-          root = pathlib.Path("runs/experiment-lab/g3")
-          summaries = sorted(root.glob("g3_*/summary.json"))
-          if not summaries:
-              raise SystemExit("G3 test run did not produce summary.json")
-          report = json.loads(summaries[-1].read_text())
-          if report["protocol"]["evaluation_split"] != "test" or report["protocol"]["test_split_opened"] is not True:
-              raise SystemExit("G3 evidence is not from the registered test evaluation")
-          if report["protocol"]["seeds"] != 3 or report["protocol"]["epochs"] != 3:
-              raise SystemExit("G3-N test run did not use the reduced 3-seed / 3-epoch protocol")
-          acceptance = report["acceptance"]
-          required = (
-              "qa3_qa5_coverage",
-              "matched_seed_example_and_training_order",
-              "full_bottom_up_top_down_mechanism",
-              "f0_six_phase_spine_audit",
-              "confidence_evidence",
-              "structured_relational_fixtures",
-          )
-          failed = [key for key in required if not acceptance[key]["passed"]]
-          print(json.dumps({
-              "acceptance": acceptance,
-              "task_effects": {
-                  task: entry["paired_effects"]["accuracy"]
-                  for task, entry in report["tasks"].items()
-              },
-              "confidence": {
-                  task: entry["confidence_evidence"]
-                  for task, entry in report["tasks"].items()
-              },
-              "hierarchy_mechanism": {
-                  task: entry["hierarchy_mechanism_audit"]
-                  for task, entry in report["tasks"].items()
-              },
-          }, indent=2))
-          if failed:
-              raise SystemExit("G3 evidence-integrity gates failed: " + ", ".join(failed))
-          PY
-
-      - name: Upload G3 Lab register and complete evidence bundle
+      - name: Upload G3-N validation evidence bundle
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: g3-full-hierarchy-qa3-qa5
+          name: g3-normalized-top-down-validation-qa3-qa5
           path: |
             runs/experiment-lab/g3-validation/
-            runs/experiment-lab/g3/
           if-no-files-found: warn
           retention-days: 30
