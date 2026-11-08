@@ -76,6 +76,21 @@ class BabiF0Config:
             raise ValueError("silence_steps_between_statements must be non-negative")
 
 
+def _readout_fingerprint(readout) -> str:
+    """Hash parameters for either supported F0 readout without changing them."""
+    if hasattr(readout, "W") and hasattr(readout, "b"):
+        arrays = (readout.W, readout.b)
+    else:
+        arrays = tuple(
+            getattr(readout, name)
+            for name in ("w1", "b1", "w2", "b2")
+            if hasattr(readout, name)
+        )
+    if not arrays:
+        raise TypeError("unsupported F0 readout: no recognized parameter arrays")
+    return hashlib.sha256(b"".join(array.tobytes() for array in arrays)).hexdigest()
+
+
 def _make_runtime(config: BabiF0Config, memory_config, *, session_id: str) -> DigitalRuntime:
     return DigitalRuntime(
         memory_config=memory_config,
@@ -300,9 +315,7 @@ def run_babi_f0_experiment(
             memory_config,
             session_id=f"babi-train-task{config.task}-seed{seed}",
         )
-        initial_readout_sha256 = hashlib.sha256(
-            readout.W.tobytes() + readout.b.tobytes()
-        ).hexdigest()
+        initial_readout_sha256 = _readout_fingerprint(readout)
         training_epoch_losses: list[float] = []
         training_orders: list[list[int]] = []
         for epoch in range(epochs):
