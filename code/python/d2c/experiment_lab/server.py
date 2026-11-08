@@ -502,7 +502,7 @@ def _run_summary(job: dict) -> dict:
         hierarchy_accuracies = []
         for task_key, task in task_rows.items():
             arms = task.get("arms", {})
-            flat = arms.get("flat_abi", {})
+            flat = arms.get("ef0_vectorized", {})
             hierarchy = arms.get("hier_bu_td", {})
             effect = task.get("paired_effects", {}).get("accuracy", {})
             diagnostics = task.get("hierarchy_mechanism_audit", {}).get("per_seed", [])
