@@ -1,6 +1,6 @@
 # G3: G2 E-F0 Vectorized Runtime versus Full Scalar-ABI Hierarchy
 
-**Status:** implementation and execution on branch `g3/full-hierarchy-relational`  
+**Status:** G3 baseline completed; G3-N top-down normalization validation on branch `g3/normalized-top-down-kernel`  
 **Experiment ID:** G3-FULL-HIERARCHY  
 **Scope:** QA3 + QA5; two matched arms only.
 
@@ -25,13 +25,13 @@ The existing per-task/per-seed F0 spine exercise is also retained as a companion
 |---|---|
 | Tasks | QA3 and QA5; both required |
 | Arms | G2 E-F0 vectorized flat; full scalar-ABI bottom-up/top-down hierarchy |
-| Seeds | 20 matched seeds, numbered 0–19 (3 for validation preflight) |
+| Seeds | 3 matched seeds, numbered 0–2 for G3-N validation (reduced CI evaluation) |
 | Epochs | 3 |
 | State dimension | 64 |
 | Readout | Linear |
 | Learning rate | 0.05 |
 | Feature scale | 10 |
-| Evaluation | 3-seed validation preflight, then 20-seed held-out test |
+| Evaluation | 3-seed QA3/QA5 validation only; previously consumed test split remains closed |
 | Confidence bootstrap | 200 replicates in preflight; 400 in held-out test |
 | Mode | Isolated episode per story |
 | Runtime ablation | Deferred |
@@ -67,7 +67,7 @@ The existing C++ hierarchy arm is retained:
 - context weights `[0.05, 0.02]`;
 - context leak 0.5;
 - Form-B negative-feedback ABI stepping;
-- top-down weight normalization disabled to preserve base aggregate weight scale;
+- top-down positive-kernel weight normalization enabled (G3-N); active fast-level kernel is normalized to unit total weight;
 - active per-level kernels, state norms, spectral diagnostics and stability ratios captured.
 
 The hierarchy's scalar-ABI stability contract remains unchanged. The flat E-F0 memory kernel is not silently substituted into the hierarchy, since it belongs to a different vectorized/input-driven execution formulation.
@@ -139,7 +139,7 @@ One GitHub Actions workflow owns the full sequence. There is no separate manual 
 2. Prepare train and validation only; do not download or open test.
 3. Run F0, hierarchy, G2 fixture, G3 and Lab tests; compile Python modules and validate Lab JavaScript.
 4. Run the 3-seed QA3/QA5 validation preflight.
-5. Stop on any technical failure. If the validation gates pass, download the test split and run the 20-seed QA3/QA5 test evaluation.
-6. Enforce evidence-integrity gates and upload one artifact containing both validation and test bundles.
+5. Keep the previously consumed test split closed; G3-N is a validation-stage normalizer check only.
+6. Upload one compact validation evidence bundle. A fresh locked holdout is reserved for a later confirmatory stage.
 
 Julia remains out of scope and is skipped. The workflow does not gate on an observed accuracy improvement.
