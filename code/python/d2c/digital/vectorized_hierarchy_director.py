@@ -42,18 +42,14 @@ def vectorized_top_down_kernel(
     gamma = [float(value) * gamma_scale for value in base.gamma]
     if any(not math.isfinite(value) or value <= 0.0 for value in gamma):
         raise RuntimeError("top-down modulation underflowed a positive decay rate")
-    raw_weights = [float(value) * math.exp(gain * drive) for value in base.w]
     if normalize_weights:
-        total = sum(raw_weights)
-        if not math.isfinite(total) or total <= 0.0:
-            # Since the modulation multiplier is common to all channels,
-            # this is exactly the normalized base-kernel distribution.
-            base_total = sum(base.w)
-            weights = [float(value) / base_total for value in base.w]
-        else:
-            weights = [value / total for value in raw_weights]
+        # The exp(gain*drive) term is common to every positive channel weight,
+        # so it cancels exactly under unit-sum normalization.
+        base_total = sum(base.w)
+        weights = [float(value) / base_total for value in base.w]
     else:
-        weights = raw_weights
+        weight_scale = math.exp(gain * drive)
+        weights = [float(value) * weight_scale for value in base.w]
     paired = sorted(zip(gamma, weights), key=lambda item: item[0], reverse=True)
     return DigitalMemoryConfig(
         gamma=[item[0] for item in paired],
