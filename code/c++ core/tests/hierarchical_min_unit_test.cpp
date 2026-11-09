@@ -1,6 +1,7 @@
 #include "abersoe/hierarchical_min.hpp"
 
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 
@@ -323,7 +324,8 @@ int main() {
                 return 1;
             }
 
-            const std::string cross_path = "/tmp/hierarchical_cross_level_schema_test.csv";
+            const std::string cross_path =
+                (std::filesystem::temp_directory_path() / "hierarchical_cross_level_schema_test.csv").string();
             abersoe::write_hierarchy_cross_level_csv(cross_path, cross_level);
             std::ifstream in(cross_path);
             std::string header;
@@ -356,7 +358,8 @@ int main() {
                 return 1;
             }
 
-            const std::string renorm_path = "/tmp/hierarchical_renorm_schema_test.csv";
+            const std::string renorm_path =
+                (std::filesystem::temp_directory_path() / "hierarchical_renorm_schema_test.csv").string();
             abersoe::write_hierarchy_renorm_csv(renorm_path, renorm);
             std::ifstream renorm_in(renorm_path);
             std::string renorm_header;
