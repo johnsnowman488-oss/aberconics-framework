@@ -19,7 +19,7 @@ gfe::digital::MemoryKernel kernel(const gfe_c_digital_memory_kernel_view& x,std:
  return {{x.gamma,x.gamma+C},{x.weights,x.weights+C}};
 }
 gfe::digital::MemoryState state(const gfe_c_digital_memory_state_view& x,const gfe::digital::MemoryConfig& c){
- if(!x.u||!x.chi||x.u_size!=c.state_dim||c.channel_count>std::numeric_limits<std::size_t>::max()/c.state_dim||x.chi_size!=c.channel_count*c.state_dim)throw std::invalid_argument("state pointers or dimensions invalid");
+ if(!c.state_dim||!c.channel_count||!x.u||!x.chi||x.u_size!=c.state_dim||c.channel_count>std::numeric_limits<std::size_t>::max()/c.state_dim||x.chi_size!=c.channel_count*c.state_dim)throw std::invalid_argument("state pointers or dimensions invalid");
  return {{x.u,x.u+x.u_size},{x.chi,x.chi+x.chi_size},x.t};
 }
 int write_state(const gfe::digital::MemoryState& x,gfe_c_digital_memory_state_mut_view* y,char* e,std::size_t n){

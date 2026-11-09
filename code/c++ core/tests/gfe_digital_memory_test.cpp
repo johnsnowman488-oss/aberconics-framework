@@ -39,6 +39,8 @@ void sequence_and_abi(){
  req(dg.steps_executed==2&&tss==3&&tus==6&&tcs==12&&eq(ts[2],.6),"sequence ABI output");
  double tinyu[1]{},tinyc[1]{},tinyt=0;std::size_t tuz=0,tcz=0;gfe_c_digital_memory_state_mut_view tiny{tinyu,1,&tuz,tinyc,1,&tcz,&tinyt};
  req(gfe_c_digital_step(&cc,&kv,&sv,force,2,&tiny,e,sizeof(e))==GFE_C_STATUS_BUFFER_TOO_SMALL&&tuz==2&&tcz==4,"buffer-too-small contract");
+ cc.state_dim=0;
+ req(gfe_c_digital_step(&cc,&kv,&sv,force,0,&ov,e,sizeof(e))==GFE_C_STATUS_INVALID_ARGUMENT,"zero state_dim must be rejected safely");
 }
 }
 int main(){try{core_forms();sequence_and_abi();std::cout<<"gfe_digital_memory_test: all checks passed\n";return 0;}catch(const std::exception&e){std::cerr<<e.what()<<"\n";return 1;}}
