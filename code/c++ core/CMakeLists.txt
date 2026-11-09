@@ -17,6 +17,8 @@ add_library(gfe_core
     src/gfe_core.cpp
     src/gfe_backend.cpp
     src/gfe_c_api.cpp
+    src/gfe_digital_memory.cpp
+    src/gfe_digital_memory_c_api.cpp
     src/gfe_dynamics.cpp
     src/gfe_gst.cpp
     src/gfe_assumptions.cpp
@@ -74,6 +76,10 @@ if(GFE_BUILD_TESTS)
     add_executable(gfe_c_api_smoke_test tests/gfe_c_api_smoke_test.cpp)
     target_link_libraries(gfe_c_api_smoke_test PRIVATE gfe_core)
     add_test(NAME gfe_c_api_smoke_test COMMAND gfe_c_api_smoke_test)
+
+    add_executable(gfe_digital_memory_test tests/gfe_digital_memory_test.cpp)
+    target_link_libraries(gfe_digital_memory_test PRIVATE gfe_core)
+    add_test(NAME gfe_digital_memory_test COMMAND gfe_digital_memory_test)
 
     add_executable(abersoe_smoke_test tests/abersoe_smoke_test.cpp)
     target_link_libraries(abersoe_smoke_test PRIVATE gfe_core)
