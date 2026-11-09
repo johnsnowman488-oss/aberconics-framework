@@ -288,6 +288,7 @@ def run_g4_validation(
     data_dir: Path = _DATA_DIR,
 ) -> dict[str, Any]:
     cfg = config or G4Config()
+    started_at = datetime.now(timezone.utc).isoformat()
     data_dir = Path(data_dir)
     train_path = data_dir / "babi_train.jsonl"
     valid_path = data_dir / "babi_valid.jsonl"
@@ -439,7 +440,7 @@ def run_g4_validation(
         "experiment": "g4_vectorized_hierarchical_relational",
         "experiment_id": "G4-VECTORIZED-HIERARCHY",
         "status": "completed",
-        "started_at_utc": g3_reference.get("started_at_utc"),
+        "started_at_utc": started_at,
         "completed_at_utc": datetime.now(timezone.utc).isoformat(),
         "code_revision": g3_reference.get("code_revision", "unknown"),
         "protocol": {
