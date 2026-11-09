@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <vector>
 namespace {
-void err(char* p,std::size_t n,const char* s){if(!p||!n)return;auto k=std::min(n-1,std::strlen(s));std::memcpy(p,s,k);p[k]='\\0';}
+void err(char* p,std::size_t n,const char* s){if(!p||!n)return;auto k=std::min(n-1,std::strlen(s));std::memcpy(p,s,k);p[k]='\0';}
 int fail(const std::exception& e,char* p,std::size_t n){err(p,n,e.what());return dynamic_cast<const std::invalid_argument*>(&e)?GFE_C_STATUS_INVALID_ARGUMENT:GFE_C_STATUS_RUNTIME_ERROR;}
 gfe::digital::MemoryConfig cfg(const gfe_c_digital_memory_config& x){
  gfe::digital::MemoryConfig c{x.state_dim,x.channel_count,x.dt,x.leak_rate,gfe::digital::MemoryForm::InputDriven};

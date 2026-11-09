@@ -57,6 +57,7 @@ class BabiF0Config:
     readout_type: Literal["linear", "mlp"] = "linear"
     feature_scale: float = 100.0
     mode: Literal["isolated", "continuous"] = "isolated"
+    memory_backend: Literal["python_ref", "cpp_vectorized"] = "python_ref"
     silence_steps_between_statements: int = 0
     runtime: DigitalRuntimeConfig = field(default_factory=DigitalRuntimeConfig)
     exercise_spine: bool = False
@@ -68,6 +69,8 @@ class BabiF0Config:
             raise ValueError("readout_type must be linear or mlp")
         if self.mode not in {"isolated", "continuous"}:
             raise ValueError("mode must be isolated or continuous")
+        if self.memory_backend not in {"python_ref", "cpp_vectorized"}:
+            raise ValueError("memory_backend must be python_ref or cpp_vectorized")
         if self.learning_rate <= 0.0:
             raise ValueError("learning_rate must be positive")
         if not math.isfinite(self.feature_scale) or self.feature_scale <= 0.0:
@@ -92,11 +95,17 @@ def _readout_fingerprint(readout) -> str:
 
 
 def _make_runtime(config: BabiF0Config, memory_config, *, session_id: str) -> DigitalRuntime:
+    memory_stepper = None
+    if config.memory_backend == "cpp_vectorized":
+        from ..digital.native_stepper import CppVectorizedMemoryStepper
+        memory_stepper = CppVectorizedMemoryStepper(memory_config)
     return DigitalRuntime(
         memory_config=memory_config,
         state_dim=config.dim,
         config=config.runtime,
         session_id=session_id,
+        memory_backend=config.memory_backend,
+        memory_stepper=memory_stepper,
     )
 
 
@@ -439,6 +448,7 @@ def run_babi_f0_experiment(
         "feature_scale": config.feature_scale,
         "learning_rate": config.learning_rate,
         "mode": config.mode,
+        "memory_backend": config.memory_backend,
         "seeds": config.seeds,
         "epochs": epochs,
         "evaluation_split": eval_split,
@@ -488,6 +498,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--eval-split", choices=["valid", "test"], default="test")
     parser.add_argument("--readout", choices=["linear", "mlp"], default="linear")
     parser.add_argument("--mode", choices=["isolated", "continuous"], default="isolated")
+    parser.add_argument("--memory-backend", choices=["python_ref", "cpp_vectorized"], default="python_ref")
     parser.add_argument("--silence-steps", type=int, default=0)
     parser.add_argument("--max-train-stories", type=int, default=0)
     parser.add_argument("--data-dir", type=Path, default=_DATA_DIR)
@@ -523,6 +534,7 @@ def main(argv: list[str] | None = None) -> dict[str, str]:
         readout_type=args.readout,
         feature_scale=args.feature_scale,
         mode=args.mode,
+        memory_backend=args.memory_backend,
         silence_steps_between_statements=args.silence_steps,
         runtime=runtime_config,
         exercise_spine=args.exercise_spine,
