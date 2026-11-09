@@ -502,6 +502,11 @@ def _run_arm(
             "max_fast_active_stability_ratio": max(
                 row["fast_active_stability_ratio_max"] for row in hierarchy_rows
             ) if hierarchy_rows else None,
+            # Preserve the frozen stability bound in the seed-level summary;
+            # the run-level acceptance reporter consumes this aggregated field.
+            "fast_active_stability_margin": min(
+                row["fast_active_stability_margin"] for row in hierarchy_rows
+            ) if hierarchy_rows else None,
             "fast_active_stability_pass": all(
                 row["fast_active_stability_pass"] for row in hierarchy_rows
             ) if hierarchy_rows else True,
