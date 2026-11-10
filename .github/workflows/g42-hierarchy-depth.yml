@@ -1,4 +1,4 @@
-name: G4.2 N-Level Hierarchy Sweep and Adaptive Follow-up
+name: G4.2 Corrected Coupling, Concurrent H-C-D Sweep, and Adaptive Follow-up
 
 on:
   push:
@@ -10,24 +10,61 @@ on:
       - "code/python/d2c/experiments/babi_g42.py"
       - "code/python/tests/test_hierarchy_g42.py"
       - "docs/G4_2_ADAPTIVE_HIERARCHY.md"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: g42-${{ github.ref }}
+  group: g42-corrected-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  h-sweep:
-    name: H${{ matrix.depth }} static hierarchy
+  coupling-validation:
+    name: Validate corrected vector coupling and readout
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: ${{ github.workspace }}/code/python
+      GFE_CORE_LIB: ${{ github.workspace }}/code/c++ core/build-shared/libgfe_core.so
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      VECLIB_MAXIMUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.18"
+      - name: Build unchanged vectorized C++ memory runtime
+        run: |
+          cmake -S "code/c++ core" -B "code/c++ core/build-shared" \
+            -DBUILD_SHARED_LIBS=ON -DGFE_BUILD_TESTS=OFF -DGFE_BUILD_APPS=OFF
+          cmake --build "code/c++ core/build-shared" -j
+      - name: Install pinned dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy==2.4.6" matplotlib pytest
+      - name: Download train and validation only
+        run: python -m d2c.digital.download_babi --splits train,valid
+      - name: Run coupling interventions, budget checks, and adaptation invariants
+        run: pytest -q code/python/tests/test_hierarchy_g42.py code/python/tests/test_vectorized_hierarchy.py
+      - name: Compile corrected G4.2 modules
+        run: python -m compileall -q code/python/d2c/digital/hierarchy_g42.py code/python/d2c/experiments/babi_g42.py
+
+  static-sweep:
+    name: Static H${{ matrix.depth }} C${{ matrix.capacity }} D${{ matrix.dim }}
+    needs: coupling-validation
     runs-on: ubuntu-latest
     timeout-minutes: 180
     strategy:
       fail-fast: false
-      max-parallel: 3
+      max-parallel: 18
       matrix:
         depth: [2, 3, 4]
+        capacity: [3, 4, 6]
+        dim: [64, 128]
     env:
       PYTHONPATH: ${{ github.workspace }}/code/python
       GFE_CORE_LIB: ${{ github.workspace }}/code/c++ core/build-shared/libgfe_core.so
@@ -41,7 +78,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11.18"
-      - name: Build vectorized C++ memory runtime
+      - name: Build unchanged vectorized C++ memory runtime
         run: |
           cmake -S "code/c++ core" -B "code/c++ core/build-shared" \
             -DBUILD_SHARED_LIBS=ON -DGFE_BUILD_TESTS=OFF -DGFE_BUILD_APPS=OFF
@@ -52,83 +89,130 @@ jobs:
           python -m pip install "numpy==2.4.6" matplotlib pytest
       - name: Download train and validation only
         run: python -m d2c.digital.download_babi --splits train,valid
-      - name: Test G4.2 mutation invariants and G4.1 vectorized integration
-        run: pytest -q code/python/tests/test_hierarchy_g42.py code/python/tests/test_vectorized_hierarchy.py
-      - name: Compile G4.2 modules
-        run: python -m compileall -q code/python/d2c/digital/hierarchy_g42.py code/python/d2c/experiments/babi_g42.py
-      - name: Run H-depth validation
+      - name: Run this independent static configuration
         run: |
           python -m d2c.experiments.babi_g42 \
-            --depth ${{ matrix.depth }} --mode static --bootstrap-samples 400 \
-            --data-dir code/python/d2c/progress/babi_data --output-dir runs/experiment-lab/g42
-      - name: Upload H-depth evidence
+            --depth ${{ matrix.depth }} --capacity ${{ matrix.capacity }} \
+            --dim ${{ matrix.dim }} --mode static --bootstrap-samples 400 \
+            --data-dir code/python/d2c/progress/babi_data \
+            --output-dir runs/experiment-lab/g42-static
+      - name: Upload this configuration's complete evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: g42-h-depth-${{ matrix.depth }}
-          path: runs/experiment-lab/g42/
+          name: g42-static-h${{ matrix.depth }}-c${{ matrix.capacity }}-d${{ matrix.dim }}
+          path: runs/experiment-lab/g42-static/
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 90
 
-  select-depth:
-    name: Select best stability-qualified H configuration
-    needs: h-sweep
+  select-configuration:
+    name: Aggregate all 18 static runs and select H-C-D
+    needs: static-sweep
     runs-on: ubuntu-latest
     outputs:
       depth: ${{ steps.select.outputs.depth }}
+      capacity: ${{ steps.select.outputs.capacity }}
+      dim: ${{ steps.select.outputs.dim }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.18"
       - uses: actions/download-artifact@v4
         with:
-          pattern: g42-h-depth-*
-          path: runs/g42-h-sweep
+          pattern: g42-static-*
+          path: runs/g42-static-campaign
           merge-multiple: false
       - id: select
-        name: Rank H-runs and write selected depth
+        name: Validate completeness, rank eligible configurations, write Lab manifest
         run: |
           python - <<'PY'
-          import glob, json, os, pathlib
-          files = glob.glob("runs/g42-h-sweep/**/summary.json", recursive=True)
-          if len(files) != 3:
-              raise SystemExit(f"Expected three H-depth summaries, found {len(files)}")
-          rows = []
+          import glob, hashlib, json, os, pathlib
+          expected = {(h, c, d) for h in (2, 3, 4) for c in (3, 4, 6) for d in (64, 128)}
+          files = sorted(glob.glob("runs/g42-static-campaign/**/summary.json", recursive=True))
+          if len(files) != 18:
+              raise SystemExit(f"Static campaign incomplete: expected 18 summaries, found {len(files)}")
+          rows, seen = [], set()
           for path in files:
-              result = json.loads(pathlib.Path(path).read_text())
-              if result["mode"] != "static":
-                  raise SystemExit("Unexpected non-static H sweep artifact")
+              raw = pathlib.Path(path).read_bytes()
+              result = json.loads(raw)
+              p = result["protocol"]
+              key = (int(p["depth"]), int(p["capacity"]), int(p["dim"]))
+              if key not in expected or key in seen:
+                  raise SystemExit(f"Unexpected or duplicate static configuration: {key}")
+              seen.add(key)
+              if result["mode"] != "static" or result["status"] != "completed":
+                  raise SystemExit(f"Invalid static result status for {key}")
               qa3 = result["tasks"]["3"]["arms"]["static"]
               qa5 = result["tasks"]["5"]["arms"]["static"]
-              stable = qa3["stability_pass"] and qa5["stability_pass"]
-              depth = int(result["protocol"]["depth"])
-              channels = sum(qa3["seed_results"][0]["hierarchy"]["channels_per_level"])
-              rows.append((depth, stable, qa3["mean_accuracy_over_seeds"],
-                           qa5["mean_accuracy_over_seeds"], channels))
-          eligible = [row for row in rows if row[1]]
+              gates = result["acceptance"]
+              ece = statistics_ece = sum(
+                  seed["confidence"]["calibration"]["fixed_bin_top_label_ece"]
+                  for seed in qa3["seed_results"]
+              ) / len(qa3["seed_results"])
+              eligible = (
+                  qa3["stability_pass"] and qa5["stability_pass"]
+                  and qa3["finite_state_pass"] and qa5["finite_state_pass"]
+                  and qa3["all_levels_readout_pass"] and qa5["all_levels_readout_pass"]
+                  and qa3["cross_level_top_down_pass"] and qa5["cross_level_top_down_pass"]
+                  and qa3["cross_level_bottom_up_pass"] and qa5["cross_level_bottom_up_pass"]
+                  and gates["all_states_finite"]
+                  and gates["all_levels_contribute_to_readout"]
+                  and gates["bottom_up_and_top_down_coupling_observed"]
+              )
+              total_channels = p["initial_total_channels"]
+              row = {
+                  "depth": key[0], "capacity": key[1], "dim": key[2],
+                  "eligible": bool(eligible),
+                  "qa3_mean_accuracy": qa3["mean_accuracy_over_seeds"],
+                  "qa5_mean_accuracy": qa5["mean_accuracy_over_seeds"],
+                  "qa3_fixed_bin_ece_mean": ece,
+                  "mean_compute_seconds": qa3["mean_compute_seconds"] + qa5["mean_compute_seconds"],
+                  "total_channels": total_channels,
+                  "summary_path": path,
+                  "summary_sha256": hashlib.sha256(raw).hexdigest(),
+              }
+              rows.append(row)
+          if seen != expected:
+              raise SystemExit(f"Static campaign matrix mismatch: missing {sorted(expected - seen)}")
+          eligible = [row for row in rows if row["eligible"]]
           if not eligible:
-              raise SystemExit("No H configuration met the 0.9 stability margin; adaptive follow-up withheld")
-          winner = sorted(eligible, key=lambda row: (-row[2], -row[3], row[4], row[0]))[0]
-          pathlib.Path("winner.json").write_text(json.dumps({
-              "selected_depth": winner[0], "selection_metric": "QA3 mean accuracy",
-              "qa3_mean_accuracy": winner[2], "qa5_mean_accuracy": winner[3],
-              "total_channels_per_seed": winner[4], "stability_pass": winner[1],
-              "all_h_results": [
-                  {"depth": r[0], "stability_pass": r[1], "qa3_mean_accuracy": r[2],
-                   "qa5_mean_accuracy": r[3], "total_channels": r[4]} for r in rows
-              ]
-          }, indent=2))
+              raise SystemExit("No static H-C-D configuration met stability, coupling, and readout gates; adaptive stage withheld")
+          winner = sorted(eligible, key=lambda row: (
+              -row["qa3_mean_accuracy"], -row["qa5_mean_accuracy"],
+              row["qa3_fixed_bin_ece_mean"], row["mean_compute_seconds"],
+              row["total_channels"], row["depth"], row["capacity"], row["dim"],
+          ))[0]
+          manifest = {
+              "schema_version": 1,
+              "campaign": "G4.2 corrected HxCxD static comparison",
+              "expected_configurations": 18,
+              "completed_configurations": len(rows),
+              "seed_ids": [0, 1, 2],
+              "epochs": 3,
+              "selection_policy": "QA3 accuracy, QA5 accuracy, QA3 fixed-bin ECE, measured compute, resource cost",
+              "all_configurations": rows,
+              "selected_configuration": winner,
+              "adaptive_stage_authorized": True,
+          }
+          pathlib.Path("runs/g42-static-campaign/campaign_manifest.json").write_text(json.dumps(manifest, indent=2))
+          pathlib.Path("runs/g42-static-campaign/winner.json").write_text(json.dumps(winner, indent=2))
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
-              out.write(f"depth={winner[0]}\n")
-          print(pathlib.Path("winner.json").read_text())
+              out.write(f"depth={winner['depth']}\n")
+              out.write(f"capacity={winner['capacity']}\n")
+              out.write(f"dim={winner['dim']}\n")
+          print(json.dumps(manifest, indent=2))
           PY
-      - uses: actions/upload-artifact@v4
+      - name: Upload aggregate Lab register and full static comparison
+        uses: actions/upload-artifact@v4
         with:
-          name: g42-selected-depth
-          path: winner.json
-          retention-days: 30
+          name: g42-static-campaign-register
+          path: runs/g42-static-campaign/
+          retention-days: 90
 
   adaptive-prune-grow:
-    name: Prune/grow follow-up on selected H configuration
-    needs: select-depth
+    name: Matched adaptive capacity run on selected configuration
+    needs: select-configuration
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
@@ -144,7 +228,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11.18"
-      - name: Build vectorized C++ memory runtime
+      - name: Build unchanged vectorized C++ memory runtime
         run: |
           cmake -S "code/c++ core" -B "code/c++ core/build-shared" \
             -DBUILD_SHARED_LIBS=ON -DGFE_BUILD_TESTS=OFF -DGFE_BUILD_APPS=OFF
@@ -155,21 +239,20 @@ jobs:
           python -m pip install "numpy==2.4.6" matplotlib pytest
       - name: Download train and validation only
         run: python -m d2c.digital.download_babi --splits train,valid
-      - uses: actions/download-artifact@v4
-        with:
-          name: g42-selected-depth
-          path: runs/g42-selection
-      - name: Run matched static versus prune/grow experiment at selected depth
+      - name: Run matched static versus capacity-adaptive prune/grow
         run: |
           python -m d2c.experiments.babi_g42 \
-            --depth ${{ needs.select-depth.outputs.depth }} --mode prune_grow \
-            --bootstrap-samples 400 --data-dir code/python/d2c/progress/babi_data \
+            --depth ${{ needs.select-configuration.outputs.depth }} \
+            --capacity ${{ needs.select-configuration.outputs.capacity }} \
+            --dim ${{ needs.select-configuration.outputs.dim }} \
+            --mode prune_grow --bootstrap-samples 400 \
+            --data-dir code/python/d2c/progress/babi_data \
             --output-dir runs/experiment-lab/g42-adaptive
-      - name: Upload selected-depth adaptive evidence
+      - name: Upload matched adaptive evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: g42-selected-depth-prune-grow
+          name: g42-selected-h${{ needs.select-configuration.outputs.depth }}-c${{ needs.select-configuration.outputs.capacity }}-d${{ needs.select-configuration.outputs.dim }}-adaptive
           path: runs/experiment-lab/g42-adaptive/
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 90
