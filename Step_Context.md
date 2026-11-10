@@ -1,8 +1,11 @@
-# Step Context — Phase E Entry Point
+# Step Context — E0 through G4.2 Research Journey
 
-Current record file for the E+F stage. Supersedes entries in Context.md from
-this date forward for active roadmap tracking. Context.md retains all prior
-milestone history; this file tracks the E+F phase.
+Current chronological research record, beginning with the Phase E entry point
+and now extending through the G4.2 hierarchy campaign. Earlier entries are
+preserved as written; the consolidated 2026-11-10 entry below records the
+subsequent E-F0 and G-series work in experimental order. Context.md retains
+the wider historical background; this file is the active experiment and
+decision handoff.
 
 ---
 
@@ -827,3 +830,308 @@ reasoning step before QA3's three supporting facts.
    entity binding and answer-class imbalance.
 5. Do not interpret a component audit pass as evidence of a reasoning gain.
    Runtime ablation remains a later stage.
+
+
+---
+
+## 2026-11-10 — Consolidated journey: E0 / E-F0 through G4.2
+
+This entry records the progression in experimental order. The date is the
+documentation/update date; milestone dates below refer to the corresponding
+implementation or CI activity where known. Distinguish implementation/CI
+success from a scientific performance improvement: a green workflow validates
+the declared execution and evidence gates, not an accuracy claim by itself.
+
+### 1. E0 — bAbI bridge and supervised QA (September 2026)
+
+- Integrated the bAbI dataset, story parser, episode builder, deterministic
+  token forcing, SOE memory and supervised query-conditioned readout.
+- The first QA1 smoke tests established a working end-to-end real-data
+  pipeline, but accuracy was far below the original >80% target. Early
+  dim-16 results were roughly 16–22%, and removing the slow channel sometimes
+  improved QA1. These were recorded as honest pipeline/readout smoke results,
+  not as a successful reasoning gate.
+- The convergence and dimension sweeps showed that learning rate and
+  representation/readout choices mattered more than simply increasing hidden
+  width or epoch count. At dim 16, changing the learning rate from 0.05 to
+  0.02 raised the full-kernel result from about 19.9% to 33.4%; dim 32 gave a
+  further modest lift but did not reverse the QA1 ablation ordering.
+- The result scoped the slow-channel hypothesis: a slow timescale is not
+  automatically useful on clean single-fact QA1; its proposed advantage is
+  expected under multi-fact chains, distractors and interference.
+- Identified pure-Python readout computation as the practical bottleneck,
+  rather than the SOE memory stepper.
+
+### 2. E0 readout and execution improvements (September 2026)
+
+- Added NumPy-backed MLP operations and a NumPy `LinearReadout`, preserving
+  the experiment interface while making larger dimensions and seed sweeps
+  practical. The recorded train-step speedups for the NumPy MLP were
+  approximately 26–51x over the original pure-Python path; the linear
+  readout was faster still.
+- The dim-64 QA1 smoke reached approximately 40.5% for the full kernel,
+  43.4% for no-slow and 39.8% for collapsed-gamma (three seeds). This was a
+  material pipeline/readout improvement, but no-slow still led on QA1.
+- The key interpretation remained task-specific: these results did not
+  establish that the slow channel was intrinsically harmful, nor that the
+  E0 >80% target had been met.
+
+### 3. E-F0 — runtime-integrated reasoning (3 November 2026)
+
+- Added the digital runtime coordinator around the existing SOE numerical
+  stepper, with WARMUP, EXPLORE, CONSOLIDATE, EVALUATE, PRUNE and GROW phases;
+  bounded continuity-aware trace storage; checkpoint/restore; deterministic
+  continuation; and formulation-aware stability monitoring.
+- Added isolated and continuous bAbI execution modes. Isolated mode remained
+  the primary independent-story benchmark; continuous mode was kept as a
+  separate cross-story interference stress test.
+- PRUNE/GROW were initially observable, non-mutating proposal phases. Actual
+  channel-count mutation was deliberately deferred to later adaptive work.
+  F0 did not silently activate F1–F5 learning mechanisms.
+- Preserved the original E0 runner as a baseline. Added dataset download and
+  validation tooling and expanded C++/Python CI. Runtime audit success was
+  treated separately from reasoning accuracy.
+
+### 4. QA2 selection and G0 — diagnostics, readout and reasoning probes
+(November 2026)
+
+- Moved from QA1 to QA2 (two supporting facts) to examine relational
+  composition and entity binding. The matched E0/E-F0 QA2 baseline at
+  dimension 64, full kernel, linear readout, five epochs and three seeds
+  recorded 24.4% mean accuracy for both arms (seed scores 22.3%, 28.0%,
+  22.9%). F0 therefore qualified the runtime path but did not itself improve
+  the supervised prediction result.
+- G0 expanded E0/E-F0 result parity: per-example questions, statements,
+  targets, predictions, full probability vectors, confidence, margins,
+  answer distributions, calibration, failure categories and runtime evidence.
+- Added a staged readout/feature-scale investigation and QA2 oracle ladder:
+  token baseline, event segmentation, entity-role binding, temporal
+  relational-state replay and gold-state answer ceiling. Counterfactual tests
+  cover renaming, irrelevant insertions, supporting-fact removal and temporal
+  updates.
+- The G2 reproducibility diagnostic later pinned the numerical environment
+  (Python/NumPy/BLAS dispatch controls). Two independent jobs then matched
+  exactly across 120 epoch-level records, with identical trained weights,
+  validation logits and predictions. This resolved the observed cross-job
+  drift under the combined controls; the individual contribution of each
+  environment pin was not isolated.
+- On the five-seed, three-epoch validation diagnostic, feature scale 10
+  materially outperformed scale 100 on confidence quality. QA3 accuracy was
+  28.0% at scale 10 versus 22.8% at scale 100; QA5 was 63.8% versus 61.2%.
+  QA3 remained poorly calibrated (ECE-15 0.594 at scale 10), while scale 100
+  produced severe overconfidence. Decision: retain scale 10 as the leading
+  candidate, not a production-confirmed setting; use three epochs as the
+  provisional checkpoint; investigate QA3 and confidence errors before any
+  locked evaluation.
+
+### 5. G1 — deterministic relational-state QA2 control (November 2026)
+
+- Added an explicit event/state diagnostic for person locations, object
+  holders and object locations, including move, pickup, release and temporal
+  updates.
+- The recorded QA2 report achieved 1,000/1,000 answers (100%), with 100%
+  parse coverage across 15,426 statements, 100% query resolution and zero
+  F0 stability violations.
+- Claim boundary: G1 is an inspectable symbolic parser/world-state control,
+  not a learned-binding result and not directly comparable to trained E0 or
+  E-F0 accuracy. Its value is to expose the semantic structure and provide
+  an oracle-like diagnostic reference.
+
+### 6. G1-L — learned relational binding pilot and staged confirmation
+(November 2026)
+
+- Implemented a distinct QA2 learned binder over deterministic typed-event
+  inputs: learned identity embeddings, role-specific relation encoders,
+  object-holder representations, soft holder-to-person retrieval and a
+  supervised location readout.
+- Combined L0 controlled binding sanity checks, L1 one-seed pilot and gated
+  L2 multi-seed confirmation in one workflow. The F0 spine audit was retained
+  as a separate companion qualification, not as an input to the G1-L learner.
+- The parser is restricted to supported QA2 templates. This experiment does
+  not establish a general natural-language parser or a learned binder for
+  QA3/QA5. Preserve the stage-specific run artifact as the source of truth
+  for exact pilot/confirmation metrics; do not infer an L2 pass from workflow
+  completion alone.
+
+### 7. G2 — relational composition and confidence qualification
+(November 2026)
+
+- Extended the learned benchmark to QA3 and QA5 with matched E0/E-F0
+  controls, five seeds by default, per-example evidence, confidence and
+  calibration metrics, and 12 structured relational fixtures.
+- The fixtures cover multi-fact composition, holder-dependent locations,
+  object transfer, release, temporal updates, multiple entities, distractors,
+  explicit coreference aliases and insufficient evidence. They are semantic
+  controls, not natural-language model accuracy.
+- G2 formalized paired seed effects, uncertainty, NLL, Brier, fixed/adaptive
+  and classwise calibration, overconfidence and risk/coverage reporting.
+  QA3 remained the difficult task; QA5 was materially stronger. The
+  reproducibility diagnostic above showed that scale 10 was much healthier
+  than scale 100 for confidence, without establishing a production setting.
+- A validation-only readout follow-up retained scale 10 as the leading
+  candidate and three epochs as the provisional checkpoint. QA3
+  reproducibility and confidence errors remained open questions. The
+  held-out split was not to be used for tuning.
+
+### 8. G3 — full bottom-up/top-down hierarchy versus the G2 E-F0 spine
+(7–9 November 2026)
+
+- Used the existing G2 E-F0 runner directly as the flat/vectorized control;
+  compared it with the full two-level scalar-ABI hierarchy. The protocol
+  retained QA3 and QA5, matched seeds, story order, readout initialization,
+  feature scale 10 and the three-epoch checkpoint.
+- Added explicit per-level coupling, kernel, state and stability evidence;
+  stronger seed/example pairing; F0 spine qualification; and Lab reporting.
+  Runtime ablation and unrelated static-strengthening arms remained deferred.
+- G3-N investigated top-down positive-kernel normalization. The first
+  normalization attempt exposed a fast-level stability regression rather
+  than being accepted as a performance fix. The workflow was corrected to
+  report mechanism execution and stability qualification separately, and
+  the evidence was retained rather than masking the failure.
+- Interpretation boundary: G3 compares two complete execution packages
+  (flat E-F0 vectorized runtime versus scalar-ABI hierarchy); it does not
+  isolate hierarchy as the only causal difference. No hierarchy-only
+  performance claim should be made from that package comparison.
+
+### 9. G4 — vectorized hierarchy implementation (9 November 2026)
+
+- Added contiguous vector-valued memory at both hierarchy levels and a
+  vectorized native digital-memory ABI/stepper. Bottom-up forcing and
+  top-down modulation were computed from previous-event states, with each
+  level advanced once per event.
+- This changed the representation and feedback formulation relative to
+  G3's scalar-chi hierarchy; it was therefore treated as an implementation
+  package comparison, not bitwise numerical parity.
+- The initial G4 top-down unit-sum normalization raised the fast-level
+  stability ratio to approximately 2.567, above the 0.9 margin. The result
+  identified a kernel-mass/stability interaction and was not accepted as a
+  stable hierarchy configuration.
+
+### 10. G4.1 — mass-preserving fast-kernel correction (10 November 2026)
+
+- Diagnosed that normalizing the calibrated fast-kernel weights to unit sum
+  changed the kernel mass from 0.3128 and amplified the stability ratio.
+- Corrected the top-down path to preserve the calibrated positive-kernel
+  weights and their mass while retaining top-down decay modulation. The
+  legacy unit-sum mode remained available for regression testing.
+- The three-seed QA3/QA5 validation workflow passed its implementation and
+  stability gates, with active levels required to remain at or below 0.9.
+  This was a targeted stability correction, not evidence of an accuracy
+  improvement or a final locked evaluation.
+
+### 11. G4.2 — corrected vector coupling, concurrent H-C-D sweep and
+adaptive follow-up (10 November 2026)
+
+**Historical pilot**
+
+- The earlier G4.2 pilot is superseded. Its scalar-context/bottom-level
+  readout and depth-only selection did not test the agreed capacity and
+  dimension factors or establish meaningful multi-level readout
+  contribution. Preserve its artifacts as historical evidence; do not use
+  it to claim a hierarchy-depth result.
+
+**Corrected coupling and static matrix**
+
+- Reused the G2 E-F0 spine and G4.1 mass-preserving kernel definitions;
+  no C++ ABI redesign was introduced in this correction.
+- Replaced scalar context with bounded vector-valued bottom-up and top-down
+  messages derived from each level's structured state, including memory
+  channels. All messages use previous-event states and bounded nonlinear
+  clipping. The multi-level readout concatenates per-level memory and
+  query-gated features; the bare query is supplied only at level zero.
+- Coupling intervention tests verify that upper-level perturbations affect
+  lower-level computation, disabling top-down changes lower-level output,
+  and disabling bottom-up changes upper-level representation. Finite-state,
+  positive-kernel, mass-preservation and <=0.9 stability gates are enforced.
+- Launched all 18 H x C x D configurations as independent concurrent jobs:
+  H={2,3,4}, C={3,4,6}, D={64,128}; three matched seeds and three epochs;
+  QA3 primary, QA5 secondary. Total channel budget is matched by C across
+  depths. The selector waited for all 18 jobs before selecting.
+
+**Static findings (three-seed validation screening only)**
+
+- The corrected workflow completed successfully: coupling validation,
+  all 18 static jobs, selection and adaptive follow-up succeeded (21/21
+  jobs in the final run).
+- Aggregate mean QA3 accuracy by depth was H2 18.56%, H3 18.00% and H4
+  18.78%. Aggregate QA5 was H2 60.28%, H3 58.94% and H4 56.33%.
+  QA3 calibration worsened with depth (mean fixed-bin ECE approximately
+  0.289, 0.359 and 0.387 respectively); recorded compute also rose
+  (approximately 14.0, 16.3 and 22.4 minutes).
+- The pre-registered selector chose H4-C6-D64: QA3 19.67%, QA5 56.67%,
+  QA3 ECE approximately 0.3804. This is the QA3-first selector winner,
+  not a demonstrated general best architecture.
+- H2-C4-D64 is a strong efficient alternative (QA3 19.00%, QA5 61.00%,
+  ECE approximately 0.2867, about 8.1 minutes). H2-C6-D64 had the best
+  QA5 result (61.33%). Preserve these alternatives in the Lab register;
+  do not silently replace the official selector winner.
+- Increasing D from 64 to 128 did not produce a useful average gain and
+  substantially increased compute. Increasing C yielded only modest
+  average accuracy gains relative to its cost. Three seeds and three
+  epochs make this a screening result, not a confirmatory ranking.
+
+**Adaptive follow-up findings**
+
+- The matched adaptive follow-up ran on H4-C6-D64. It preserved kernel
+  mass and stability, but generated 24 births and zero deaths across the
+  two tasks, three seeds and four levels: each level grew by one channel,
+  taking the per-trial allocation from [10,7,7,6] to [11,8,8,7].
+- Adaptive versus static accuracy was effectively neutral: QA3 19.67%
+  static versus 19.33% adaptive; QA5 56.67% for both. QA3 ECE was 0.3804
+  versus 0.3837; QA5 ECE 0.1397 versus 0.1366. Combined recorded compute
+  increased from about 985.3s to 1,043.8s.
+- The current 5% growth threshold is mathematically too permissive for
+  these channel counts: for non-negative activity over N active channels,
+  the maximum channel's share is at least 1/N (10–16.7% for 6–10
+  channels). Thus the threshold is automatically met for non-zero
+  activity unless pruning has already happened. The real campaign did
+  not demonstrate a channel death. The adaptive mechanism is therefore
+  mechanically exercised for growth, but prune/grow as a balanced
+  selection policy is not validated.
+- Next adaptive work must replace the absolute 5% criterion with a
+  scale-aware/relative criterion, record prune-candidate ratios and
+  rejection reasons (including mass/stability feasibility), and include
+  controlled tests that exercise both actual death and birth. Compare
+  against the matched static control before claiming a learning benefit.
+
+### Current research conclusions and handoff
+
+1. The E0-to-G4.2 path has moved from a token/SOE baseline to a runtime-
+   integrated and instrumented benchmark, then to explicit relational
+   controls, reproducible confidence diagnostics, and a stable vector-
+   coupled multi-level hierarchy.
+2. The strongest verified G4.2 result is architectural/mechanical:
+   bounded bidirectional vector coupling and mass/stability-preserving
+   multi-level execution are validated. More hierarchy depth has not shown
+   a general QA3/QA5 advantage.
+3. H4-C6-D64 remains the official QA3-first static selector winner; retain
+   H2-C4-D64 and H2-C6-D64 as important alternatives for a better-powered
+   confirmation.
+4. Adaptive growth executed safely but did not improve prediction accuracy;
+   pruning was not demonstrated. Correct the activity policy and test both
+   birth and death before calling adaptive hierarchy validated.
+5. Do not open a previously consumed/locked test split for tuning. Future
+   confirmation must use a clearly reserved evaluation split and more
+   independent seeds.
+6. The G4.2 corrected CI run is
+   https://github.com/johnsnowman488-oss/aberconics-framework/actions/runs/42862659473.
+   Its artifacts contain 18 static bundles, the aggregate campaign register,
+   and the matched adaptive comparison.
+
+### Branch and integration handoff (10 November 2026)
+
+- G4.2 head before this documentation update:
+  `496f997e597ac0bb8c1e9f6293313aaf1a6fdfc4`.
+- The G4.2 branch is 25 commits ahead of
+  `f/vectorized-cpp-digital-abi`, with no commits behind. The latter is
+  itself 77 commits ahead of `main` and is the head branch of open draft
+  PR #8. G4.2 is therefore a stacked branch, not an independent
+  main-targeted change set.
+- Keep PR #8's vectorized C++ ABI work separate. The G4.2 PR should target
+  `f/vectorized-cpp-digital-abi` first; after PR #8 is merged, retarget the
+  G4.2 PR to `main`. Do not merge unrelated work or force-update the
+  underlying branch.
+- The final G4.2 corrected workflow is green. Re-run lightweight C++/Python
+  integration CI for the documentation commit/PR where available; the
+  full 18-cell campaign need not be repeated solely for a documentation
+  change.

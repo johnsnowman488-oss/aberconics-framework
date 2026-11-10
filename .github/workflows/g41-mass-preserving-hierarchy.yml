@@ -1,0 +1,114 @@
+name: G4.1 Mass-Preserving Hierarchy Validation (QA3 + QA5)
+
+on:
+  push:
+    paths:
+      - ".github/workflows/g41-mass-preserving-hierarchy.yml"
+      - "code/python/d2c/digital/vectorized_hierarchy_director.py"
+      - "code/python/d2c/experiments/babi_g41.py"
+      - "code/python/tests/test_vectorized_hierarchy.py"
+      - "docs/G4_1_MASS_PRESERVING_HIERARCHY.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g41-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  g41-validation:
+    name: Mass-preserving fast kernel → matched G3 QA3 + QA5 validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PYTHONPATH: ${{ github.workspace }}/code/python
+      GFE_CORE_LIB: ${{ github.workspace }}/code/c++ core/build-shared/libgfe_core.so
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      VECLIB_MAXIMUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up pinned Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.18"
+      - name: Build shared C++ runtime with vector digital ABI
+        run: |
+          cmake -S "code/c++ core" -B "code/c++ core/build-shared" \
+            -DBUILD_SHARED_LIBS=ON -DGFE_BUILD_TESTS=OFF -DGFE_BUILD_APPS=OFF
+          cmake --build "code/c++ core/build-shared" -j
+      - name: Install pinned Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy==2.4.6" matplotlib pytest
+      - name: Download train and validation only
+        run: python -m d2c.digital.download_babi --splits train,valid
+      - name: Test legacy G4 mode and G4.1 mass-preserving mode
+        run: |
+          pytest -q \
+            code/python/tests/test_digital_native_stepper.py \
+            code/python/tests/test_vectorized_hierarchy.py
+      - name: Validate Python modules
+        run: |
+          python -m compileall -q \
+            code/python/d2c/digital/vectorized_hierarchy_director.py \
+            code/python/d2c/experiments/babi_g41.py
+      - name: Run G4.1 matched QA3/QA5 validation (three seeds, three epochs)
+        run: |
+          python -m d2c.experiments.babi_g41 \
+            --seeds 3 --bootstrap-samples 400 \
+            --data-dir code/python/d2c/progress/babi_data \
+            --output-dir runs/experiment-lab/g41
+      - name: Enforce G4.1 evidence, stability, and validation-only gates
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("runs/experiment-lab/g41")
+          summaries = sorted(root.glob("g41_mass_preserving_hierarchy_*/summary.json"))
+          if not summaries:
+              raise SystemExit("G4.1 produced no summary.json")
+          result = json.loads(summaries[-1].read_text())
+          protocol = result["protocol"]
+          if protocol["evaluation_split"] != "valid":
+              raise SystemExit("G4.1 did not use the validation split")
+          if protocol["test_split_opened"] is not False:
+              raise SystemExit("G4.1 opened or claimed to open the locked test split")
+          if protocol["seed_ids"] != [0, 1, 2]:
+              raise SystemExit("G4.1 seed identity contract failed")
+          required = (
+              "qa3_qa5_validation_coverage",
+              "three_seed_pairing_and_example_identity",
+              "vectorized_two_level_bidirectional_mechanism",
+              "stability_evidence_recorded",
+              "confidence_evidence",
+          )
+          failures = [name for name in required if not result["acceptance"][name]["passed"]]
+          if failures:
+              raise SystemExit("G4.1 evidence gates failed: " + ", ".join(failures))
+          if not result["acceptance"]["stability_within_frozen_margin"]["passed"]:
+              raise SystemExit("G4.1 fast/upper stability margin failed")
+          for task, row in result["tasks"].items():
+              before = row["baseline_g3_scalar_hierarchy"]["mean_accuracy_over_seeds"]
+              after = row["g41_mass_preserving_hierarchy"]["mean_accuracy_over_seeds"]
+              delta = row["paired_effects_g4_minus_g3"]["accuracy"]["mean"]
+              stable = row["stability_qualification"]["passed"]
+              print(
+                  f"QA{task}: G3={before:.4f}, G4.1={after:.4f}, "
+                  f"paired_delta={delta:+.4f}, within_margin={stable}"
+              )
+          print("G4.1 stability and validation evidence gates passed; locked test split untouched.")
+          PY
+      - name: Upload G4.1 validation evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g41-mass-preserving-hierarchy-qa3-qa5-validation
+          path: runs/experiment-lab/g41/
+          if-no-files-found: warn
+          retention-days: 30
