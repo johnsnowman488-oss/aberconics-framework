@@ -82,7 +82,9 @@ jobs:
               assert math.isclose(ratio, 1.38, abs_tol=1e-10)
               assert [r["seed"] for r in cell["seed_rows"]] == [0, 1, 2]
               assert all(len(r["epoch_mean_train_losses"]) == 3 for r in cell["seed_rows"])
-              order_hashes.setdefault(cell["task"], set()).add(cell["training_order_sha256"])
+              for seed_row in cell["seed_rows"]:
+                  key = (cell["task"], seed_row["seed"])
+                  order_hashes.setdefault(key, set()).add(seed_row["training_order_sha256"])
           assert all(len(values) == 1 for values in order_hashes.values()), order_hashes
           print("Flat C × D validation sweep passed pairing, mass, stability, and split gates.")
           for cell in result["cells"]:
