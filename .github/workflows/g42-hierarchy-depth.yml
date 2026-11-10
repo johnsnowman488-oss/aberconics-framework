@@ -1,0 +1,175 @@
+name: G4.2 N-Level Hierarchy Sweep and Adaptive Follow-up
+
+on:
+  push:
+    branches:
+      - "g4.2/adaptive-hierarchy-depth-sweep"
+    paths:
+      - ".github/workflows/g42-hierarchy-depth.yml"
+      - "code/python/d2c/digital/hierarchy_g42.py"
+      - "code/python/d2c/experiments/babi_g42.py"
+      - "code/python/tests/test_hierarchy_g42.py"
+      - "docs/G4_2_ADAPTIVE_HIERARCHY.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g42-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  h-sweep:
+    name: H${{ matrix.depth }} static hierarchy
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        depth: [2, 3, 4]
+    env:
+      PYTHONPATH: ${{ github.workspace }}/code/python
+      GFE_CORE_LIB: ${{ github.workspace }}/code/c++ core/build-shared/libgfe_core.so
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      VECLIB_MAXIMUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.18"
+      - name: Build vectorized C++ memory runtime
+        run: |
+          cmake -S "code/c++ core" -B "code/c++ core/build-shared" \
+            -DBUILD_SHARED_LIBS=ON -DGFE_BUILD_TESTS=OFF -DGFE_BUILD_APPS=OFF
+          cmake --build "code/c++ core/build-shared" -j
+      - name: Install pinned dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy==2.4.6" matplotlib pytest
+      - name: Download train and validation only
+        run: python -m d2c.digital.download_babi --splits train,valid
+      - name: Test G4.2 mutation invariants and G4.1 vectorized integration
+        run: pytest -q code/python/tests/test_hierarchy_g42.py code/python/tests/test_vectorized_hierarchy.py
+      - name: Compile G4.2 modules
+        run: python -m compileall -q code/python/d2c/digital/hierarchy_g42.py code/python/d2c/experiments/babi_g42.py
+      - name: Run H-depth validation
+        run: |
+          python -m d2c.experiments.babi_g42 \
+            --depth ${{ matrix.depth }} --mode static --bootstrap-samples 400 \
+            --data-dir code/python/d2c/progress/babi_data --output-dir runs/experiment-lab/g42
+      - name: Upload H-depth evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g42-h-depth-${{ matrix.depth }}
+          path: runs/experiment-lab/g42/
+          if-no-files-found: warn
+          retention-days: 30
+
+  select-depth:
+    name: Select best stability-qualified H configuration
+    needs: h-sweep
+    runs-on: ubuntu-latest
+    outputs:
+      depth: ${{ steps.select.outputs.depth }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: g42-h-depth-*
+          path: runs/g42-h-sweep
+          merge-multiple: false
+      - id: select
+        name: Rank H-runs and write selected depth
+        run: |
+          python - <<'PY'
+          import glob, json, os, pathlib
+          files = glob.glob("runs/g42-h-sweep/**/summary.json", recursive=True)
+          if len(files) != 3:
+              raise SystemExit(f"Expected three H-depth summaries, found {len(files)}")
+          rows = []
+          for path in files:
+              result = json.loads(pathlib.Path(path).read_text())
+              if result["mode"] != "static":
+                  raise SystemExit("Unexpected non-static H sweep artifact")
+              qa3 = result["tasks"]["3"]["arms"]["static"]
+              qa5 = result["tasks"]["5"]["arms"]["static"]
+              stable = qa3["stability_pass"] and qa5["stability_pass"]
+              depth = int(result["protocol"]["depth"])
+              channels = sum(qa3["seed_results"][0]["hierarchy"]["channels_per_level"])
+              rows.append((depth, stable, qa3["mean_accuracy_over_seeds"],
+                           qa5["mean_accuracy_over_seeds"], channels))
+          eligible = [row for row in rows if row[1]]
+          if not eligible:
+              raise SystemExit("No H configuration met the 0.9 stability margin; adaptive follow-up withheld")
+          winner = sorted(eligible, key=lambda row: (-row[2], -row[3], row[4], row[0]))[0]
+          pathlib.Path("winner.json").write_text(json.dumps({
+              "selected_depth": winner[0], "selection_metric": "QA3 mean accuracy",
+              "qa3_mean_accuracy": winner[2], "qa5_mean_accuracy": winner[3],
+              "total_channels_per_seed": winner[4], "stability_pass": winner[1],
+              "all_h_results": [
+                  {"depth": r[0], "stability_pass": r[1], "qa3_mean_accuracy": r[2],
+                   "qa5_mean_accuracy": r[3], "total_channels": r[4]} for r in rows
+              ]
+          }, indent=2))
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"depth={winner[0]}\n")
+          print(pathlib.Path("winner.json").read_text())
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: g42-selected-depth
+          path: winner.json
+          retention-days: 30
+
+  adaptive-prune-grow:
+    name: Prune/grow follow-up on selected H configuration
+    needs: select-depth
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PYTHONPATH: ${{ github.workspace }}/code/python
+      GFE_CORE_LIB: ${{ github.workspace }}/code/c++ core/build-shared/libgfe_core.so
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      VECLIB_MAXIMUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.18"
+      - name: Build vectorized C++ memory runtime
+        run: |
+          cmake -S "code/c++ core" -B "code/c++ core/build-shared" \
+            -DBUILD_SHARED_LIBS=ON -DGFE_BUILD_TESTS=OFF -DGFE_BUILD_APPS=OFF
+          cmake --build "code/c++ core/build-shared" -j
+      - name: Install pinned dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy==2.4.6" matplotlib pytest
+      - name: Download train and validation only
+        run: python -m d2c.digital.download_babi --splits train,valid
+      - uses: actions/download-artifact@v4
+        with:
+          name: g42-selected-depth
+          path: runs/g42-selection
+      - name: Run matched static versus prune/grow experiment at selected depth
+        run: |
+          python -m d2c.experiments.babi_g42 \
+            --depth ${{ needs.select-depth.outputs.depth }} --mode prune_grow \
+            --bootstrap-samples 400 --data-dir code/python/d2c/progress/babi_data \
+            --output-dir runs/experiment-lab/g42-adaptive
+      - name: Upload selected-depth adaptive evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g42-selected-depth-prune-grow
+          path: runs/experiment-lab/g42-adaptive/
+          if-no-files-found: warn
+          retention-days: 30
