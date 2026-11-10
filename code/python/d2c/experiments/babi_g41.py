@@ -60,7 +60,7 @@ class G41Config:
         if self.dim != 64:
             raise ValueError("G4.1 holds dimension fixed at 64 for the G3 comparison")
         if self.seeds != _EXPECTED_SEEDS:
-            raise ValueError("G4 validation uses exactly three matched seeds")
+            raise ValueError("G4.1 validation uses exactly three matched seeds")
         if self.epochs != _EXPECTED_EPOCHS:
             raise ValueError("G4.1 uses the fixed three-epoch checkpoint")
         if self.learning_rate != 0.05 or self.feature_scale != 10.0:
@@ -440,7 +440,7 @@ def run_g41_validation(
     return {
         "schema_version": 1,
         "experiment": "g4_vectorized_hierarchical_relational",
-        "experiment_id": "G4-VECTORIZED-HIERARCHY",
+        "experiment_id": "G4.1-MASS-PRESERVING-HIERARCHY",
         "status": "completed",
         "started_at_utc": started_at,
         "completed_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -452,13 +452,13 @@ def run_g41_validation(
             "test_split_opened": False,
             "seed_ids": list(range(cfg.seeds)),
             "baseline": "G3 scalar-ABI two-level hierarchy, rerun on the same validation split",
-            "g4_backend": "new vector-valued C++ digital-memory ABI at both hierarchy levels",
+            "g41_backend": "new vector-valued C++ digital-memory ABI at both hierarchy levels",
             "hierarchy": "two levels; full bottom-up plus top-down; G3 gains retained",
             "normalization": "top-down decay modulation retained; calibrated positive-kernel mass preserved instead of unit-sum rescaling",
             "memory_form": "negative_feedback at each level; chi is channel-by-state-dimension vector",
             "numerical_difference_from_g3": (
                 "G3 scalar hierarchy uses the legacy ABERSOE scalar chi and pre-step feedback; "
-                "G4 vector digital ABI updates vector chi and computes feedback from post-step chi. "
+                "G4.1 vector digital ABI updates vector chi and computes feedback from post-step chi. "
                 "This is an explicit numerical substrate change, not claimed to be bitwise parity."
             ),
             "stability_margin": 0.9,
@@ -468,7 +468,7 @@ def run_g41_validation(
         "tasks": all_tasks,
         "acceptance": {
             "qa3_qa5_validation_coverage": {"passed": coverage, "tasks": sorted(all_tasks)},
-            "five_seed_pairing_and_example_identity": {"passed": pairing, "seeds": cfg.seeds},
+            "three_seed_pairing_and_example_identity": {"passed": pairing, "seeds": cfg.seeds},
             "vectorized_two_level_bidirectional_mechanism": {"passed": mechanism},
             "stability_evidence_recorded": {"passed": stability_recorded},
             "stability_within_frozen_margin": {
