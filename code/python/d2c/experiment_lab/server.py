@@ -85,6 +85,19 @@ EXPERIMENTS = [
             "eval_split": "test", "bootstrap_samples": 400,
         },
     },
+    {
+        "id": "g3",
+        "name": "G3 G2 E-F0 vectorized flat vs full hierarchy",
+        "description": "Matched QA3/QA5 benchmark: existing G2 E-F0 vectorized runtime and six-phase spine versus full bottom-up + top-down scalar-ABI hierarchy.",
+        "modes": ["isolated"],
+        "tasks": [3, 5],
+        "defaults": {
+            "tasks": [3, 5], "dim": 64, "seeds": 20, "epochs": 3,
+            "learning_rate": 0.05, "feature_scale": 10.0,
+            "readout": "linear", "mode": "isolated",
+            "eval_split": "test", "bootstrap_samples": 400,
+        },
+    },
 ]
 EXPERIMENT_BY_ID = {item["id"]: item for item in EXPERIMENTS}
 
@@ -218,6 +231,15 @@ def build_launch(data: dict, directory: Path) -> tuple[list[str], dict, dict]:
     if experiment in {"g1", "g1l"} and task != 2:
         raise ValueError(f"{experiment.upper()} supports QA2 only")
 
+    fingerprint_splits = (
+        ("train", settings.get("eval_split", "test"))
+        if experiment == "g3" else ("train", "valid", "test")
+    )
+    fingerprints = {
+        split: {"sha256": file_sha256(profile["files"][split]), "bytes": profile["files"][split].stat().st_size}
+        for split in fingerprint_splits
+        if profile["files"][split].is_file()
+    }
     config = {
         "experiment": experiment,
         "dataset": {
@@ -225,8 +247,8 @@ def build_launch(data: dict, directory: Path) -> tuple[list[str], dict, dict]:
             "name": profile["name"],
             "directory": profile["relative_directory"],
         },
-        "dataset_fingerprints": dataset_fingerprints(profile),
-        "task": task if experiment != "g2" else None,
+        "dataset_fingerprints": fingerprints,
+        "task": task if experiment not in {"g2", "g3"} else None,
         "tasks": None,
         "dim": dim,
         "mode": mode,
@@ -238,6 +260,7 @@ def build_launch(data: dict, directory: Path) -> tuple[list[str], dict, dict]:
         "g1": "d2c.experiments.babi_g1",
         "g1l": "d2c.experiments.babi_g1l",
         "g2": "d2c.experiments.babi_g2",
+        "g3": "d2c.experiments.babi_g3",
     }[experiment]
     args = [
         sys.executable, "-m", module, "--dim", str(dim),
@@ -333,7 +356,7 @@ def build_launch(data: dict, directory: Path) -> tuple[list[str], dict, dict]:
         ]
         if stage == "all":
             args += ["--confirm-seeds", str(confirmation_seeds)]
-    else:
+    elif experiment == "g2":
         tasks = settings.get("tasks", [3, 5])
         if isinstance(tasks, str):
             tasks = [int(value.strip()) for value in tasks.split(",") if value.strip()]
@@ -374,6 +397,49 @@ def build_launch(data: dict, directory: Path) -> tuple[list[str], dict, dict]:
             "--seeds", str(seeds), "--epochs", str(epochs),
             "--learning-rate", str(learning_rate),
             "--feature-scale", str(feature_scale), "--readout", readout,
+            "--bootstrap-samples", str(bootstrap_samples),
+            "--eval-split", eval_split,
+        ]
+    elif experiment == "g3":
+        tasks = settings.get("tasks", [3, 5])
+        if isinstance(tasks, str):
+            tasks = [int(value.strip()) for value in tasks.split(",") if value.strip()]
+        else:
+            tasks = [int(value) for value in tasks]
+        seeds = int(settings.get("seeds", 20))
+        epochs = int(settings.get("epochs", 3))
+        learning_rate = _positive_number(settings.get("learning_rate", 0.05), "learning rate")
+        feature_scale = _positive_number(settings.get("feature_scale", 10.0), "feature scale")
+        eval_split = settings.get("eval_split", "test")
+        bootstrap_samples = int(settings.get("bootstrap_samples", 400))
+        if (
+            tasks != [3, 5] or not 3 <= seeds <= 20 or epochs != 3
+            or learning_rate != 0.05 or feature_scale != 10.0
+            or eval_split not in {"valid", "test"}
+            or not 200 <= bootstrap_samples <= 5000
+        ):
+            raise ValueError("G3 requires QA3+QA5, 3 epochs, LR 0.05, feature scale 10, 3–20 seeds, and 200–5000 bootstrap samples")
+        config.update({
+            "task": None, "tasks": tasks, "seeds": seeds, "epochs": epochs,
+            "learning_rate": learning_rate, "feature_scale": feature_scale,
+            "readout": "linear", "evaluation_split": eval_split,
+            "bootstrap_samples": bootstrap_samples,
+            "mode": "G2 E-F0 vectorized Python runtime vs scalar-chi hierarchy",
+            "arms": ["ef0_vectorized", "hier_bu_td"],
+            "flat_baseline": "existing G2 E-F0 runner; Python-vectorized step_memory; isolated mode; six-phase runtime spine active",
+            "hierarchy": "full bottom-up + top-down scalar-ABI hierarchy",
+            "bottom_up_gain": 0.4, "top_down_gain": 0.5,
+            "context_gamma": [0.35, 0.08], "context_w": [0.05, 0.02],
+            "context_leak": 0.5, "hierarchy_kernel_form": "negative_feedback_form_b",
+            "top_down_weight_normalization": False,
+            "active_kernel_stability_margin": 0.9,
+            "f0_spine_audit": True, "static_weight_control": "deferred",
+            "learning_performed": True,
+            "confidence_metrics": "NLL, Brier, fixed/adaptive ECE, AURC, Wilson and story bootstrap",
+        })
+        args += [
+            "--tasks", "3,5", "--seeds", str(seeds), "--epochs", "3",
+            "--lr", "0.05", "--feature-scale", "10.0",
             "--bootstrap-samples", str(bootstrap_samples),
             "--eval-split", eval_split,
         ]
@@ -423,18 +489,59 @@ def _run_summary(job: dict) -> dict:
     stages = result.get("stages", {})
     l1 = stages.get("L1", {})
     l2 = stages.get("L2", {})
+    g2_summary = {}
+    g3_summary = {}
     if experiment == "g1l":
         confirmed = l2.get("status") == "completed"
         accuracy = l2.get("mean_accuracy") if confirmed else l1.get("validation_after_training", {}).get("accuracy")
         split = "test" if confirmed else "validation"
         error = l2.get("standard_error") if confirmed else None
         stage = "L2 confirmation" if confirmed else "L1 pilot"
+    elif experiment == "g3":
+        task_rows = result.get("tasks", {})
+        hierarchy_accuracies = []
+        for task_key, task in task_rows.items():
+            arms = task.get("arms", {})
+            flat = arms.get("ef0_vectorized", {})
+            hierarchy = arms.get("hier_bu_td", {})
+            effect = task.get("paired_effects", {}).get("accuracy", {})
+            diagnostics = task.get("hierarchy_mechanism_audit", {}).get("per_seed", [])
+            hierarchy_accuracies.append(hierarchy.get("mean_accuracy_over_seeds", 0.0))
+            stability_values = [
+                row.get("max_hierarchy_active_stability_ratio")
+                for row in diagnostics
+                if row.get("max_hierarchy_active_stability_ratio") is not None
+            ]
+            g3_summary[task_key] = {
+                "flat_mean_accuracy": flat.get("mean_accuracy_over_seeds"),
+                "hierarchy_mean_accuracy": hierarchy.get("mean_accuracy_over_seeds"),
+                "paired_delta": effect.get("mean"),
+                "paired_ci95": effect.get("ci95_two_sided_t"),
+                "sign_test_p": effect.get("exact_two_sided_sign_test_p"),
+                "holm_adjusted_p": effect.get("holm_adjusted_exact_sign_test_p_across_tasks"),
+                "mean_context_activity": (
+                    sum(row.get("bottom_up_context_activity", 0.0) for row in diagnostics) / len(diagnostics)
+                    if diagnostics else None
+                ),
+                "mean_top_down_gamma_fraction": (
+                    sum(row.get("top_down_dynamic_gamma_fraction", 0.0) for row in diagnostics) / len(diagnostics)
+                    if diagnostics else None
+                ),
+                "max_active_stability_ratio": max(stability_values) if stability_values else None,
+                "active_stability_pass": all(row.get("all_active_stability_pass", False) for row in diagnostics),
+            }
+        accuracy = (
+            sum(hierarchy_accuracies) / len(hierarchy_accuracies)
+            if hierarchy_accuracies else None
+        )
+        split = config.get("evaluation_split", result.get("protocol", {}).get("evaluation_split", "test"))
+        error = None
+        stage = "full hierarchy benchmark"
     else:
         accuracy = result.get("mean_accuracy")
         split = config.get("evaluation_split", result.get("evaluation_split", "test"))
         error = result.get("standard_error", result.get("se_accuracy"))
         stage = None
-    g2_summary = {}
     if experiment == "g2":
         for task_key, task in result.get("tasks", {}).items():
             difference = task.get("paired_accuracy_difference_ef0_minus_e0", {})
@@ -452,13 +559,13 @@ def _run_summary(job: dict) -> dict:
         "evaluation_split": split,
         "stage": stage,
         "g2_paired_results": g2_summary,
+        "g3_paired_results": g3_summary,
         "dataset": config.get("dataset"),
         "task": config.get("task"),
         "tasks": config.get("tasks"),
         "seed_count": config.get("seeds"),
         "claim_boundary": result.get("claim_boundary"),
     }
-
 
 def _matched_ef0_pair(left: dict, right: dict) -> tuple[bool, str]:
     experiments = {left.get("experiment"), right.get("experiment")}
@@ -629,6 +736,7 @@ class Handler(BaseHTTPRequestHandler):
                         "deterministic diagnostic" if job.get("experiment") == "g1"
                         else "validation pilot / gated confirmation" if job.get("experiment") == "g1l"
                         else "paired benchmark with internal E0/E-F0 comparison" if job.get("experiment") == "g2"
+                        else "paired flat ABI versus full hierarchy benchmark" if job.get("experiment") == "g3"
                         else "learned benchmark arm"
                     ),
                 })

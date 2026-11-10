@@ -1,0 +1,136 @@
+name: G3 Full Hierarchy Relational (QA3 + QA5)
+
+on:
+  push:
+    paths:
+      - ".github/workflows/g3-full-hierarchy.yml"
+      - "code/python/d2c/experiments/babi_g3.py"
+      - "code/python/d2c/experiments/babi_f0.py"
+      - "code/python/d2c/experiments/babi_g2.py"
+      - "code/python/d2c/experiments/confidence_metrics.py"
+      - "code/python/d2c/digital/download_babi.py"
+      - "code/python/d2c/experiment_lab/server.py"
+      - "code/python/d2c/experiment_lab/index.html"
+      - "code/python/tests/test_babi_g3.py"
+      - "code/python/tests/test_babi_f0.py"
+      - "code/python/tests/test_hierarchy_director.py"
+      - "code/python/tests/test_download_babi.py"
+      - "code/python/tests/test_experiment_lab.py"
+      - "docs/G3_FULL_HIERARCHY.md"
+permissions:
+  contents: read
+
+jobs:
+  g3-full-hierarchy:
+    name: Validation preflight → matched flat / bidirectional hierarchy
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      PYTHONPATH: ${{ github.workspace }}/code/python
+      GFE_CORE_LIB: ${{ github.workspace }}/code/c++ core/build-shared/libgfe_core.so
+      OPENBLAS_NUM_THREADS: "1"
+      OPENBLAS_CORETYPE: "Haswell"
+      NPY_DISABLE_CPU_FEATURES: "X86_V3,X86_V4,AVX512_ICL,AVX512_SPR"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      VECLIB_MAXIMUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+      G3_VALIDATION_OUTPUT: runs/experiment-lab/g3-validation
+      G3_TEST_OUTPUT: runs/experiment-lab/g3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pinned Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.18"
+
+      - name: Build shared C++ ABI runtime
+        run: |
+          cmake -S "code/c++ core" -B "code/c++ core/build-shared" -DBUILD_SHARED_LIBS=ON
+          cmake --build "code/c++ core/build-shared" -j
+
+      - name: Install pinned Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy==2.4.6" matplotlib pytest
+
+      - name: Prepare train and validation only (test remains untouched)
+        run: python -m d2c.digital.download_babi --splits train,valid
+
+      - name: Run hierarchy, G2 fixture, G3 and Lab tests
+        run: |
+          pytest -q \
+            code/python/tests/test_hierarchy_director.py \
+            code/python/tests/test_download_babi.py \
+            code/python/tests/test_babi_g2.py \
+            code/python/tests/test_babi_f0.py \
+            code/python/tests/test_babi_g3.py \
+            code/python/tests/test_experiment_lab.py
+
+      - name: Validate Python modules and Lab JavaScript
+        run: |
+          python -m compileall -q \
+            code/python/d2c/experiments/babi_g3.py \
+            code/python/d2c/experiments/babi_f0.py \
+            code/python/d2c/experiments/babi_g2.py \
+            code/python/d2c/digital/download_babi.py \
+            code/python/d2c/experiment_lab/server.py
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          html = Path("code/python/d2c/experiment_lab/index.html").read_text()
+          scripts = re.findall(r"<script>(.*?)</script>", html, flags=re.S)
+          if len(scripts) != 1:
+              raise SystemExit(f"expected one inline Lab script, found {len(scripts)}")
+          Path("/tmp/experiment-lab.js").write_text(scripts[0])
+          PY
+          node --check /tmp/experiment-lab.js
+
+      - name: G3 validation-only preflight (does not open test split)
+        run: |
+          mkdir -p "$G3_VALIDATION_OUTPUT"
+          python -m d2c.experiments.babi_g3 \
+            --tasks 3,5 --dim 64 --seeds 3 --epochs 3 \
+            --lr 0.05 --feature-scale 10 --bootstrap-samples 200 \
+            --eval-split valid --output-dir "$G3_VALIDATION_OUTPUT"
+          python - <<'PY'
+          import json, pathlib
+          root = pathlib.Path("runs/experiment-lab/g3-validation")
+          summaries = sorted(root.glob("g3_*/summary.json"))
+          if not summaries:
+              raise SystemExit("G3 validation preflight did not produce summary.json")
+          result = json.loads(summaries[-1].read_text())
+          if result["protocol"]["evaluation_split"] != "valid":
+              raise SystemExit("G3 preflight did not use validation")
+          if result["protocol"]["test_split_opened"] is not False:
+              raise SystemExit("G3 validation preflight opened the locked test split")
+          if set(result["tasks"]) != {"3", "5"}:
+              raise SystemExit("G3 preflight missed QA3 or QA5")
+          if not result["acceptance"]["matched_seed_example_and_training_order"]["passed"]:
+              raise SystemExit("G3 preflight failed matched-arm identity controls")
+          if not result["acceptance"]["full_bottom_up_top_down_mechanism"]["passed"]:
+              raise SystemExit("G3 preflight failed hierarchy activity, positive-kernel or finite-state mechanism checks")
+          stability = result["acceptance"]["hierarchy_stability_qualification"]
+          if not stability["evidence_recorded"]:
+              raise SystemExit("G3 preflight did not record the hierarchy stability qualification")
+          if not result["acceptance"]["f0_six_phase_spine_audit"]["passed"]:
+              raise SystemExit("G3 preflight failed F0 six-phase spine audit")
+          print(
+              "G3 validation execution, mechanism, F0 spine and test-split isolation passed; "
+              f"stability_qualified={stability['passed']} "
+              f"(max_ratio={stability['max_observed_stability_ratio']:.4f}, "
+              f"margin={stability['stability_margin']:.4f})."
+          )
+          PY
+
+      - name: Upload G3-N validation evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g3-normalized-top-down-validation-qa3-qa5
+          path: |
+            runs/experiment-lab/g3-validation/
+          if-no-files-found: warn
+          retention-days: 30

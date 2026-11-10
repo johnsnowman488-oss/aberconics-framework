@@ -59,6 +59,8 @@ def test_babi_f0_runner_executes_train_and_test_without_external_dataset(tmp_pat
     assert seed["test_runtime"]["step_count"] > 0
     assert seed["test_runtime"]["stability_violations"] == 0
     assert seed["test_runtime"]["phase_counts"]
+    assert len(seed["initial_readout_sha256"]) == 64
+    assert len(seed["training_order_sha256"]) == 64
 
 
 def test_continuous_mode_keeps_one_test_memory_continuity(tmp_path) -> None:

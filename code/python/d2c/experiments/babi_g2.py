@@ -48,6 +48,7 @@ class G2Config:
     learning_rate: float = 0.05
     feature_scale: float = 100.0
     readout: str = "linear"
+    memory_backend: str = "python_ref"
     bootstrap_samples: int = 400
 
     def __post_init__(self) -> None:
@@ -63,6 +64,8 @@ class G2Config:
             raise ValueError("feature_scale must be finite and positive")
         if self.readout not in {"linear", "mlp"}:
             raise ValueError("readout must be linear or mlp")
+        if self.memory_backend not in {"python_ref", "cpp_vectorized"}:
+            raise ValueError("memory_backend must be python_ref or cpp_vectorized")
         if self.bootstrap_samples < 200 or self.bootstrap_samples > 5000:
             raise ValueError("bootstrap_samples must be between 200 and 5000 for G2 confidence gates")
 
@@ -373,6 +376,7 @@ def run_g2_experiment(
             epochs=cfg.epochs, hidden_dim=32,
             learning_rate=cfg.learning_rate, readout_type=cfg.readout,
             feature_scale=cfg.feature_scale, mode="isolated",
+            memory_backend=cfg.memory_backend,
             exercise_spine=True,
         )
         # These are paired, pre-registered settings. The locked test split is
@@ -669,6 +673,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--learning-rate", type=float, default=0.05)
     parser.add_argument("--feature-scale", type=float, default=100.0)
     parser.add_argument("--readout", choices=("linear", "mlp"), default="linear")
+    parser.add_argument("--memory-backend", choices=("python_ref", "cpp_vectorized"), default="python_ref")
     parser.add_argument("--bootstrap-samples", type=int, default=400)
     parser.add_argument("--eval-split", choices=("valid", "test"), default="test")
     parser.add_argument("--data-dir", type=Path, default=_DATA_DIR)
@@ -682,7 +687,8 @@ def main(argv: list[str] | None = None) -> dict[str, str]:
     config = G2Config(
         tasks=args.tasks, dim=args.dim, seeds=args.seeds, epochs=args.epochs,
         learning_rate=args.learning_rate, feature_scale=args.feature_scale,
-        readout=args.readout, bootstrap_samples=args.bootstrap_samples,
+        readout=args.readout, memory_backend=args.memory_backend,
+        bootstrap_samples=args.bootstrap_samples,
     )
     result = run_g2_experiment(config=config, data_dir=args.data_dir, fixture_path=args.fixture_path, eval_split=args.eval_split)
     paths = save_g2_bundle(result, output_dir=args.output_dir)

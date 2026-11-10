@@ -7,7 +7,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
-from typing import Any
+from typing import Any, Sequence
 from urllib.request import urlopen
 
 
@@ -64,19 +64,28 @@ def download_babi_dataset(
     *,
     force: bool = False,
     timeout: float = 60.0,
+    splits: Sequence[str] | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Download train/test/valid splits atomically and validate before install.
+    """Download selected bAbI splits atomically and validate before install.
 
-    Existing valid files are kept by default. Downloads use temporary files in
-    the destination directory and are atomically renamed only after validation.
+    By default all canonical splits are handled. Validation-only diagnostics
+    can request train/valid first and defer touching test until locked evaluation.
     """
     if timeout <= 0:
         raise ValueError("timeout must be positive")
+    selected = tuple(_BABI_URLS) if splits is None else tuple(splits)
+    if (
+        not selected
+        or len(set(selected)) != len(selected)
+        or any(name not in _BABI_URLS for name in selected)
+    ):
+        raise ValueError("splits must be a non-empty unique selection of train, valid and/or test")
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
     results: dict[str, dict[str, Any]] = {}
 
-    for split, url in _BABI_URLS.items():
+    for split in selected:
+        url = _BABI_URLS[split]
         target = destination / f"babi_{split}.jsonl"
         if target.exists() and not force:
             results[split] = {**validate_babi_jsonl(target), "downloaded": False}
@@ -103,13 +112,16 @@ def download_babi_dataset(
             raise
     return results
 
-
 def main(argv: list[str] | None = None) -> int:
     repo_root = Path(__file__).resolve().parents[4]
     default_dir = repo_root / "code" / "python" / "d2c" / "progress" / "babi_data"
     parser = argparse.ArgumentParser(description="Download and validate bAbI JSONL data.")
     parser.add_argument("--output-dir", type=Path, default=default_dir)
     parser.add_argument("--force", action="store_true", help="replace existing valid split files")
+    parser.add_argument(
+        "--splits", default="train,test,valid",
+        help="comma-separated subset of train,valid,test (default: all three)",
+    )
     parser.add_argument("--timeout", type=float, default=60.0)
     args = parser.parse_args(argv)
 
@@ -117,6 +129,7 @@ def main(argv: list[str] | None = None) -> int:
         args.output_dir,
         force=args.force,
         timeout=args.timeout,
+        splits=tuple(value.strip() for value in args.splits.split(",") if value.strip()),
     )
     for split, result in results.items():
         print(

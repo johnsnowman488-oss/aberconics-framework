@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 import math
-from typing import Mapping, Sequence
+from typing import Callable, Mapping, Sequence
 
 import numpy as np
 
@@ -194,6 +194,8 @@ class DigitalRuntime:
     state_dim: int
     config: DigitalRuntimeConfig = field(default_factory=DigitalRuntimeConfig)
     session_id: str = "digital-session"
+    memory_backend: str = "python_ref"
+    memory_stepper: Callable[[DigitalMemoryState, Sequence[float], DigitalMemoryConfig], DigitalMemoryState] | None = field(default=None, repr=False)
     monitor: DigitalStabilityMonitor = field(default_factory=DigitalStabilityMonitor)
     memory_state: DigitalMemoryState = field(init=False)
     trace_store: DigitalTraceStore = field(init=False)
@@ -213,6 +215,10 @@ class DigitalRuntime:
             raise ValueError("state_dim must be positive")
         if not self.session_id:
             raise ValueError("session_id must be non-empty")
+        if self.memory_backend not in {"python_ref", "cpp_vectorized"}:
+            raise ValueError("memory_backend must be python_ref or cpp_vectorized")
+        if (self.memory_backend == "cpp_vectorized") != (self.memory_stepper is not None):
+            raise ValueError("cpp_vectorized backend requires a native memory_stepper")
         self.memory_config = DigitalMemoryConfig.from_mapping(self.memory_config.to_mapping())
         self.memory_state = seed_memory_state(
             state_dim=self.state_dim,
@@ -284,7 +290,9 @@ class DigitalRuntime:
             raise ValueError("forcing dimension must match runtime state_dim")
         active_phase = self.phase_controller.phase
         previous_u = list(self.memory_state.u)
-        next_state = step_memory(self.memory_state, forcing, self.memory_config)
+        next_state = (self.memory_stepper(self.memory_state, forcing, self.memory_config)
+                      if self.memory_stepper is not None
+                      else step_memory(self.memory_state, forcing, self.memory_config))
         assessment = self.monitor.assess(next_state, self.memory_config)
         self.stability_checks += 1
         if not assessment.passed:
@@ -399,6 +407,7 @@ class DigitalRuntime:
     def runtime_summary(self) -> dict[str, object]:
         return {
             "session_id": self.session_id,
+            "memory_backend": self.memory_backend,
             "step_count": self.step_count,
             "episode_count": self.episode_count,
             "continuity_id": self.continuity_id,
@@ -418,6 +427,7 @@ class DigitalRuntime:
         return {
             "schema_version": 1,
             "state_dim": self.state_dim,
+            "memory_backend": self.memory_backend,
             "session_id": self.session_id,
             "memory_config": self.memory_config.to_mapping(),
             "runtime_config": self.config.to_mapping(),
@@ -443,6 +453,8 @@ class DigitalRuntime:
             raise ValueError("unsupported digital runtime checkpoint schema")
         if int(snapshot["state_dim"]) != self.state_dim:
             raise ValueError("checkpoint state_dim does not match runtime")
+        if str(snapshot.get("memory_backend", "python_ref")) != self.memory_backend:
+            raise ValueError("checkpoint memory_backend does not match runtime")
         memory_config = DigitalMemoryConfig.from_mapping(dict(snapshot["memory_config"]))
         runtime_data = dict(snapshot["runtime_config"])
         phase_data = dict(runtime_data["phase"])

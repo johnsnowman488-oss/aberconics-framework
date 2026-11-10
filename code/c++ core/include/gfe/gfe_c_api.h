@@ -704,6 +704,17 @@ GFE_C_API int gfe_c_fit_soe_kernel(const double* t,
                                    char* error_msg,
                                    size_t error_msg_capacity);
 
+/* Vector-valued digital memory ABI. chi is row-major [channel_count, state_dim]. */
+typedef enum gfe_c_digital_memory_form { GFE_C_DIGITAL_MEMORY_INPUT_DRIVEN=0, GFE_C_DIGITAL_MEMORY_NEGATIVE_FEEDBACK=1 } gfe_c_digital_memory_form;
+typedef struct gfe_c_digital_memory_config { size_t state_dim; size_t channel_count; double dt; double leak_rate; int form; } gfe_c_digital_memory_config;
+typedef struct gfe_c_digital_memory_kernel_view { const double* gamma; size_t gamma_size; const double* weights; size_t weights_size; } gfe_c_digital_memory_kernel_view;
+typedef struct gfe_c_digital_memory_state_view { const double* u; size_t u_size; const double* chi; size_t chi_size; double t; } gfe_c_digital_memory_state_view;
+typedef struct gfe_c_digital_memory_state_mut_view { double* u; size_t u_capacity; size_t* u_size; double* chi; size_t chi_capacity; size_t* chi_size; double* t; } gfe_c_digital_memory_state_mut_view;
+typedef struct gfe_c_digital_memory_trajectory_mut_view { double* t; size_t t_capacity; size_t* t_size; double* u; size_t u_capacity; size_t* u_size; double* chi; size_t chi_capacity; size_t* chi_size; } gfe_c_digital_memory_trajectory_mut_view;
+typedef struct gfe_c_digital_memory_diagnostics { size_t steps_executed; int all_finite; double max_abs_u; double max_abs_chi; } gfe_c_digital_memory_diagnostics;
+GFE_C_API int gfe_c_digital_step(const gfe_c_digital_memory_config*, const gfe_c_digital_memory_kernel_view*, const gfe_c_digital_memory_state_view*, const double*, size_t, gfe_c_digital_memory_state_mut_view*, char*, size_t);
+GFE_C_API int gfe_c_digital_run_sequence(const gfe_c_digital_memory_config*, const gfe_c_digital_memory_kernel_view*, const gfe_c_digital_memory_state_view*, const double*, size_t, size_t, gfe_c_digital_memory_state_mut_view*, gfe_c_digital_memory_trajectory_mut_view*, gfe_c_digital_memory_diagnostics*, char*, size_t);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif
