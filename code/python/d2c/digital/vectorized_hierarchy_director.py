@@ -23,6 +23,7 @@ def vectorized_top_down_kernel(
     *,
     gain: float,
     normalize_weights: bool = True,
+    preserve_weight_mass: bool = False,
 ) -> DigitalMemoryConfig:
     """Materialize G3-style positive top-down kernel modulation.
 
@@ -42,9 +43,13 @@ def vectorized_top_down_kernel(
     gamma = [float(value) * gamma_scale for value in base.gamma]
     if any(not math.isfinite(value) or value <= 0.0 for value in gamma):
         raise RuntimeError("top-down modulation underflowed a positive decay rate")
-    if normalize_weights:
-        # The exp(gain*drive) term is common to every positive channel weight,
-        # so it cancels exactly under unit-sum normalization.
+    if preserve_weight_mass:
+        # Keep the calibrated kernel mass. Unit-sum normalization would
+        # multiply the effective feedback weights by 1/sum(base.w), while
+        # top-down modulation has already reduced gamma by exp(-gain*drive).
+        weights = [float(value) for value in base.w]
+    elif normalize_weights:
+        # The common exp(gain*drive) factor cancels under unit-sum normalization.
         base_total = sum(base.w)
         weights = [float(value) / base_total for value in base.w]
     else:
@@ -98,6 +103,7 @@ class VectorizedHierarchicalDigitalDirector:
         context_w: Sequence[float] = (0.05, 0.02),
         context_leak: float = 0.5,
         normalize_top_down_weights: bool = True,
+        preserve_top_down_weight_mass: bool = False,
         library_path: str | None = None,
     ) -> None:
         if state_dim <= 0:
@@ -112,6 +118,7 @@ class VectorizedHierarchicalDigitalDirector:
         self.bottom_up_gain = float(bottom_up_gain)
         self.top_down_gain = float(top_down_gain)
         self.normalize_top_down_weights = bool(normalize_top_down_weights)
+        self.preserve_top_down_weight_mass = bool(preserve_top_down_weight_mass)
         self.base_memory = DigitalMemoryConfig(
             gamma=list(memory_config.gamma), w=list(memory_config.w),
             dt=memory_config.dt, leak_rate=memory_config.leak_rate,
@@ -170,6 +177,7 @@ class VectorizedHierarchicalDigitalDirector:
             active_fast = vectorized_top_down_kernel(
                 self.base_memory, context_u, gain=self.top_down_gain,
                 normalize_weights=self.normalize_top_down_weights,
+                preserve_weight_mass=self.preserve_top_down_weight_mass,
             )
             bottom_up = [self.bottom_up_gain * value for value in states[0].u]
 
