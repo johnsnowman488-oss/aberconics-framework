@@ -79,7 +79,7 @@ jobs:
               raise SystemExit("G4.1 seed identity contract failed")
           required = (
               "qa3_qa5_validation_coverage",
-              "five_seed_pairing_and_example_identity",
+              "three_seed_pairing_and_example_identity",
               "vectorized_two_level_bidirectional_mechanism",
               "stability_evidence_recorded",
               "confidence_evidence",
