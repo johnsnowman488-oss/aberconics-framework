@@ -93,7 +93,6 @@ def _run_cell(*, task: int, dim: int, channels: int, seeds: int, epochs: int,
     bridge = build_babi_bridge(vocabulary, dim=dim)
     feature_dim = dim * 2 + dim * dim
     seed_rows = []
-    order_hashes = []
     for seed in range(seeds):
         rng = random.Random(seed)
         readout = LinearReadout(input_dim=feature_dim, output_dim=len(answer_set), seed=seed)
@@ -130,7 +129,6 @@ def _run_cell(*, task: int, dim: int, channels: int, seeds: int, epochs: int,
         order_hash = hashlib.sha256(
             json.dumps(training_orders, separators=(",", ":")).encode()
         ).hexdigest()
-        order_hashes.append(order_hash)
 
         eval_runtime = _make_runtime(
             cfg, memory_config, session_id=f"flat-c-sweep-valid-t{task}-d{dim}-c{channels}-s{seed}",
@@ -162,8 +160,6 @@ def _run_cell(*, task: int, dim: int, channels: int, seeds: int, epochs: int,
             "predictions": predictions,
             "diagnostics": summarize_predictions(predictions, answer_set),
         })
-    if len(set(order_hashes)) != 1:
-        raise AssertionError("training order is not matched across capacity cells")
     accuracies = [row["accuracy"] for row in seed_rows]
     return {
         "task": task, "dim": dim, "channels": channels,
@@ -171,7 +167,7 @@ def _run_cell(*, task: int, dim: int, channels: int, seeds: int, epochs: int,
         "mean_validation_accuracy": statistics.mean(accuracies),
         "seed_accuracy_sd": statistics.stdev(accuracies) if len(accuracies) > 1 else 0.0,
         "seed_rows": seed_rows,
-        "training_order_sha256": order_hashes[0],
+        "training_order_sha256_by_seed": {str(row["seed"]): row["training_order_sha256"] for row in seed_rows},
     }
 
 
