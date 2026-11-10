@@ -288,7 +288,7 @@ def run_g42(*, config: G42Config, data_dir: Path, mode: str = "static") -> dict[
             "matched_static_adaptive_initialization": (
                 mode == "static" or all(row.get("matched_readout_initialization", False)
                     and row.get("matched_training_order", False) for row in tasks.values())),
-            "prune_and_grow_observed": mode == "static" or event_count == config.seeds * config.depth * 2 * 2,
+            "prune_and_grow_observed": mode == "static" or event_count == config.seeds * config.depth * 2,
         },
     }
 
