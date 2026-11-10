@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: g41-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   g41-validation:
     name: Mass-preserving fast kernel → matched G3 QA3 + QA5 validation
