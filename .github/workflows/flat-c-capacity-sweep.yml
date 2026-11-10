@@ -1,0 +1,99 @@
+name: Flat E-F0 Memory Channel Capacity Sweep
+
+on:
+  push:
+    paths:
+      - ".github/workflows/flat-c-capacity-sweep.yml"
+      - "code/python/d2c/experiments/flat_c_capacity_sweep.py"
+      - "code/python/tests/test_flat_c_capacity_sweep.py"
+      - "docs/FLAT_C_CAPACITY_SWEEP.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flat-c-capacity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  flat-c-capacity:
+    name: Matched flat E-F0 C × D validation (QA3 + QA5)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PYTHONPATH: ${{ github.workspace }}/code/python
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      VECLIB_MAXIMUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up pinned Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.18"
+      - name: Install pinned numerical dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy==2.4.6" pytest
+      - name: Download train and validation only
+        run: python -m d2c.digital.download_babi --splits train,valid
+      - name: Test channel construction and preserved invariants
+        run: pytest -q code/python/tests/test_flat_c_capacity_sweep.py
+      - name: Compile sweep implementation
+        run: python -m compileall -q code/python/d2c/experiments/flat_c_capacity_sweep.py
+      - name: Run matched flat E-F0 C × D validation sweep
+        run: |
+          python -m d2c.experiments.flat_c_capacity_sweep \
+            --tasks 3,5 --dims 64,96,128 --channels 3,4,6 \
+            --seeds 3 --epochs 3 --learning-rate 0.05 --feature-scale 10 \
+            --data-dir code/python/d2c/progress/babi_data \
+            --output-dir runs/experiment-lab/flat-c-capacity
+      - name: Enforce pairing, kernel controls, and validation-only boundary
+        run: |
+          python - <<'PY'
+          import json, math
+          from pathlib import Path
+
+          root = Path("runs/experiment-lab/flat-c-capacity")
+          result = json.loads((root / "summary.json").read_text())
+          protocol = result["protocol"]
+          assert protocol["evaluation_split"] == "valid"
+          assert protocol["test_split_opened"] is False
+          assert protocol["dims"] == [64, 96, 128]
+          assert protocol["channels"] == [3, 4, 6]
+          assert protocol["seeds"] == [0, 1, 2]
+          assert protocol["epochs"] == 3
+          assert protocol["feature_scale"] == 10
+          assert len(result["cells"]) == 18
+          identities = set()
+          order_hashes = {}
+          for cell in result["cells"]:
+              identity = (cell["task"], cell["dim"], cell["channels"])
+              assert identity not in identities
+              identities.add(identity)
+              cfg = cell["memory_config"]
+              assert len(cfg["gamma"]) == cell["channels"]
+              assert len(cfg["w"]) == cell["channels"]
+              assert math.isclose(sum(cfg["w"]), 0.24, abs_tol=1e-10)
+              ratio = sum(w / (g * cfg["leak_rate"]) for w, g in zip(cfg["w"], cfg["gamma"]))
+              assert math.isclose(ratio, 1.38, abs_tol=1e-10)
+              assert [r["seed"] for r in cell["seed_rows"]] == [0, 1, 2]
+              assert all(len(r["epoch_mean_train_losses"]) == 3 for r in cell["seed_rows"])
+              order_hashes.setdefault(cell["task"], set()).add(cell["training_order_sha256"])
+          assert all(len(values) == 1 for values in order_hashes.values()), order_hashes
+          print("Flat C × D validation sweep passed pairing, mass, stability, and split gates.")
+          for cell in result["cells"]:
+              print(f"QA{cell['task']} D={cell['dim']} C={cell['channels']} "
+                    f"valid_accuracy={cell['mean_validation_accuracy']:.4f}")
+          PY
+      - name: Upload flat capacity evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flat-ef0-c-memory-capacity-validation
+          path: runs/experiment-lab/flat-c-capacity/
+          if-no-files-found: warn
+          retention-days: 30
