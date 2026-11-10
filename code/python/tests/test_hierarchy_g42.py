@@ -25,3 +25,31 @@ def test_prune_grow_rejects_invalid_activity_shape():
         dt=0.05, leak_rate=2.0, form="negative_feedback")
     with pytest.raises(ValueError):
         prune_grow_kernel(config, [0.1])
+
+def test_h3_director_runs_three_simultaneous_levels_when_native_library_is_available():
+    import os
+    from d2c.digital.director import DigitalEpisode
+    from d2c.digital.hierarchy_g42 import NLevelVectorizedHierarchyDirector
+    if not os.environ.get("GFE_CORE_LIB"):
+        pytest.skip("GFE_CORE_LIB is required for native hierarchy integration")
+    fast = DigitalMemoryConfig(
+        gamma=[2.0, 0.45, 0.035], w=[0.16, 0.108, 0.0448],
+        dt=0.05, leak_rate=2.0, form="negative_feedback")
+    context = DigitalMemoryConfig(
+        gamma=[0.35, 0.08], w=[0.05, 0.02],
+        dt=0.05, leak_rate=0.5, form="negative_feedback")
+    director = NLevelVectorizedHierarchyDirector(
+        level_configs=[fast, context, context], state_dim=8)
+    forcings = []
+    for i in range(5):
+        row = [0.0] * 8
+        row[i % 8] = 0.25
+        forcings.append(row)
+    episode = DigitalEpisode(
+        forcings=forcings, tokens=[f"t{i}" for i in range(5)],
+        target="x", query=[0.0] * 8)
+    result = director.run_episode(episode)
+    assert len(result.level_traces) == 3
+    assert all(len(trace.steps) == 5 for trace in result.level_traces)
+    assert len(result.final_state.u) == 8
+    assert all(math.isfinite(v) for row in result.stability_ratios for v in row)
