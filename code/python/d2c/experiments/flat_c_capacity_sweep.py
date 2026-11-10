@@ -208,6 +208,24 @@ def run_sweep(*, data_dir: Path, output_dir: Path, tasks=(3, 5), dims=DEFAULT_DI
                     answer_set=answer_set, vocabulary=vocabulary,
                     memory_config=memory_config,
                 ))
+    paired_c_effects = []
+    for task in tasks:
+        for dim in dims:
+            baseline = next(c for c in results if c["task"] == task and c["dim"] == dim and c["channels"] == 3)
+            baseline_by_seed = {row["seed"]: row["accuracy"] for row in baseline["seed_rows"]}
+            for count in (4, 6):
+                candidate = next(c for c in results if c["task"] == task and c["dim"] == dim and c["channels"] == count)
+                candidate_by_seed = {row["seed"]: row["accuracy"] for row in candidate["seed_rows"]}
+                differences = [candidate_by_seed[seed] - baseline_by_seed[seed] for seed in sorted(baseline_by_seed)]
+                paired_c_effects.append({
+                    "task": task, "dim": dim, "comparison": f"C{count}-C3",
+                    "seed_differences": differences,
+                    "mean_paired_accuracy_delta": statistics.mean(differences),
+                    "positive_seeds": sum(value > 0 for value in differences),
+                    "negative_seeds": sum(value < 0 for value in differences),
+                    "zero_seeds": sum(value == 0 for value in differences),
+                    "interpretation": "Descriptive paired seed delta; three seeds are a screening sample, not confirmatory inference.",
+                })
     result = {
         "experiment": "flat_ef0_memory_channel_capacity_sweep",
         "experiment_id": "FLAT-C-CAPACITY-VALIDATION",
@@ -234,6 +252,7 @@ def run_sweep(*, data_dir: Path, output_dir: Path, tasks=(3, 5), dims=DEFAULT_DI
             "train_sha256": sha256(train_path), "valid_sha256": sha256(valid_path),
         },
         "cells": results,
+        "paired_c_effects_at_fixed_D": paired_c_effects,
     }
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "summary.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
