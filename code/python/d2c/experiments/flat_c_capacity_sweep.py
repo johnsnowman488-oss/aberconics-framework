@@ -26,7 +26,7 @@ from ..digital.babi import (
     build_babi_vocabulary,
 )
 from ..digital.bridge import DigitalMemoryConfig
-from ..digital.readout import LinearReadout
+from ..digital.readout import LinearReadout, query_conditioned_features
 from ..runtime.digital_runtime import DigitalRuntimeConfig
 from .babi_f0 import BabiF0Config, _make_runtime
 from .g0_diagnostics import (
@@ -89,7 +89,7 @@ def build_channel_config(channel_count: int) -> DigitalMemoryConfig:
 def _run_cell(*, task: int, dim: int, channels: int, seeds: int, epochs: int,
               learning_rate: float, feature_scale: float, train_stories,
               valid_stories, answer_set: list[str], vocabulary, memory_config,
-              spine_audit: bool = False) -> dict:
+) -> dict:
     bridge = build_babi_bridge(vocabulary, dim=dim)
     feature_dim = dim * 2 + dim * dim
     seed_rows = []
@@ -118,9 +118,7 @@ def _run_cell(*, task: int, dim: int, channels: int, seeds: int, epochs: int,
                 result = train_runtime.run_episode(
                     episode, episode_id=f"train-e{epoch}-s{story_index}", reset_memory=True,
                 )
-                features = __import__(
-                    "d2c.digital.readout", fromlist=["query_conditioned_features"]
-                ).query_conditioned_features(
+                features = query_conditioned_features(
                     result.final_state, memory_config, result.query,
                     feature_scale=feature_scale,
                 )
@@ -143,7 +141,6 @@ def _run_cell(*, task: int, dim: int, channels: int, seeds: int, epochs: int,
             result = eval_runtime.run_episode(
                 episode, episode_id=f"valid-s{story_index}", reset_memory=True,
             )
-            from ..digital.readout import query_conditioned_features
             features = query_conditioned_features(
                 result.final_state, memory_config, result.query,
                 feature_scale=feature_scale,
