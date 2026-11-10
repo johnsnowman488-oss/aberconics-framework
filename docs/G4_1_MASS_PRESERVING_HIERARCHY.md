@@ -50,7 +50,7 @@ that the historical comparison is not silently changed.
 - Full memory kernel and context kernel.
 - Feature scale 10, learning rate 0.05, three epochs.
 - QA3 and QA5, same validation examples and matched seed identities 0, 1, 2.
-- Three seeds for this short corrective validation.
+- Three matched seeds (0, 1, 2) for this short corrective validation.
 - Validation split only; locked test split is not downloaded or opened.
 - No static weight strengthening, ABI redesign, new hierarchy arms, or C++ vectorization changes.
 
@@ -60,7 +60,7 @@ that the historical comparison is not silently changed.
 2. Original calibrated kernel mass is preserved at every fast-path event.
 3. Fast and upper stability ratios are at most 0.9 for every seed.
 4. States remain finite and both coupling directions remain active.
-5. QA3/QA5 pairing, example identity, and confidence evidence are complete.
+5. Three-seed QA3/QA5 pairing, example identity, and confidence evidence are complete.
 6. QA3 and QA5 performance are compared with the matched G3 reference; no
    predictive improvement is assumed in advance.
 
