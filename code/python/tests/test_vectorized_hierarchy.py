@@ -81,3 +81,21 @@ def test_vectorized_hierarchy_uses_vector_memory_at_both_levels():
     assert math.isclose(result.top_down_weight_sum_max, 1.0, abs_tol=1e-9)
     assert all(math.isfinite(value) for row in result.stability_ratios for value in row)
     assert director.step_count == len(forcings)
+
+
+def test_g41_top_down_mode_preserves_calibrated_kernel_mass_and_stability():
+    base = DigitalMemoryConfig(
+        gamma=[2.0, 0.45, 0.035],
+        w=[0.16, 0.108, 0.0448],
+        dt=0.05,
+        leak_rate=2.0,
+        form="negative_feedback",
+    )
+    active = vectorized_top_down_kernel(
+        base, [0.1, -0.1, 0.1, -0.1], gain=0.5,
+        normalize_weights=True, preserve_weight_mass=True,
+    )
+    assert math.isclose(sum(active.w), sum(base.w), rel_tol=0.0, abs_tol=1e-12)
+    assert active.w == base.w
+    assert active.stability_ratio() < 0.9
+    assert all(value > 0.0 and math.isfinite(value) for value in active.gamma)
