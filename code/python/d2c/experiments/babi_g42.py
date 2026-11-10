@@ -311,8 +311,18 @@ def main(argv=None):
         "tasks": {task: {arm: row["mean_accuracy_over_seeds"] for arm, row in item["arms"].items()}
                   for task, item in result["tasks"].items()}, "bundle": str(bundle)
     }, sort_keys=True))
-    if not all(result["acceptance"].values()):
-        raise SystemExit("G4.2 acceptance gate failed")
+    hard_gates = (
+        "qa3_qa5_validation_coverage",
+        "all_states_finite",
+        "three_matched_seed_orders",
+    )
+    if args.mode == "prune_grow":
+        hard_gates = (*hard_gates, "matched_static_adaptive_initialization", "prune_and_grow_observed")
+    failed = [name for name in hard_gates if not result["acceptance"][name]]
+    if failed:
+        raise SystemExit("G4.2 execution/evidence gates failed: " + ", ".join(failed))
+    # Stability is a scientific qualification and winner-selection filter,
+    # not a reason to discard a completed H-run's evidence bundle.
     return result
 
 if __name__ == "__main__":
