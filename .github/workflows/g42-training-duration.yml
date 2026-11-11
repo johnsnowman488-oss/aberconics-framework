@@ -1,0 +1,239 @@
+name: G4.2 Training Duration — Three Candidate Runs
+
+on:
+  push:
+    branches:
+      - "g42/longer-epoch-candidate-checks"
+    paths:
+      - ".github/workflows/g42-training-duration.yml"
+      - "code/python/d2c/experiments/babi_g42.py"
+      - "code/python/tests/test_hierarchy_g42.py"
+      - "docs/G4_2_TRAINING_DURATION.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g42-duration-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Build runtime, validate protocol, and prepare train/validation data
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: ${{ github.workspace }}/code/python
+      GFE_CORE_LIB: ${{ github.workspace }}/code/c++ core/build-shared/libgfe_core.so
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      VECLIB_MAXIMUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.18"
+      - name: Install pinned Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy==2.4.6" matplotlib pytest
+      - name: Build shared C++ vector-memory runtime
+        run: |
+          cmake -S "code/c++ core" -B "code/c++ core/build-shared" \
+            -DBUILD_SHARED_LIBS=ON -DGFE_BUILD_TESTS=OFF -DGFE_BUILD_APPS=OFF
+          cmake --build "code/c++ core/build-shared" -j
+      - name: Download train and validation only
+        run: python -m d2c.digital.download_babi --splits train,valid
+      - name: Test hierarchy and duration protocol
+        run: |
+          pytest -q \
+            code/python/tests/test_hierarchy_g42.py \
+            code/python/tests/test_vectorized_hierarchy.py
+      - name: Compile G4.2 experiment module
+        run: python -m compileall -q code/python/d2c/experiments/babi_g42.py
+      - name: Upload train and validation data for the three candidate jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: g42-duration-dataset
+          path: code/python/d2c/progress/babi_data/
+          if-no-files-found: error
+          retention-days: 7
+
+  candidate-runs:
+    name: ${{ matrix.label }} — 12 epochs
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          - id: h4-c6-d64
+            label: H4-C6-D64 (current QA3-first winner)
+            depth: 4
+            capacity: 6
+            dim: 64
+          - id: h2-c4-d64
+            label: H2-C4-D64 (efficient calibrated alternative)
+            depth: 2
+            capacity: 4
+            dim: 64
+          - id: h2-c6-d64
+            label: H2-C6-D64 (strong QA5 alternative)
+            depth: 2
+            capacity: 6
+            dim: 64
+    env:
+      PYTHONPATH: ${{ github.workspace }}/code/python
+      GFE_CORE_LIB: ${{ github.workspace }}/code/c++ core/build-shared/libgfe_core.so
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      VECLIB_MAXIMUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.18"
+      - name: Install pinned Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy==2.4.6" matplotlib pytest
+      - name: Download shared train/validation data
+        uses: actions/download-artifact@v4
+        with:
+          name: g42-duration-dataset
+          path: code/python/d2c/progress/babi_data
+      - name: Build shared C++ vector-memory runtime
+        run: |
+          cmake -S "code/c++ core" -B "code/c++ core/build-shared" \
+            -DBUILD_SHARED_LIBS=ON -DGFE_BUILD_TESTS=OFF -DGFE_BUILD_APPS=OFF
+          cmake --build "code/c++ core/build-shared" -j
+      - name: Run this independent candidate through epoch 12
+        run: |
+          python -m d2c.experiments.babi_g42 \
+            --depth ${{ matrix.depth }} \
+            --capacity ${{ matrix.capacity }} \
+            --dim ${{ matrix.dim }} \
+            --mode static \
+            --epochs 12 \
+            --checkpoint-epochs 3,5,8,12 \
+            --bootstrap-samples 400 \
+            --data-dir code/python/d2c/progress/babi_data \
+            --output-dir runs/experiment-lab/g42-duration/${{ matrix.id }}
+      - name: Upload complete per-candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g42-duration-candidate-${{ matrix.id }}
+          path: runs/experiment-lab/g42-duration/${{ matrix.id }}/
+          if-no-files-found: error
+          retention-days: 90
+
+  aggregate:
+    name: Validate all three curves and write duration comparison
+    needs: candidate-runs
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.18"
+      - name: Download the three candidate evidence bundles
+        uses: actions/download-artifact@v4
+        with:
+          pattern: g42-duration-candidate-*
+          path: runs/g42-duration-candidates
+          merge-multiple: false
+      - name: Validate completeness and write the Lab comparison manifest
+        run: |
+          python - <<'PY'
+          import glob, json, pathlib
+          root = pathlib.Path("runs/g42-duration-candidates")
+          expected = {
+              (4, 6, 64): "h4-c6-d64",
+              (2, 4, 64): "h2-c4-d64",
+              (2, 6, 64): "h2-c6-d64",
+          }
+          checkpoints = [3, 5, 8, 12]
+          files = sorted(glob.glob(str(root / "**" / "summary.json"), recursive=True))
+          if len(files) != 3:
+              raise SystemExit(f"Expected three candidate summaries; found {len(files)}")
+          rows, seen, orders_by_task = [], set(), {}
+          for path in files:
+              result = json.loads(pathlib.Path(path).read_text())
+              p = result["protocol"]
+              key = (int(p["depth"]), int(p["capacity"]), int(p["dim"]))
+              if key not in expected or key in seen:
+                  raise SystemExit(f"Unexpected or duplicate candidate: {key}")
+              seen.add(key)
+              if p["training_epochs"] != 12 or p["checkpoint_epochs"] != checkpoints:
+                  raise SystemExit(f"Wrong duration/checkpoint protocol for {key}")
+              if p["seed_ids"] != [0, 1, 2] or p["test_split_opened"] is not False:
+                  raise SystemExit(f"Seed identity or validation-only gate failed for {key}")
+              if not result["acceptance"]["training_checkpoint_coverage"]:
+                  raise SystemExit(f"Checkpoint coverage failed for {key}")
+              task_curves, task_gain = {}, {}
+              for task in ("3", "5"):
+                  arm = result["tasks"][task]["arms"]["static"]
+                  curve = arm["learning_curve"]
+                  if [row["epoch"] for row in curve] != checkpoints:
+                      raise SystemExit(f"Missing QA{task} checkpoints for {key}")
+                  hashes = arm["training_order_hashes"]
+                  if task in orders_by_task and hashes != orders_by_task[task]:
+                      raise SystemExit(f"Training order mismatch across candidates for QA{task}")
+                  orders_by_task[task] = hashes
+                  task_curves[f"qa{task}"] = curve
+                  first, last = curve[0], curve[-1]
+                  task_gain[f"qa{task}_accuracy_gain_3_to_12"] = (
+                      last["mean_accuracy_over_seeds"] - first["mean_accuracy_over_seeds"]
+                  )
+              rows.append({
+                  "candidate": expected[key],
+                  "depth": key[0], "capacity": key[1], "dim": key[2],
+                  "qa3_learning_curve": task_curves["qa3"],
+                  "qa5_learning_curve": task_curves["qa5"],
+                  "duration_gains": task_gain,
+                  "qa3_final_accuracy": task_curves["qa3"][-1]["mean_accuracy_over_seeds"],
+                  "qa5_final_accuracy": task_curves["qa5"][-1]["mean_accuracy_over_seeds"],
+                  "qa3_final_ece": task_curves["qa3"][-1]["mean_fixed_bin_top_label_ece"],
+                  "qa5_final_ece": task_curves["qa5"][-1]["mean_fixed_bin_top_label_ece"],
+                  "mean_compute_seconds": result["tasks"]["3"]["arms"]["static"]["mean_compute_seconds"]
+                    + result["tasks"]["5"]["arms"]["static"]["mean_compute_seconds"],
+                  "summary_path": path,
+              })
+          if seen != set(expected):
+              raise SystemExit(f"Candidate matrix mismatch: missing {sorted(set(expected) - seen)}")
+          rows.sort(key=lambda row: row["candidate"])
+          manifest = {
+              "schema_version": 1,
+              "campaign": "G4.2 selected-candidate training-duration check",
+              "code_revision": "${{ github.sha }}",
+              "epochs": 12,
+              "checkpoint_epochs": checkpoints,
+              "seed_ids": [0, 1, 2],
+              "candidate_count": len(rows),
+              "parallel_candidate_jobs": 3,
+              "training_order_matched_across_candidates": True,
+              "evaluation_split": "valid",
+              "test_split_opened": False,
+              "selection_policy": "No automatic reselection; inspect full learning curves, calibration, stability, and compute.",
+              "candidates": rows,
+          }
+          out = pathlib.Path("runs/g42-duration-candidates/duration_comparison.json")
+          out.write_text(json.dumps(manifest, indent=2))
+          print(json.dumps(manifest, indent=2))
+          PY
+      - name: Upload aggregate duration comparison and candidate index
+        uses: actions/upload-artifact@v4
+        with:
+          name: g42-training-duration-comparison
+          path: runs/g42-duration-candidates/
+          if-no-files-found: error
+          retention-days: 90
