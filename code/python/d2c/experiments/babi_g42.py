@@ -39,6 +39,7 @@ class G42Config:
     dim: int = 64
     seeds: int = 3
     epochs: int = 3
+    checkpoint_epochs: tuple[int, ...] = (3,)
     learning_rate: float = 0.05
     feature_scale: float = 10.0
     bootstrap_samples: int = 400
@@ -56,8 +57,15 @@ class G42Config:
             raise ValueError("G4.2 capacity C must be 3, 4, or 6")
         if self.dim not in (64, 128):
             raise ValueError("G4.2 representation dimension D must be 64 or 128")
-        if self.seeds != 3 or self.epochs != 3:
-            raise ValueError("G4.2 initial sweep fixes three seeds and three epochs")
+        if self.seeds != 3 or not 3 <= self.epochs <= 12:
+            raise ValueError("G4.2 duration checks fix three seeds and allow 3–12 epochs")
+        if (
+            not self.checkpoint_epochs
+            or tuple(sorted(set(self.checkpoint_epochs))) != self.checkpoint_epochs
+            or self.checkpoint_epochs[-1] != self.epochs
+            or any(epoch < 1 or epoch > self.epochs for epoch in self.checkpoint_epochs)
+        ):
+            raise ValueError("checkpoint_epochs must be sorted, unique, within training, and include the final epoch")
         if self.learning_rate != 0.05 or self.feature_scale != 10.0:
             raise ValueError("G4.2 retains the G4.1 learning rate and feature scale")
         if self.bootstrap_samples < 200:
@@ -213,7 +221,8 @@ def _level_contribution_l1(readout: LinearReadout, features: list[float], block_
 
 
 def _run_seed(
-    *, task: int, seed: int, train_stories: list[BabiStory],
+    *,
+    task: int, seed: int, train_stories: list[BabiStory],
     valid_stories: list[BabiStory], answer_set: list[str], bridge,
     cfg: G42Config, orders: list[list[int]], adaptive: bool,
 ) -> dict[str, Any]:
@@ -229,8 +238,87 @@ def _run_seed(
         bottom_up_gain=cfg.bottom_up_gain, top_down_gain=cfg.top_down_gain,
         preserve_top_down_weight_mass=True,
     )
-    losses, mutation_events = [], []
-    for epoch, order in enumerate(orders):
+    losses, mutation_events, learning_curve = [], [], []
+    final_predictions = None
+    final_confidence = None
+    final_diagnostics = None
+
+    def evaluate_validation(*, final_checkpoint: bool):
+        predictions = []
+        max_stability = [0.0] * cfg.depth
+        max_norm = [0.0] * cfg.depth
+        readout_contribution = [0.0] * cfg.depth
+        top_down_observed = [0.0] * cfg.depth
+        bottom_up_observed = [0.0] * cfg.depth
+        all_finite = True
+
+        for story_index, story in enumerate(valid_stories):
+            episode = babi_story_to_episode(story, bridge, answer_set)
+            result = director.run_episode(
+                episode,
+                experiment_name=f"g42-h{cfg.depth}-c{cfg.capacity}-d{cfg.dim}-qa{task}-s{seed}-valid",
+            )
+            features = _multi_level_features(
+                result, director.level_configs, episode.query, feature_scale=cfg.feature_scale,
+            )
+            probabilities = readout.probabilities(features)
+            predictions.append(build_prediction_record(
+                story, story_index, answer_set, probabilities,
+            ))
+            if final_checkpoint:
+                contributions = _level_contribution_l1(
+                    readout, features, level_feature_dim, cfg.depth,
+                )
+                for level, value in enumerate(contributions):
+                    readout_contribution[level] += value
+                for level in range(cfg.depth):
+                    max_stability[level] = max(
+                        max_stability[level], max(result.stability_ratios[level], default=0.0),
+                    )
+                    max_norm[level] = max(max_norm[level], result.max_state_norms[level])
+                    top_down_observed[level] += result.top_down_input_norms[level]
+                    bottom_up_observed[level] += result.bottom_up_input_norms[level]
+                all_finite = all_finite and all(
+                    math.isfinite(value)
+                    for state in result.final_states
+                    for value in state.u
+                ) and all(
+                    math.isfinite(value)
+                    for trace in result.level_traces
+                    for step in trace.steps
+                    for value in (*step.u, *(item for channel in step.chi for item in channel))
+                )
+
+        count = max(1, len(valid_stories))
+        confidence = summarize_confidence(
+            predictions, answer_set, calibration_bins=10,
+            bootstrap_samples=cfg.bootstrap_samples if final_checkpoint else 0,
+            bootstrap_seed=task * 10000 + seed * 101 + cfg.depth * 13 + cfg.capacity * 7 + cfg.dim,
+        )
+        diagnostics = None
+        if final_checkpoint:
+            readout_contribution = [value / count for value in readout_contribution]
+            top_down_observed = [value / count for value in top_down_observed]
+            bottom_up_observed = [value / count for value in bottom_up_observed]
+            diagnostics = {
+                "max_observed_stability_ratio_by_level": max_stability,
+                "max_state_norm_by_level": max_norm,
+                "stability_pass": all(value <= 0.9 for value in max_stability),
+                "finite_state_pass": all_finite,
+                "mean_top_down_input_l2_by_level": top_down_observed,
+                "mean_bottom_up_input_l2_by_level": bottom_up_observed,
+                "level_readout_contribution_l1": readout_contribution,
+                "cross_level_top_down_pass": all(
+                    top_down_observed[level] > 1e-12 for level in range(cfg.depth - 1)
+                ),
+                "cross_level_bottom_up_pass": all(
+                    bottom_up_observed[level] > 1e-12 for level in range(1, cfg.depth)
+                ),
+                "all_levels_readout_pass": all(value > 1e-8 for value in readout_contribution),
+            }
+        return predictions, confidence, diagnostics
+
+    for epoch_index, order in enumerate(orders):
         epoch_losses = []
         for index in order:
             story = train_stories[index]
@@ -245,72 +333,43 @@ def _run_seed(
                 features, answer_set.index(story.answer), learning_rate=cfg.learning_rate,
             ))
         losses.append(statistics.mean(epoch_losses) if epoch_losses else 0.0)
-        if adaptive and epoch == 0:
+
+        epoch_number = epoch_index + 1
+        if adaptive and epoch_index == 0:
             mutation_events = director.prune_grow(growth_factor=cfg.growth_factor)
 
-    predictions = []
-    max_stability = [0.0] * cfg.depth
-    max_norm = [0.0] * cfg.depth
-    readout_contribution = [0.0] * cfg.depth
-    top_down_observed = [0.0] * cfg.depth
-    bottom_up_observed = [0.0] * cfg.depth
-    all_finite = True
-
-    for story_index, story in enumerate(valid_stories):
-        episode = babi_story_to_episode(story, bridge, answer_set)
-        result = director.run_episode(
-            episode, experiment_name=f"g42-h{cfg.depth}-c{cfg.capacity}-d{cfg.dim}-qa{task}-s{seed}-valid",
-        )
-        features = _multi_level_features(
-            result, director.level_configs, episode.query, feature_scale=cfg.feature_scale,
-        )
-        probabilities = readout.probabilities(features)
-        predictions.append(build_prediction_record(
-            story, story_index, answer_set, probabilities,
-        ))
-        contributions = _level_contribution_l1(
-            readout, features, level_feature_dim, cfg.depth,
-        )
-        for level, value in enumerate(contributions):
-            readout_contribution[level] += value
-        for level in range(cfg.depth):
-            max_stability[level] = max(
-                max_stability[level], max(result.stability_ratios[level], default=0.0),
+        if epoch_number in cfg.checkpoint_epochs:
+            predictions, confidence, diagnostics = evaluate_validation(
+                final_checkpoint=(epoch_number == cfg.epochs),
             )
-            max_norm[level] = max(max_norm[level], result.max_state_norms[level])
-            top_down_observed[level] += result.top_down_input_norms[level]
-            bottom_up_observed[level] += result.bottom_up_input_norms[level]
-        all_finite = all_finite and all(
-            math.isfinite(value)
-            for state in result.final_states
-            for value in state.u
-        ) and all(
-            math.isfinite(value)
-            for trace in result.level_traces
-            for step in trace.steps
-            for value in (*step.u, *(item for channel in step.chi for item in channel))
-        )
+            learning_curve.append({
+                "epoch": epoch_number,
+                "correct": sum(int(row["correct"]) for row in predictions),
+                "total": len(predictions),
+                "accuracy": sum(int(row["correct"]) for row in predictions) / max(1, len(predictions)),
+                "fixed_bin_top_label_ece": confidence["calibration"]["fixed_bin_top_label_ece"],
+                "negative_log_likelihood": confidence["negative_log_likelihood"],
+            })
+            if epoch_number == cfg.epochs:
+                final_predictions = predictions
+                final_confidence = confidence
+                final_diagnostics = diagnostics
 
-    count = max(1, len(valid_stories))
-    readout_contribution = [value / count for value in readout_contribution]
-    top_down_observed = [value / count for value in top_down_observed]
-    bottom_up_observed = [value / count for value in bottom_up_observed]
-    confidence = summarize_confidence(
-        predictions, answer_set, calibration_bins=10,
-        bootstrap_samples=cfg.bootstrap_samples,
-        bootstrap_seed=task * 10000 + seed * 101 + cfg.depth * 13 + cfg.capacity * 7 + cfg.dim,
-    )
+    if final_predictions is None or final_confidence is None or final_diagnostics is None:
+        raise RuntimeError("final validation checkpoint was not evaluated")
+
     channels = [config.channel_count for config in director.level_configs]
     return {
         "seed": seed,
-        "correct": sum(int(row["correct"]) for row in predictions),
-        "total": len(valid_stories),
-        "accuracy": sum(int(row["correct"]) for row in predictions) / count,
+        "correct": sum(int(row["correct"]) for row in final_predictions),
+        "total": len(final_predictions),
+        "accuracy": sum(int(row["correct"]) for row in final_predictions) / max(1, len(final_predictions)),
         "initial_readout_sha256": initial_hash,
         "training_order_sha256": _fingerprint(orders),
         "training": summarize_training_losses(losses),
-        "predictions": predictions,
-        "confidence": confidence,
+        "epoch_checkpoints": learning_curve,
+        "predictions": final_predictions,
+        "confidence": final_confidence,
         "compute_seconds": time.perf_counter() - started,
         "hierarchy": {
             "depth": cfg.depth, "capacity": cfg.capacity, "dim": cfg.dim,
@@ -318,17 +377,8 @@ def _run_seed(
             "total_channels_after_run": sum(channels),
             "kernel_mass_by_level": [sum(config.w) for config in director.level_configs],
             "stability_ratio_by_level": [config.stability_ratio() for config in director.level_configs],
-            "max_observed_stability_ratio_by_level": max_stability,
-            "max_state_norm_by_level": max_norm,
+            **final_diagnostics,
             "stability_margin": 0.9,
-            "stability_pass": all(value <= 0.9 for value in max_stability),
-            "finite_state_pass": all_finite,
-            "mean_top_down_input_l2_by_level": top_down_observed,
-            "mean_bottom_up_input_l2_by_level": bottom_up_observed,
-            "cross_level_top_down_pass": all(top_down_observed[level] > 1e-12 for level in range(cfg.depth - 1)),
-            "cross_level_bottom_up_pass": all(bottom_up_observed[level] > 1e-12 for level in range(1, cfg.depth)),
-            "level_readout_contribution_l1": readout_contribution,
-            "all_levels_readout_pass": all(value > 1e-8 for value in readout_contribution),
             "top_down_weight_mass_preserved": True,
         },
         "structural_adaptation": {
@@ -342,14 +392,34 @@ def _run_seed(
         },
     }
 
-
 def _task_arm_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     accuracies = [row["accuracy"] for row in rows]
     depth = len(rows[0]["hierarchy"]["channels_per_level_after_run"])
+    checkpoint_epochs = rows[0]["epoch_checkpoints"]
+    learning_curve = []
+    for checkpoint in checkpoint_epochs:
+        epoch = checkpoint["epoch"]
+        matching = [
+            next(item for item in row["epoch_checkpoints"] if item["epoch"] == epoch)
+            for row in rows
+        ]
+        curve_accuracy = [item["accuracy"] for item in matching]
+        learning_curve.append({
+            "epoch": epoch,
+            "mean_accuracy_over_seeds": statistics.mean(curve_accuracy),
+            "standard_deviation_over_seeds": statistics.stdev(curve_accuracy),
+            "mean_fixed_bin_top_label_ece": statistics.mean(
+                item["fixed_bin_top_label_ece"] for item in matching
+            ),
+            "mean_negative_log_likelihood": statistics.mean(
+                item["negative_log_likelihood"] for item in matching
+            ),
+        })
     return {
         "mean_accuracy_over_seeds": statistics.mean(accuracies),
         "standard_deviation_over_seeds": statistics.stdev(accuracies),
         "mean_compute_seconds": statistics.mean(row["compute_seconds"] for row in rows),
+        "learning_curve": learning_curve,
         "mean_level_readout_contribution_l1": [
             statistics.mean(row["hierarchy"]["level_readout_contribution_l1"][level] for row in rows)
             for level in range(depth)
@@ -451,7 +521,7 @@ def run_g42(*, config: G42Config, data_dir: Path, mode: str = "static") -> dict[
     result = {
         "schema_version": 2,
         "experiment": "G4.2 corrected vector-coupled multi-level hierarchy",
-        "experiment_id": f"G4.2-H{config.depth}-C{config.capacity}-D{config.dim}-{mode.upper()}",
+        "experiment_id": f"G4.2-H{config.depth}-C{config.capacity}-D{config.dim}-E{config.epochs}-{mode.upper()}",
         "mode": mode, "status": "completed",
         "started_at_utc": started,
         "completed_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -459,7 +529,7 @@ def run_g42(*, config: G42Config, data_dir: Path, mode: str = "static") -> dict[
         "protocol": {
             **asdict(config), "tasks": [3, 5], "evaluation_split": "valid",
             "test_split_opened": False, "seed_ids": [0, 1, 2],
-            "training_epochs": 3, "initial_channels_per_level": initial_channels,
+            "training_epochs": config.epochs, "checkpoint_epochs": list(config.checkpoint_epochs), "initial_channels_per_level": initial_channels,
             "initial_total_channels": sum(initial_channels),
             "capacity_interpretation": (
                 "C is a global channel-budget multiplier. Total channels are 5*C "
@@ -499,6 +569,13 @@ def run_g42(*, config: G42Config, data_dir: Path, mode: str = "static") -> dict[
         "tasks": tasks,
         "acceptance": {
             "qa3_qa5_validation_coverage": set(tasks) == {"3", "5"},
+            "training_checkpoint_coverage": all(
+                all(
+                    [item["epoch"] for item in seed["epoch_checkpoints"]] == list(config.checkpoint_epochs)
+                    for seed in arm["seed_results"]
+                )
+                for task in tasks.values() for arm in task["arms"].values()
+            ),
             "stability_within_0_9_margin": stability,
             "all_states_finite": finite,
             "all_levels_contribute_to_readout": readout,
@@ -533,12 +610,22 @@ def main(argv=None):
     parser.add_argument("--capacity", type=int, choices=(3, 4, 6), required=True)
     parser.add_argument("--dim", type=int, choices=(64, 128), required=True)
     parser.add_argument("--mode", choices=("static", "prune_grow"), default="static")
+    parser.add_argument("--epochs", type=int, default=3)
+    parser.add_argument(
+        "--checkpoint-epochs", type=str, default=None,
+        help="Comma-separated validation checkpoints; must include the final epoch.",
+    )
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA)
     parser.add_argument("--output-dir", type=Path, default=ROOT / "runs/experiment-lab/g42")
     parser.add_argument("--bootstrap-samples", type=int, default=400)
     args = parser.parse_args(argv)
+    checkpoint_epochs = (
+        tuple(int(value.strip()) for value in args.checkpoint_epochs.split(",") if value.strip())
+        if args.checkpoint_epochs else (args.epochs,)
+    )
     config = G42Config(
         depth=args.depth, capacity=args.capacity, dim=args.dim,
+        epochs=args.epochs, checkpoint_epochs=checkpoint_epochs,
         bootstrap_samples=args.bootstrap_samples,
     )
     result = run_g42(config=config, data_dir=args.data_dir, mode=args.mode)
