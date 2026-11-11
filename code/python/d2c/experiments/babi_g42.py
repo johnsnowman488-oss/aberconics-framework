@@ -653,7 +653,7 @@ def main(argv=None):
         "bundle": str(bundle),
     }, sort_keys=True))
     gates = [
-        "qa3_qa5_validation_coverage", "all_states_finite",
+        "qa3_qa5_validation_coverage", "training_checkpoint_coverage", "all_states_finite",
         "all_levels_contribute_to_readout",
         "bottom_up_and_top_down_coupling_observed",
         "three_matched_seed_orders",
