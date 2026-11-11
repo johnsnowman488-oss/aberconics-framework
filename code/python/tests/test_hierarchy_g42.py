@@ -10,7 +10,7 @@ from d2c.digital.director import DigitalEpisode
 from d2c.digital.hierarchy_g42 import (
     NLevelVectorizedHierarchyDirector, adaptive_capacity_update, prune_grow_kernel,
 )
-from d2c.experiments.babi_g42 import _channel_counts, _level_configs, _multi_level_features, G42Config
+from d2c.experiments.babi_g42 import _channel_counts, _level_configs, _multi_level_features, _orders, G42Config
 
 
 @pytest.mark.parametrize("config,activity", [
@@ -27,6 +27,29 @@ def test_legacy_replacement_primitive_preserves_mass_and_stability(config, activ
     assert math.isclose(updated.stability_ratio(), config.stability_ratio(), abs_tol=1e-10)
     assert all(value > 0.0 and math.isfinite(value) for value in updated.w)
     assert event["operation"] == "prune_then_grow"
+
+
+def test_duration_checkpoints_accept_3_5_8_12_epochs():
+    config = G42Config(
+        depth=4, capacity=6, dim=64, epochs=12,
+        checkpoint_epochs=(3, 5, 8, 12),
+    )
+    assert config.epochs == 12
+    assert config.checkpoint_epochs == (3, 5, 8, 12)
+
+
+def test_duration_orders_preserve_the_original_three_epoch_prefix():
+    baseline = _orders(count=31, seeds=3, epochs=3)
+    extended = _orders(count=31, seeds=3, epochs=12)
+    assert [orders[:3] for orders in extended] == baseline
+
+
+def test_duration_checkpoints_must_include_final_epoch():
+    with pytest.raises(ValueError, match="include the final epoch"):
+        G42Config(
+            depth=2, capacity=3, dim=64, epochs=12,
+            checkpoint_epochs=(3, 5, 8),
+        )
 
 
 def test_capacity_adaptation_can_grow_a_real_channel_and_preserve_invariants():
