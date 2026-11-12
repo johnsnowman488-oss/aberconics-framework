@@ -283,7 +283,7 @@ def adaptive_capacity_update(
     elif eligible and rejected_prunes:
         reason = "prune_spectrum_infeasible"
     elif not allow_growth and growth_pressure:
-        reason = "growth_cooldown"
+        reason = "structural_mutation_cooldown"
     elif not can_grow and growth_pressure:
         reason = "maximum_channel_capacity"
     elif growth_pressure and grow_rejection:
