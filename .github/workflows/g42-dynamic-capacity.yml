@@ -1,0 +1,296 @@
+name: G4.2 Corrected Dynamic Capacity — Three Candidate Runs
+
+on:
+  push:
+    branches:
+      - "g42/dynamic-capacity-correction"
+    paths:
+      - ".github/workflows/g42-dynamic-capacity.yml"
+      - "code/python/d2c/experiments/babi_g42.py"
+      - "code/python/tests/test_hierarchy_g42.py"
+      - "docs/G4_2_DYNAMIC_CAPACITY.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g42-dynamic-capacity-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Build runtime, validate protocol, and prepare train/validation data
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: ${{ github.workspace }}/code/python
+      GFE_CORE_LIB: ${{ github.workspace }}/code/c++ core/build-shared/libgfe_core.so
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      VECLIB_MAXIMUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.18"
+      - name: Install pinned Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy==2.4.6" matplotlib pytest
+      - name: Build shared C++ vector-memory runtime
+        run: |
+          cmake -S "code/c++ core" -B "code/c++ core/build-shared" \
+            -DBUILD_SHARED_LIBS=ON -DGFE_BUILD_TESTS=OFF -DGFE_BUILD_APPS=OFF
+          cmake --build "code/c++ core/build-shared" -j
+      - name: Download train and validation only
+        run: python -m d2c.digital.download_babi --splits train,valid
+      - name: Test hierarchy and duration protocol
+        run: |
+          pytest -q \
+            code/python/tests/test_hierarchy_g42.py \
+            code/python/tests/test_vectorized_hierarchy.py
+      - name: Compile G4.2 experiment module
+        run: python -m compileall -q code/python/d2c/experiments/babi_g42.py
+      - name: Upload train and validation data for the three candidate jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: g42-dynamic-capacity-dataset
+          path: code/python/d2c/progress/babi_data/
+          if-no-files-found: error
+          retention-days: 7
+
+  candidate-runs:
+    name: ${{ matrix.label }} — static vs adaptive, 12 epochs
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          - id: h4-c6-d64
+            label: H4-C6-D64 (current QA3-first winner)
+            depth: 4
+            capacity: 6
+            dim: 64
+          - id: h2-c4-d64
+            label: H2-C4-D64 (efficient calibrated alternative)
+            depth: 2
+            capacity: 4
+            dim: 64
+          - id: h2-c6-d64
+            label: H2-C6-D64 (strong QA5 alternative)
+            depth: 2
+            capacity: 6
+            dim: 64
+    env:
+      PYTHONPATH: ${{ github.workspace }}/code/python
+      GFE_CORE_LIB: ${{ github.workspace }}/code/c++ core/build-shared/libgfe_core.so
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      VECLIB_MAXIMUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.18"
+      - name: Install pinned Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy==2.4.6" matplotlib pytest
+      - name: Download shared train/validation data
+        uses: actions/download-artifact@v4
+        with:
+          name: g42-duration-dataset
+          path: code/python/d2c/progress/babi_data
+      - name: Build shared C++ vector-memory runtime
+        run: |
+          cmake -S "code/c++ core" -B "code/c++ core/build-shared" \
+            -DBUILD_SHARED_LIBS=ON -DGFE_BUILD_TESTS=OFF -DGFE_BUILD_APPS=OFF
+          cmake --build "code/c++ core/build-shared" -j
+      - name: Run matched static and adaptive arms through epoch 12
+        run: |
+          python -m d2c.experiments.babi_g42 \
+            --depth ${{ matrix.depth }} \
+            --capacity ${{ matrix.capacity }} \
+            --dim ${{ matrix.dim }} \
+            --mode prune_grow \
+            --epochs 12 \
+            --checkpoint-epochs 3,5,8,12 \
+            --bootstrap-samples 400 \
+            --data-dir code/python/d2c/progress/babi_data \
+            --output-dir runs/experiment-lab/g42-dynamic-capacity/${{ matrix.id }}
+      - name: Upload complete static/adaptive candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g42-dynamic-capacity-candidate-${{ matrix.id }}
+          path: runs/experiment-lab/g42-duration/${{ matrix.id }}/
+          if-no-files-found: error
+          retention-days: 90
+
+  aggregate:
+    name: Validate all three curves and write duration comparison
+    needs: candidate-runs
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.18"
+      - name: Download the three candidate evidence bundles
+        uses: actions/download-artifact@v4
+        with:
+          pattern: g42-duration-candidate-*
+          path: runs/g42-dynamic-capacity-candidates
+          merge-multiple: false
+      - name: Validate matched static and adaptive evidence and write the Lab comparison
+        run: |
+          python - <<'PY'
+          import glob, json, math, pathlib
+          root = pathlib.Path("runs/g42-dynamic-capacity-candidates")
+          expected = {
+              (4, 6, 64): "h4-c6-d64",
+              (2, 4, 64): "h2-c4-d64",
+              (2, 6, 64): "h2-c6-d64",
+          }
+          checkpoints = [3, 5, 8, 12]
+          files = sorted(glob.glob(str(root / "**" / "summary.json"), recursive=True))
+          if len(files) != 3:
+              raise SystemExit(f"Expected exactly three candidate summaries; found {len(files)}")
+          rows, seen, orders_by_task = [], set(), {}
+          for path in files:
+              result = json.loads(pathlib.Path(path).read_text())
+              p = result["protocol"]
+              key = (int(p["depth"]), int(p["capacity"]), int(p["dim"]))
+              if key not in expected or key in seen:
+                  raise SystemExit(f"Unexpected or duplicate candidate: {key}")
+              seen.add(key)
+              if result.get("mode") != "prune_grow":
+                  raise SystemExit(f"Candidate {key} did not execute both static and adaptive arms")
+              if p["training_epochs"] != 12 or p["checkpoint_epochs"] != checkpoints:
+                  raise SystemExit(f"Wrong duration/checkpoint protocol for {key}")
+              if p["seed_ids"] != [0, 1, 2] or p["test_split_opened"] is not False:
+                  raise SystemExit(f"Seed identity or validation-only gate failed for {key}")
+              acceptance = result["acceptance"]
+              for gate in (
+                  "qa3_qa5_validation_coverage", "training_checkpoint_coverage",
+                  "stability_within_0_9_margin", "all_states_finite",
+                  "all_levels_contribute_to_readout",
+                  "bottom_up_and_top_down_coupling_observed",
+                  "three_matched_seed_orders", "matched_static_adaptive_initialization",
+                  "adaptive_decisions_recorded", "adaptive_mutation_reason_coverage",
+              ):
+                  if not acceptance.get(gate, False):
+                      raise SystemExit(f"Acceptance gate {gate} failed for {key}")
+
+              task_rows = {}
+              adaptation = {"channel_births": 0, "channel_deaths": 0, "decisions": 0,
+                            "operation_counts": {"prune": 0, "grow": 0, "retain": 0},
+                            "reasons": {}}
+              for task in ("3", "5"):
+                  task_result = result["tasks"][task]
+                  static = task_result["arms"]["static"]
+                  dynamic = task_result["arms"]["prune_grow"]
+                  for arm_name, arm in (("static", static), ("prune_grow", dynamic)):
+                      curve = arm["learning_curve"]
+                      if [row["epoch"] for row in curve] != checkpoints:
+                          raise SystemExit(f"Missing {arm_name} checkpoints for QA{task} in {key}")
+                      if not arm["stability_pass"] or not arm["finite_state_pass"]:
+                          raise SystemExit(f"Stability/finite-state failure for QA{task} {key} {arm_name}")
+                      hashes = arm["training_order_hashes"]
+                      order_key = (task, arm_name)
+                      if order_key in orders_by_task and hashes != orders_by_task[order_key]:
+                          raise SystemExit(f"Training order mismatch across candidates for {order_key}")
+                      orders_by_task[order_key] = hashes
+                  if not task_result.get("matched_readout_initialization", False):
+                      raise SystemExit(f"Static/adaptive readout seeds are not matched for QA{task} in {key}")
+                  if not task_result.get("matched_training_order", False):
+                      raise SystemExit(f"Static/adaptive story orders are not matched for QA{task} in {key}")
+
+                  dynamic_seeds = dynamic["seed_results"]
+                  if len(dynamic_seeds) != 3:
+                      raise SystemExit(f"Expected three adaptive seed records for QA{task} in {key}")
+                  for seed in dynamic_seeds:
+                      events = seed["structural_adaptation"]["events"]
+                      if len(events) != 12 * key[0]:
+                          raise SystemExit(f"Expected one decision per level per epoch for QA{task}, seed {seed['seed']}, {key}")
+                      for event in events:
+                          if event.get("reason") is None or event.get("activity_window_samples", 0) <= 0:
+                              raise SystemExit(f"Decision lacks activity/reason evidence for QA{task} {key}")
+                          op = event["operation"]
+                          adaptation["operation_counts"][op] += 1
+                          adaptation["decisions"] += 1
+                          adaptation["channel_births"] += event.get("channel_births", 0)
+                          adaptation["channel_deaths"] += event.get("channel_deaths", 0)
+                          adaptation["reasons"][event["reason"]] = adaptation["reasons"].get(event["reason"], 0) + 1
+                          if op != "retain":
+                              if not math.isclose(event["kernel_mass_before"], event["kernel_mass_after"], abs_tol=1e-9):
+                                  raise SystemExit(f"Kernel mass changed during {op} for QA{task} {key}")
+                              if not math.isclose(event["stability_ratio_before"], event["stability_ratio_after"], abs_tol=1e-8):
+                                  raise SystemExit(f"Stability changed during {op} for QA{task} {key}")
+
+                  def arm_metrics(arm):
+                      return {
+                          "learning_curve": arm["learning_curve"],
+                          "final_accuracy": arm["learning_curve"][-1]["mean_accuracy_over_seeds"],
+                          "final_ece": arm["learning_curve"][-1]["mean_fixed_bin_top_label_ece"],
+                          "final_nll": arm["learning_curve"][-1]["mean_negative_log_likelihood"],
+                          "mean_compute_seconds": arm["mean_compute_seconds"],
+                          "stability_pass": arm["stability_pass"],
+                          "finite_state_pass": arm["finite_state_pass"],
+                      }
+                  task_rows[f"qa{task}"] = {
+                      "static": arm_metrics(static),
+                      "prune_grow": arm_metrics(dynamic),
+                      "paired_mean_accuracy_delta": task_result["mean_paired_accuracy_delta"],
+                      "paired_accuracy_delta_by_seed": task_result["paired_accuracy_delta_by_seed"],
+                  }
+              rows.append({
+                  "candidate": expected[key], "depth": key[0], "capacity": key[1], "dim": key[2],
+                  "tasks": task_rows,
+                  "adaptation": adaptation,
+                  "final_channels_by_seed": {
+                      task: [
+                          seed["hierarchy"]["channels_per_level_after_run"]
+                          for seed in result["tasks"][task]["arms"]["prune_grow"]["seed_results"]
+                      ] for task in ("3", "5")
+                  },
+                  "summary_path": path,
+              })
+          if seen != set(expected):
+              raise SystemExit(f"Candidate matrix mismatch: missing {sorted(set(expected) - seen)}")
+          rows.sort(key=lambda row: row["candidate"])
+          manifest = {
+              "schema_version": 1,
+              "campaign": "G4.2 corrected channel-level prune/grow comparison",
+              "code_revision": "${{ github.sha }}",
+              "epochs": 12, "checkpoint_epochs": checkpoints, "seed_ids": [0, 1, 2],
+              "candidate_count": len(rows), "parallel_candidate_jobs": 3,
+              "arms": ["static", "prune_grow"],
+              "matched_static_adaptive_initialization": True,
+              "training_order_matched_across_candidates": True,
+              "evaluation_split": "valid", "test_split_opened": False,
+              "adaptation_windows": "one measured training window per epoch; validation activity excluded",
+              "policy": "prune after two consecutive low-activity windows; grow only at >=80% effective active-channel fraction; max +2 channels per level; two-window growth cooldown",
+              "mutation_counts_are_outcomes_not_acceptance_requirements": True,
+              "candidates": rows,
+          }
+          out = root / "dynamic_capacity_comparison.json"
+          out.write_text(json.dumps(manifest, indent=2))
+          print(json.dumps(manifest, indent=2))
+          PY
+      - name: Upload dynamic-capacity comparison and candidate index
+        uses: actions/upload-artifact@v4
+        with:
+          name: g42-dynamic-capacity-comparison
+          path: runs/g42-duration-candidates/
+          if-no-files-found: error
+          retention-days: 90
