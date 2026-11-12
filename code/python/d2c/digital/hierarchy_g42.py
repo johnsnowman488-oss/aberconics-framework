@@ -155,16 +155,21 @@ def adaptive_capacity_update(
     channel_activity: Sequence[float],
     *,
     growth_factor: float = 0.5,
-    prune_relative_threshold: float = 0.01,
-    growth_share_threshold: float = 0.05,
+    prune_relative_threshold: float = 0.03,
+    growth_effective_fraction: float = 0.80,
+    min_total_activity: float = 1e-8,
+    min_channels: int = 2,
+    max_channels: int | None = None,
+    eligible_prune_indices: Sequence[int] | None = None,
+    allow_growth: bool = True,
 ) -> tuple[DigitalMemoryConfig, dict]:
-    """Prune a nearly inactive channel or grow a slower channel when activity is distributed.
+    """Make one bounded, evidence-driven capacity decision for a level.
 
-    A prune is allowed only when the remaining spectrum can still represent the
-    existing positive kernel mass and stability ratio. Otherwise the policy
-    grows a slower channel when observed activity is non-zero and no channel
-    is clearly dormant. Channel count can therefore genuinely increase or
-    decrease; this is not the old fixed-count replacement operation.
+    Pruning targets persistently dormant channels (the director supplies
+    eligible_prune_indices only after its multi-window patience rule). Growth
+    requires broad channel participation, measured by the effective number of
+    active channels, not by a large maximum share. All accepted edits preserve
+    positive kernel weights, total mass, and the stability ratio.
     """
     if len(config.gamma) != len(channel_activity) or len(config.gamma) < 2:
         raise ValueError("activity must contain one value per configured channel")
@@ -172,64 +177,135 @@ def adaptive_capacity_update(
         raise ValueError("growth_factor must be between zero and one")
     if not 0.0 <= prune_relative_threshold < 1.0:
         raise ValueError("prune threshold must be in [0, 1)")
-    if not 0.0 < growth_share_threshold <= 1.0:
-        raise ValueError("growth share threshold must be in (0, 1]")
+    if not 0.0 < growth_effective_fraction <= 1.0:
+        raise ValueError("growth effective fraction must be in (0, 1]")
+    if min_channels < 2 or (max_channels is not None and max_channels < min_channels):
+        raise ValueError("channel bounds must allow at least two channels")
+    if not math.isfinite(min_total_activity) or min_total_activity < 0.0:
+        raise ValueError("minimum activity must be finite and non-negative")
+
     activity = [float(value) for value in channel_activity]
     if any(not math.isfinite(value) or value < 0.0 for value in activity):
         raise ValueError("channel activity must be finite and non-negative")
 
     mass, stability = sum(config.w), config.stability_ratio()
+    before = config.channel_count
+    total_activity = sum(activity)
     maximum = max(activity, default=0.0)
     minimum = min(activity, default=0.0)
-    before = config.channel_count
-    if before > 2 and maximum > 0.0 and minimum / maximum <= prune_relative_threshold:
-        for index in sorted(range(before), key=lambda i: (activity[i], config.w[i])):
+    shares = [value / total_activity for value in activity] if total_activity > 0.0 else [0.0] * before
+    effective_channels = (
+        1.0 / sum(share * share for share in shares)
+        if total_activity > 0.0 and sum(share * share for share in shares) > 0.0 else 0.0
+    )
+    effective_fraction = effective_channels / before if before else 0.0
+    relative = [value / maximum if maximum > 0.0 else 0.0 for value in activity]
+    low_activity_indices = [
+        index for index, value in enumerate(relative)
+        if maximum > min_total_activity and value <= prune_relative_threshold
+    ]
+    eligible = (
+        low_activity_indices if eligible_prune_indices is None
+        else [index for index in eligible_prune_indices if index in low_activity_indices]
+    )
+    rejected_prunes = []
+
+    if before > min_channels and eligible:
+        for index in sorted(eligible, key=lambda i: (activity[i], config.w[i])):
             spectrum = [value for i, value in enumerate(config.gamma) if i != index]
             try:
                 updated = _fit_positive_spectrum(config, spectrum)
-            except (ValueError, RuntimeError):
+            except (ValueError, RuntimeError) as exc:
+                rejected_prunes.append({"channel_index": index, "reason": str(exc)})
                 continue
             return updated, {
-                "operation": "prune", "pruned_index": index,
-                "pruned_gamma": config.gamma[index], "pruned_weight": config.w[index],
-                "pruned_activity": activity[index], "grown_gamma": None,
+                "operation": "prune", "reason": "persistent_low_relative_activity",
+                "pruned_index": index, "pruned_gamma": config.gamma[index],
+                "pruned_weight": config.w[index], "pruned_activity": activity[index],
+                "channel_activity": activity, "activity_shares": shares,
+                "relative_activity": relative, "low_activity_indices": low_activity_indices,
+                "eligible_prune_indices": list(eligible),
+                "effective_channel_count": effective_channels,
+                "effective_channel_fraction": effective_fraction,
                 "channel_count_before": before, "channel_count_after": updated.channel_count,
                 "capacity_delta": -1, "channel_deaths": 1, "channel_births": 0,
                 "kernel_mass_before": mass, "kernel_mass_after": sum(updated.w),
                 "stability_ratio_before": stability,
                 "stability_ratio_after": updated.stability_ratio(),
-                "selection_rule": "lowest-activity channel, subject to exact mass/stability feasibility",
+                "rejected_prune_candidates": rejected_prunes,
+                "selection_rule": "lowest-activity eligible channel, subject to exact mass/stability feasibility",
             }
 
-    total_activity = sum(activity)
-    maximum_share = maximum / total_activity if total_activity > 0.0 else 0.0
-    if maximum > 0.0 and maximum_share >= growth_share_threshold:
+    can_grow = max_channels is None or before < max_channels
+    growth_pressure = (
+        total_activity > min_total_activity
+        and effective_fraction >= growth_effective_fraction
+    )
+    if allow_growth and can_grow and growth_pressure:
         new_gamma = min(config.gamma) * growth_factor
-        updated = _fit_positive_spectrum(config, [*config.gamma, new_gamma])
-        return updated, {
-            "operation": "grow", "pruned_index": None, "pruned_gamma": None,
-            "pruned_activity": None, "grown_gamma": new_gamma,
-            "channel_count_before": before, "channel_count_after": updated.channel_count,
-            "capacity_delta": 1, "channel_deaths": 0, "channel_births": 1,
-            "kernel_mass_before": mass, "kernel_mass_after": sum(updated.w),
-            "stability_ratio_before": stability,
-            "stability_ratio_after": updated.stability_ratio(),
-            "maximum_activity_share": maximum_share,
-            "growth_factor": growth_factor,
-            "selection_rule": "add a slower positive channel when observed activity has no dormant channel",
-        }
+        try:
+            updated = _fit_positive_spectrum(config, [*config.gamma, new_gamma])
+        except (ValueError, RuntimeError) as exc:
+            updated = None
+            grow_rejection = str(exc)
+        if updated is not None:
+            return updated, {
+                "operation": "grow", "reason": "distributed_activity_capacity_pressure",
+                "pruned_index": None, "pruned_gamma": None, "pruned_activity": None,
+                "grown_gamma": new_gamma, "channel_activity": activity,
+                "activity_shares": shares, "relative_activity": relative,
+                "low_activity_indices": low_activity_indices,
+                "eligible_prune_indices": list(eligible),
+                "effective_channel_count": effective_channels,
+                "effective_channel_fraction": effective_fraction,
+                "maximum_activity_share": max(shares, default=0.0),
+                "channel_count_before": before, "channel_count_after": updated.channel_count,
+                "capacity_delta": 1, "channel_deaths": 0, "channel_births": 1,
+                "growth_factor": growth_factor,
+                "kernel_mass_before": mass, "kernel_mass_after": sum(updated.w),
+                "stability_ratio_before": stability,
+                "stability_ratio_after": updated.stability_ratio(),
+                "rejected_prune_candidates": rejected_prunes,
+                "selection_rule": "grow only when effective active-channel count reaches the configured fraction",
+            }
+    else:
+        grow_rejection = None
+
+    if total_activity <= min_total_activity:
+        reason = "insufficient_observed_activity"
+    elif low_activity_indices and not eligible and before > min_channels:
+        reason = "dormancy_patience_not_met"
+    elif low_activity_indices and before <= min_channels:
+        reason = "minimum_channel_floor"
+    elif eligible and rejected_prunes:
+        reason = "prune_spectrum_infeasible"
+    elif not allow_growth and growth_pressure:
+        reason = "growth_cooldown"
+    elif not can_grow and growth_pressure:
+        reason = "maximum_channel_capacity"
+    elif growth_pressure and grow_rejection:
+        reason = "growth_spectrum_infeasible"
+    elif effective_fraction < growth_effective_fraction:
+        reason = "activity_not_distributed_enough"
+    else:
+        reason = "retain_without_capacity_pressure"
 
     unchanged = _copy_config(config)
     return unchanged, {
-        "operation": "retain", "channel_count_before": before,
-        "channel_count_after": before, "capacity_delta": 0,
-        "channel_deaths": 0, "channel_births": 0,
+        "operation": "retain", "reason": reason,
+        "channel_count_before": before, "channel_count_after": before,
+        "capacity_delta": 0, "channel_deaths": 0, "channel_births": 0,
+        "channel_activity": activity, "activity_shares": shares,
+        "relative_activity": relative, "low_activity_indices": low_activity_indices,
+        "eligible_prune_indices": list(eligible),
+        "effective_channel_count": effective_channels,
+        "effective_channel_fraction": effective_fraction,
+        "maximum_activity_share": max(shares, default=0.0),
         "kernel_mass_before": mass, "kernel_mass_after": mass,
         "stability_ratio_before": stability, "stability_ratio_after": stability,
-        "maximum_activity_share": maximum_share,
-        "selection_rule": "retain when activity is absent or below the growth criterion",
+        "rejected_prune_candidates": rejected_prunes,
+        "selection_rule": "retain unless persistent dormancy is prune-feasible or distributed activity justifies bounded growth",
     }
-
 
 @dataclass(slots=True)
 class NLevelHierarchyResult:
@@ -259,9 +335,13 @@ class NLevelVectorizedHierarchyDirector:
         self, *, level_configs: Sequence[DigitalMemoryConfig], state_dim: int,
         bottom_up_gain: float = 0.4, top_down_gain: float = 0.5,
         preserve_top_down_weight_mass: bool = True, library_path: str | None = None,
+        prune_patience: int = 2, growth_cooldown_windows: int = 2,
+        max_channel_growth: int = 2,
     ):
         if len(level_configs) < 2:
             raise ValueError("G4.2 hierarchy requires at least two levels")
+        if prune_patience < 1 or growth_cooldown_windows < 0 or max_channel_growth < 0:
+            raise ValueError("adaptive capacity patience/cooldown/bounds are invalid")
         if state_dim <= 0 or not math.isfinite(bottom_up_gain) or bottom_up_gain <= 0.0:
             raise ValueError("state dimension and bottom-up gain must be positive and finite")
         if not math.isfinite(top_down_gain) or top_down_gain <= 0.0:
@@ -280,9 +360,19 @@ class NLevelVectorizedHierarchyDirector:
         ]
         self.activity_sums = [[0.0] * config.channel_count for config in self.level_configs]
         self.activity_samples = 0
+        self.prune_patience = int(prune_patience)
+        self.growth_cooldown_windows = int(growth_cooldown_windows)
+        self.max_channel_counts = [
+            config.channel_count + int(max_channel_growth) for config in self.level_configs
+        ]
+        self.dormancy_streaks = [
+            [0] * config.channel_count for config in self.level_configs
+        ]
+        self.growth_cooldowns = [0] * len(self.level_configs)
         self.step_count = 0
 
     def reset_activity(self):
+        """Start a new activity window without erasing multi-window dormancy history."""
         self.activity_sums = [[0.0] * config.channel_count for config in self.level_configs]
         self.activity_samples = 0
 
@@ -292,15 +382,49 @@ class NLevelVectorizedHierarchyDirector:
         events = []
         for level, config in enumerate(self.level_configs):
             activity = [value / self.activity_samples for value in self.activity_sums[level]]
+            maximum = max(activity, default=0.0)
+            total = sum(activity)
+            streaks = list(self.dormancy_streaks[level])
+            for index, value in enumerate(activity):
+                if maximum > 1e-8 and total > 1e-8 and value / maximum <= 0.03:
+                    streaks[index] += 1
+                else:
+                    streaks[index] = 0
+            eligible = [
+                index for index, streak in enumerate(streaks)
+                if streak >= self.prune_patience
+            ]
             updated, event = adaptive_capacity_update(
                 config, activity, growth_factor=growth_factor,
+                prune_relative_threshold=0.03, growth_effective_fraction=0.80,
+                min_channels=2, max_channels=self.max_channel_counts[level],
+                eligible_prune_indices=eligible,
+                allow_growth=self.growth_cooldowns[level] <= 0,
             )
-            event["level"] = level
+            event.update({
+                "level": level,
+                "activity_window_samples": self.activity_samples,
+                "dormancy_streaks": list(streaks),
+                "prune_patience_windows": self.prune_patience,
+                "growth_cooldown_remaining_before": self.growth_cooldowns[level],
+                "max_channel_count": self.max_channel_counts[level],
+            })
             if event["operation"] != "retain":
                 self.level_configs[level] = updated
                 self.steppers[level] = CppVectorizedMemoryStepper(
                     updated, library_path=self.library_path,
                 )
+                # Spectrum fitting sorts the timescales; clear index-based
+                # dormancy history after any topology edit to avoid stale indices.
+                self.dormancy_streaks[level] = [0] * updated.channel_count
+                if event["operation"] == "grow":
+                    self.growth_cooldowns[level] = self.growth_cooldown_windows
+                else:
+                    self.growth_cooldowns[level] = 0
+            else:
+                self.dormancy_streaks[level] = streaks
+                if self.growth_cooldowns[level] > 0:
+                    self.growth_cooldowns[level] -= 1
             events.append(event)
         self.reset_activity()
         return events
@@ -309,6 +433,7 @@ class NLevelVectorizedHierarchyDirector:
         self, episode: DigitalEpisode, *, experiment_name: str = "g4_2_nlevel",
         enable_bottom_up: bool = True, enable_top_down: bool = True,
         initial_states: Sequence[DigitalMemoryState] | None = None,
+        record_activity: bool = True,
     ):
         if len(episode.forcings) != len(episode.tokens) or not episode.forcings:
             raise ValueError("episode must have matching non-empty forcings and tokens")
@@ -396,11 +521,16 @@ class NLevelVectorizedHierarchyDirector:
 
             states = next_states
             self.step_count += 1
-
-        for level, (state, config) in enumerate(zip(states, self.level_configs)):
-            for channel, values in enumerate(state.chi):
-                self.activity_sums[level][channel] += _l2(values) / max(1, len(values))
-        self.activity_samples += 1
+            # Time-integrated RMS channel activity: every channel is observed
+            # after every native transition, rather than only at episode end.
+            # Validation can opt out so it cannot influence adaptation policy.
+            if record_activity:
+                for level, state in enumerate(states):
+                    for channel, values in enumerate(state.chi):
+                        self.activity_sums[level][channel] += (
+                            _l2(values) / math.sqrt(max(1, len(values)))
+                        )
+                self.activity_samples += 1
 
         return NLevelHierarchyResult(
             final_state=states[0], final_states=list(states), level_traces=traces,
