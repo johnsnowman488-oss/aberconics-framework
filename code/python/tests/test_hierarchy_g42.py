@@ -200,3 +200,111 @@ def test_all_levels_have_distinct_readout_blocks():
     for level in (1, 2):
         start = level * block_dim + 64
         assert all(value == 0.0 for value in features[start:start + 64])
+
+
+
+def test_capacity_growth_requires_distributed_activity_not_a_large_max_share():
+    config = DigitalMemoryConfig(
+        gamma=[2.0, 0.45, 0.035], w=[0.16, 0.108, 0.0448],
+        dt=0.05, leak_rate=2.0, form="negative_feedback",
+    )
+    updated, event = adaptive_capacity_update(config, [0.90, 0.05, 0.05])
+    assert event["operation"] == "retain"
+    assert event["reason"] == "activity_not_distributed_enough"
+    assert updated.channel_count == config.channel_count
+    distributed, growth = adaptive_capacity_update(config, [0.34, 0.33, 0.33])
+    assert growth["operation"] == "grow"
+    assert growth["effective_channel_fraction"] >= 0.80
+    assert distributed.channel_count == config.channel_count + 1
+
+
+def test_capacity_pruning_can_be_held_until_director_patience_is_met():
+    config = DigitalMemoryConfig(
+        gamma=[2.0, 0.45, 0.035], w=[0.16, 0.108, 0.0448],
+        dt=0.05, leak_rate=2.0, form="negative_feedback",
+    )
+    retained, first = adaptive_capacity_update(
+        config, [0.5, 0.0001, 0.4], eligible_prune_indices=[],
+    )
+    assert first["operation"] == "retain"
+    assert first["reason"] == "dormancy_patience_not_met"
+    assert retained.channel_count == config.channel_count
+    pruned, second = adaptive_capacity_update(
+        config, [0.5, 0.0001, 0.4], eligible_prune_indices=[1],
+    )
+    assert second["operation"] == "prune"
+    assert second["eligible_prune_indices"] == [1]
+    assert pruned.channel_count == config.channel_count - 1
+
+
+def _prime_activity_window(director, activity_by_level, samples=10):
+    director.activity_samples = samples
+    director.activity_sums = [
+        [float(value) * samples for value in activity]
+        for activity in activity_by_level
+    ]
+
+
+def test_director_prune_rebuilds_stepper_and_runs_with_new_state_shape():
+    _require_native()
+    director = _small_director()
+    old_stepper = director.steppers[0]
+    activity = [[0.50, 0.000001, 0.40], [0.90, 0.10], [0.90, 0.10]]
+
+    _prime_activity_window(director, activity)
+    first = director.prune_grow()
+    assert first[0]["operation"] == "retain"
+    assert first[0]["reason"] == "dormancy_patience_not_met"
+
+    _prime_activity_window(director, activity)
+    second = director.prune_grow()
+    assert second[0]["operation"] == "prune"
+    assert second[0]["channel_deaths"] == 1
+    assert director.level_configs[0].channel_count == 2
+    assert director.steppers[0] is not old_stepper
+
+    result = director.run_episode(_episode(), record_activity=False)
+    assert len(result.final_states[0].chi) == 2
+    assert all(math.isfinite(value) for value in result.final_state.u)
+
+
+def test_director_growth_rebuilds_all_affected_steppers_and_runs_again():
+    _require_native()
+    director = _small_director()
+    old_steppers = list(director.steppers)
+    before = [config.channel_count for config in director.level_configs]
+    _prime_activity_window(
+        director, [[1.0] * config.channel_count for config in director.level_configs],
+    )
+    events = director.prune_grow()
+    assert all(event["operation"] == "grow" for event in events)
+    assert all(event["channel_births"] == 1 for event in events)
+    assert [config.channel_count for config in director.level_configs] == [
+        count + 1 for count in before
+    ]
+    assert all(new is not old for new, old in zip(director.steppers, old_steppers))
+
+    result = director.run_episode(_episode(), record_activity=False)
+    assert [
+        len(state.chi) for state in result.final_states
+    ] == [count + 1 for count in before]
+    assert all(
+        math.isclose(config.stability_ratio(), event["stability_ratio_before"], abs_tol=1e-9)
+        for config, event in zip(director.level_configs, events)
+    )
+
+
+def test_activity_is_integrated_across_timesteps_and_validation_can_be_excluded():
+    _require_native()
+    director = _small_director()
+    episode = _episode()
+    result = director.run_episode(episode)
+    assert director.activity_samples == len(episode.forcings)
+    assert all(
+        len(level_activity) == config.channel_count
+        for level_activity, config in zip(director.activity_sums, director.level_configs)
+    )
+    before = [list(row) for row in director.activity_sums]
+    director.run_episode(episode, record_activity=False)
+    assert director.activity_samples == len(episode.forcings)
+    assert director.activity_sums == before
