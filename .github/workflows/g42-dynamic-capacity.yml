@@ -47,12 +47,12 @@ jobs:
           cmake --build "code/c++ core/build-shared" -j
       - name: Download train and validation only
         run: python -m d2c.digital.download_babi --splits train,valid
-      - name: Test hierarchy and duration protocol
+      - name: Test hierarchy and adaptive capacity protocol
         run: |
           pytest -q \
             code/python/tests/test_hierarchy_g42.py \
             code/python/tests/test_vectorized_hierarchy.py
-      - name: Compile G4.2 experiment module
+      - name: Compile G4.2 dynamic-capacity experiment module
         run: python -m compileall -q code/python/d2c/experiments/babi_g42.py
       - name: Upload train and validation data for the three candidate jobs
         uses: actions/upload-artifact@v4
@@ -107,7 +107,7 @@ jobs:
       - name: Download shared train/validation data
         uses: actions/download-artifact@v4
         with:
-          name: g42-duration-dataset
+          name: g42-dynamic-capacity-dataset
           path: code/python/d2c/progress/babi_data
       - name: Build shared C++ vector-memory runtime
         run: |
@@ -131,12 +131,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: g42-dynamic-capacity-candidate-${{ matrix.id }}
-          path: runs/experiment-lab/g42-duration/${{ matrix.id }}/
+          path: runs/experiment-lab/g42-dynamic-capacity/${{ matrix.id }}/
           if-no-files-found: error
           retention-days: 90
 
   aggregate:
-    name: Validate all three curves and write duration comparison
+    name: Validate three matched static/adaptive candidates and write comparison
     needs: candidate-runs
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -148,7 +148,7 @@ jobs:
       - name: Download the three candidate evidence bundles
         uses: actions/download-artifact@v4
         with:
-          pattern: g42-duration-candidate-*
+          pattern: g42-dynamic-capacity-candidate-*
           path: runs/g42-dynamic-capacity-candidates
           merge-multiple: false
       - name: Validate matched static and adaptive evidence and write the Lab comparison
@@ -291,6 +291,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: g42-dynamic-capacity-comparison
-          path: runs/g42-duration-candidates/
+          path: runs/g42-dynamic-capacity-candidates/
           if-no-files-found: error
           retention-days: 90
