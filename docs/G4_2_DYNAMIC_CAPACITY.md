@@ -10,7 +10,7 @@ This is a channel-capacity experiment only. Hierarchy depth and per-input level 
 
 Three candidate jobs run concurrently:
 
-| Candidate | Depth | Initial capacity | Dimension |
+| Candidate | Depth | Capacity multiplier (C) | Dimension |
 |---|---:|---:|---:|
 | H4-C6-D64 | 4 | 6 | 64 |
 | H2-C4-D64 | 2 | 4 | 64 |
