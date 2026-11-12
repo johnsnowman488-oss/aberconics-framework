@@ -161,6 +161,7 @@ def adaptive_capacity_update(
     min_channels: int = 2,
     max_channels: int | None = None,
     eligible_prune_indices: Sequence[int] | None = None,
+    allow_prune: bool = True,
     allow_growth: bool = True,
 ) -> tuple[DigitalMemoryConfig, dict]:
     """Make one bounded, evidence-driven capacity decision for a level.
@@ -210,7 +211,7 @@ def adaptive_capacity_update(
     )
     rejected_prunes = []
 
-    if before > min_channels and eligible:
+    if allow_prune and before > min_channels and eligible:
         for index in sorted(eligible, key=lambda i: (activity[i], config.w[i])):
             spectrum = [value for i, value in enumerate(config.gamma) if i != index]
             try:
@@ -273,6 +274,8 @@ def adaptive_capacity_update(
 
     if total_activity <= min_total_activity:
         reason = "insufficient_observed_activity"
+    elif low_activity_indices and not allow_prune:
+        reason = "structural_mutation_cooldown"
     elif low_activity_indices and not eligible and before > min_channels:
         reason = "dormancy_patience_not_met"
     elif low_activity_indices and before <= min_channels:
@@ -335,12 +338,12 @@ class NLevelVectorizedHierarchyDirector:
         self, *, level_configs: Sequence[DigitalMemoryConfig], state_dim: int,
         bottom_up_gain: float = 0.4, top_down_gain: float = 0.5,
         preserve_top_down_weight_mass: bool = True, library_path: str | None = None,
-        prune_patience: int = 2, growth_cooldown_windows: int = 2,
+        prune_patience: int = 2, mutation_cooldown_windows: int = 2,
         max_channel_growth: int = 2,
     ):
         if len(level_configs) < 2:
             raise ValueError("G4.2 hierarchy requires at least two levels")
-        if prune_patience < 1 or growth_cooldown_windows < 0 or max_channel_growth < 0:
+        if prune_patience < 1 or mutation_cooldown_windows < 0 or max_channel_growth < 0:
             raise ValueError("adaptive capacity patience/cooldown/bounds are invalid")
         if state_dim <= 0 or not math.isfinite(bottom_up_gain) or bottom_up_gain <= 0.0:
             raise ValueError("state dimension and bottom-up gain must be positive and finite")
@@ -361,14 +364,14 @@ class NLevelVectorizedHierarchyDirector:
         self.activity_sums = [[0.0] * config.channel_count for config in self.level_configs]
         self.activity_samples = 0
         self.prune_patience = int(prune_patience)
-        self.growth_cooldown_windows = int(growth_cooldown_windows)
+        self.mutation_cooldown_windows = int(mutation_cooldown_windows)
         self.max_channel_counts = [
             config.channel_count + int(max_channel_growth) for config in self.level_configs
         ]
         self.dormancy_streaks = [
             [0] * config.channel_count for config in self.level_configs
         ]
-        self.growth_cooldowns = [0] * len(self.level_configs)
+        self.mutation_cooldowns = [0] * len(self.level_configs)
         self.step_count = 0
 
     def reset_activity(self):
@@ -384,12 +387,17 @@ class NLevelVectorizedHierarchyDirector:
             activity = [value / self.activity_samples for value in self.activity_sums[level]]
             maximum = max(activity, default=0.0)
             total = sum(activity)
+            cooldown_before = self.mutation_cooldowns[level]
             streaks = list(self.dormancy_streaks[level])
-            for index, value in enumerate(activity):
-                if maximum > 1e-8 and total > 1e-8 and value / maximum <= 0.03:
-                    streaks[index] += 1
-                else:
-                    streaks[index] = 0
+            if cooldown_before > 0:
+                # Do not accumulate dormant windows while a prior edit settles.
+                streaks = [0] * config.channel_count
+            else:
+                for index, value in enumerate(activity):
+                    if maximum > 1e-8 and total > 1e-8 and value / maximum <= 0.03:
+                        streaks[index] += 1
+                    else:
+                        streaks[index] = 0
             eligible = [
                 index for index, streak in enumerate(streaks)
                 if streak >= self.prune_patience
@@ -399,14 +407,15 @@ class NLevelVectorizedHierarchyDirector:
                 prune_relative_threshold=0.03, growth_effective_fraction=0.80,
                 min_channels=2, max_channels=self.max_channel_counts[level],
                 eligible_prune_indices=eligible,
-                allow_growth=self.growth_cooldowns[level] <= 0,
+                allow_prune=cooldown_before <= 0,
+                allow_growth=cooldown_before <= 0,
             )
             event.update({
                 "level": level,
                 "activity_window_samples": self.activity_samples,
                 "dormancy_streaks": list(streaks),
                 "prune_patience_windows": self.prune_patience,
-                "growth_cooldown_remaining_before": self.growth_cooldowns[level],
+                "mutation_cooldown_remaining_before": cooldown_before,
                 "max_channel_count": self.max_channel_counts[level],
             })
             if event["operation"] != "retain":
@@ -417,14 +426,11 @@ class NLevelVectorizedHierarchyDirector:
                 # Spectrum fitting sorts the timescales; clear index-based
                 # dormancy history after any topology edit to avoid stale indices.
                 self.dormancy_streaks[level] = [0] * updated.channel_count
-                if event["operation"] == "grow":
-                    self.growth_cooldowns[level] = self.growth_cooldown_windows
-                else:
-                    self.growth_cooldowns[level] = 0
+                self.mutation_cooldowns[level] = self.mutation_cooldown_windows
             else:
                 self.dormancy_streaks[level] = streaks
-                if self.growth_cooldowns[level] > 0:
-                    self.growth_cooldowns[level] -= 1
+                if self.mutation_cooldowns[level] > 0:
+                    self.mutation_cooldowns[level] -= 1
             events.append(event)
         self.reset_activity()
         return events
