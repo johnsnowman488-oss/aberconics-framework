@@ -567,7 +567,7 @@ def run_g42(*, config: G42Config, data_dir: Path, mode: str = "static") -> dict[
                 "relative activity <= 3%, subject to exact mass/stability feasibility and a "
                 "two-channel floor; grow only when effective active-channel count reaches "
                 "80% of capacity, with a per-level maximum of initial capacity +2 and a "
-                "two-window growth cooldown; rebuild the native stepper after each accepted edit; "
+                "two-window structural-mutation cooldown; rebuild the native stepper after each accepted edit; "
                 "validation activity is excluded"
                 if mode == "prune_grow" else "static topology and channel allocation"
             ),
