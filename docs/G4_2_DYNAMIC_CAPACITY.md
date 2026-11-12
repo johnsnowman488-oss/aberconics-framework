@@ -44,7 +44,7 @@ N_eff = 1 / sum(channel_share_i ** 2)
 
 The level may grow only when N_eff / channel_count >= 0.80 and total observed activity exceeds the numerical floor. This detects broad participation across channels. It replaces the old reversed maximum-share condition, which incorrectly interpreted a concentrated maximum share as evidence for growth.
 
-Growth is bounded to at most two additional channels per level relative to its initial count. A two-window cooldown follows each birth. The added channel uses a slower positive decay rate, and its positive spectrum is fitted to preserve the original kernel mass and stability ratio.
+Growth is bounded to at most two additional channels per level relative to its initial count. A two-window structural-mutation cooldown follows every accepted prune or growth edit. The added channel uses a slower positive decay rate, and its positive spectrum is fitted to preserve the original kernel mass and stability ratio.
 
 ## Mutation and runtime integrity
 
