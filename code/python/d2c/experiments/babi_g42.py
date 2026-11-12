@@ -509,8 +509,8 @@ def run_g42(*, config: G42Config, data_dir: Path, mode: str = "static") -> dict[
                 static_rows[index]["training_order_sha256"] == adaptive_rows[index]["training_order_sha256"]
                 for index in range(config.seeds)
             )
-            task_row["capacity_delta_by_seed_and_level"] = [
-                adaptive_rows[index]["structural_adaptation"]["capacity_delta_by_level"]
+            task_row["capacity_delta_by_seed_level_and_epoch"] = [
+                adaptive_rows[index]["structural_adaptation"]["capacity_delta_by_level_and_window"]
                 for index in range(config.seeds)
             ]
         tasks[str(task)] = task_row
