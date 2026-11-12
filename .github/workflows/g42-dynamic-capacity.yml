@@ -279,7 +279,7 @@ jobs:
               "training_order_matched_across_candidates": True,
               "evaluation_split": "valid", "test_split_opened": False,
               "adaptation_windows": "one measured training window per epoch; validation activity excluded",
-              "policy": "prune after two consecutive low-activity windows; grow only at >=80% effective active-channel fraction; max +2 channels per level; two-window growth cooldown",
+              "policy": "prune after two consecutive low-activity windows; grow only at >=80% effective active-channel fraction; max +2 channels per level; two-window structural-mutation cooldown",
               "mutation_counts_are_outcomes_not_acceptance_requirements": True,
               "candidates": rows,
           }
