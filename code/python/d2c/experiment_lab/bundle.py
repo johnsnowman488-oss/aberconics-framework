@@ -284,12 +284,10 @@ def export_bundle(
                 destination / "experiment_lab_register.json"
             )
 
-        summary_target = next(
-            (destination / Path(item).relative_to(destination).as_posix()
-             for item in copied if Path(item).name == "summary.json"),
+        summary_rel = next(
+            (item for item in copied if Path(item).name == "summary.json"),
             None,
         )
-        summary_rel = summary_target.relative_to(output_dir).as_posix() if summary_target else None
         entry = {
             "id": key,
             "run_id": run_id,
