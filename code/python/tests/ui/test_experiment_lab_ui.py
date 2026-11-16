@@ -13,7 +13,7 @@ import pytest
 from playwright.sync_api import expect, sync_playwright
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]
 ARTIFACTS = Path(os.environ.get("LAB_UI_ARTIFACT_DIR", "artifacts/experiment-lab-ui"))
 
 
@@ -96,7 +96,8 @@ def test_experiment_lab_browser_review(lab_url):
             expect(page.get_by_role("heading", name="Registered dataset profiles")).to_be_visible()
             page.screenshot(path=str(ARTIFACTS / "04-datasets-desktop.png"), full_page=True)
 
-            mobile = context.new_page(viewport={"width": 390, "height": 844})
+            mobile = context.new_page()
+            mobile.set_viewport_size({"width": 390, "height": 844})
             mobile.goto(lab_url, wait_until="networkidle")
             expect(mobile.get_by_role("heading", name="Aberconics Experiment Lab")).to_be_visible()
             mobile.screenshot(path=str(ARTIFACTS / "05-configure-mobile.png"), full_page=True)
