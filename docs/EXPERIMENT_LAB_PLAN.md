@@ -165,3 +165,24 @@ The E-F0 arm also executes the fixed F0 runtime-spine audit for each task/seed: 
 The confidence layer retains complete probability vectors and adds NLL, multiclass Brier, fixed-width and adaptive equal-mass ECE, classwise ECE, maximum/RMS calibration error, confidence-on-error, high-confidence risk, margin, entropy, risk-coverage/AURC, Wilson accuracy intervals and story-bootstrap intervals. It reports bootstrap sampling uncertainty separately from between-seed paired t intervals, and gives exact paired sign-test p-values with Holm correction across QA3 and QA5. Five seeds cannot produce a two-sided exact sign-test p below 0.05; the Lab therefore presents effects and intervals alongside p-values rather than treating the sign test as a high-powered test. Metrics are descriptive on the test split; they are not used to tune or recalibrate against held-out test data.
 
 See `docs/G2_RELATIONAL_COMPOSITION.md` for the protocol, controls, scope boundaries, confidence metrics and acceptance criteria. The full benchmark is run by `.github/workflows/g2-relational.yml`. Julia remains skipped; runtime ablation and hierarchy are outside G2.
+
+## CI browser review
+
+The fast Linux CI job now includes a real Chromium browser pass against the
+local-first Experiment Lab. It starts the same Python server used locally,
+opens the actual browser UI, exercises the experiment selector and staged
+controls, navigates all three Lab pages, and captures desktop/mobile screenshots
+plus a Playwright trace. These checks validate browser interaction and layout;
+they do not launch a scientific benchmark or claim numerical results.
+
+After a CI run, download the `experiment-lab-ui-review` artifact from the
+workflow run's **Artifacts** section. The PNG files provide direct visual
+review. Open `experiment-lab-browser-trace.zip` with the Playwright Trace
+Viewer to inspect browser actions, DOM snapshots, screenshots, and network
+activity. See the [Trace Viewer documentation](https://playwright.dev/docs/trace-viewer).
+
+The CI runner keeps the Lab bound to `127.0.0.1`; it is not exposed as a public
+service. This is deliberate: the current API can launch and cancel allow-listed
+experiments and delete saved run directories. A live remote preview requires a
+separate authenticated, read-only review surface and should not expose this
+local control API directly.

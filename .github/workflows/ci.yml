@@ -118,3 +118,38 @@ jobs:
           Path("/tmp/experiment-lab.js").write_text(scripts[0])
           PY
           node --check /tmp/experiment-lab.js
+
+      - name: Install Playwright browser test dependency
+        if: runner.os == 'Linux'
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Exercise Experiment Lab in Chromium
+        if: runner.os == 'Linux'
+        env:
+          PYTHONPATH: code/python
+          LAB_UI_ARTIFACT_DIR: artifacts/experiment-lab-ui
+        run: pytest -q ui-tests/test_experiment_lab_ui.py
+
+      - name: Upload Experiment Lab browser review
+        if: always() && runner.os == 'Linux'
+        id: lab-ui-review
+        uses: actions/upload-artifact@v4
+        with:
+          name: experiment-lab-ui-review
+          path: artifacts/experiment-lab-ui/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Add browser review link to job summary
+        if: always() && runner.os == 'Linux'
+        env:
+          ARTIFACT_URL: ${{ steps.lab-ui-review.outputs.artifact-url }}
+        run: |
+          echo "## Experiment Lab browser review" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$ARTIFACT_URL" ]; then
+            echo "[Download screenshots and Playwright trace]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Browser review artifact was not produced; inspect the preceding test step." >> "$GITHUB_STEP_SUMMARY"
+          fi
