@@ -130,7 +130,7 @@ jobs:
         env:
           PYTHONPATH: code/python
           LAB_UI_ARTIFACT_DIR: artifacts/experiment-lab-ui
-        run: pytest -q code/python/tests/ui/test_experiment_lab_ui.py
+        run: pytest -q ui-tests/test_experiment_lab_ui.py
 
       - name: Upload Experiment Lab browser review
         if: always() && runner.os == 'Linux'
