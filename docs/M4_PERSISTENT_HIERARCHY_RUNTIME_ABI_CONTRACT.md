@@ -248,7 +248,8 @@ This is the active work ledger. Status values: **NOT STARTED**, **IN PROGRESS**,
 | M4-ABI-8 | D4B parity campaign | Two-/three-level deterministic parity, silent/forced sequences, multi-level feedback and invalid-input invariance | PASSED (tested scope; Linux 193 passed/4 skipped; Windows job passed) |
 | M4-ABI-9 | Checkpoint/restore | Versioned portable format, spec fingerprint, exact continuation tests | NOT STARTED — merge blocker |
 | M4-ABI-10 | HLA/HLB integration seam | Python feedback adapter and inspection path; hierarchy topology held fixed | NOT STARTED |
-| M4-ABI-11 | Confirmatory runtime campaign | Repeated episodes, lifecycle/memory-leak checks, timing and allocation profile | NOT STARTED |\n| M4-ABI-12 | Persistent-vs-D4B benchmark | Reproducible warm-up/repeated timing, model construction and allocation counts, parity-checked workloads, raw result artifact | NOT STARTED — merge blocker |
+| M4-ABI-11 | Confirmatory runtime campaign | Repeated episodes, lifecycle/memory-leak checks, timing and allocation profile | NOT STARTED |
+| M4-ABI-12 | Persistent-vs-D4B benchmark | Reproducible warm-up/repeated timing, model construction and allocation counts, parity-checked workloads, raw result artifact | NOT STARTED — merge blocker |
 
 ### Execution order and dependencies
 
