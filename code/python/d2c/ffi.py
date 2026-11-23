@@ -171,6 +171,16 @@ def step_hierarchy_raw(
     )
 
 
+
+def create_persistent_hierarchy_runtime(
+    lib: ctypes.CDLL,
+    levels: list[dict[str, object]],
+    edges: list[dict[str, object]],
+) -> gfe.PersistentHierarchyRuntime:
+    """Create one native hierarchy runtime for a multi-event episode."""
+    return gfe.create_persistent_hierarchy_runtime(lib, levels, edges)
+
+
 def get_scenario_cross_level_report_raw(
     lib: ctypes.CDLL,
     scenario: int,
