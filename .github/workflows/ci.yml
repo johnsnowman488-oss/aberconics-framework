@@ -59,6 +59,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     needs: cpp-tests
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     steps:
