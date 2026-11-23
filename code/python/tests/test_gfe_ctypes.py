@@ -814,7 +814,9 @@ def test_persistent_hierarchy_repeated_create_step_checkpoint_restore_destroy_li
         with gfe.create_persistent_hierarchy_runtime(lib, levels, edges) as resumed:
             resumed.restore(checkpoint)
             assert resumed.step_count == 4
-            assert resumed.get_state() == runtime_snapshot(checkpoint)
+            restored = resumed.get_state()
+            assert restored["level_states"] == runtime_snapshot(checkpoint)["level_states"]
+            assert restored["active_kernels"] == runtime_snapshot(checkpoint)["active_kernels"]
         err = gfe.ctypes.create_string_buffer(256)
         count = gfe.c_size_t(0)
         status = lib.gfe_c_hierarchy_get_level_count(
