@@ -644,13 +644,13 @@ def _checkpoint_test_spec():
         },
         {
             "name": "checkpoint_slow", "gamma": [0.7, 0.15], "w": [0.6, 0.4],
-            "u": [-0.04], "chi": [0.0, 0.0], "dt": 0.02,
+            "u": [-0.04], "chi": [0.0, 0.0], "dt": 0.01,
             "linear_decay": [0.08], "forcing_bias": [0.01],
             "form": GFE_C_COUPLING_FORM_B, "coupling_index": 0,
         },
         {
             "name": "checkpoint_abstract", "gamma": [0.35, 0.08], "w": [0.6, 0.4],
-            "u": [0.025], "chi": [0.0, 0.0], "dt": 0.015,
+            "u": [0.025], "chi": [0.0, 0.0], "dt": 0.01,
             "linear_decay": [0.06], "forcing_bias": [0.0],
             "form": GFE_C_COUPLING_FORM_B, "coupling_index": 0,
         },
