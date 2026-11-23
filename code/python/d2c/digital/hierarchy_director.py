@@ -1,8 +1,8 @@
 """Stateful multi-level digital memory stepping over the hierarchy C ABI.
 
 This is the D4B streaming surface made task-facing.  ``DigitalEpisode``
-forcing schedules are stepped through ``gfe_c_hierarchical_step_chain_spec``
-one event at a time.  The returned level-0 trace keeps the same shape as a
+forcing schedules are stepped through the persistent hierarchy handle API
+(one native model construction per episode).  The returned level-0 trace keeps the same shape as a
 ``DigitalDirector`` trace, so eligibility/readout layers written against the
 single-level Python stepper can consume hierarchy dynamics unchanged.
 
@@ -76,7 +76,7 @@ class HierarchicalEpisodeResult:
 
 @dataclass(slots=True)
 class HierarchicalDigitalDirector:
-    """Stream ``DigitalEpisode`` forcing schedules through the hierarchy C ABI.
+    """Stream ``DigitalEpisode`` forcing schedules through one persistent native hierarchy handle.
 
     ``levels``/``edges`` use the chain-spec dict format consumed by
     :func:`d2c.ffi.step_hierarchy_raw`.  A single-level flat chain (empty
@@ -111,7 +111,7 @@ class HierarchicalDigitalDirector:
         *,
         experiment_name: str = "hierarchical_digital_episode",
     ) -> HierarchicalEpisodeResult:
-        """Run one episode, calling the hierarchy step ABI once per forcing step."""
+        """Run one episode, calling the persistent handle once per forcing step."""
         if len(episode.forcings) != len(episode.tokens):
             raise ValueError("episode forcings and tokens must have matching lengths")
         if not episode.forcings:
