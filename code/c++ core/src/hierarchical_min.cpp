@@ -497,9 +497,34 @@ HierarchicalState initialize_hierarchy_state(
 }
 
 HierarchicalState step(const HierarchicalMINModel& model, const HierarchicalState& state) {
+    return step_with_external_forcings(model, state, {});
+}
+
+HierarchicalState step_with_external_forcings(
+    const HierarchicalMINModel& model,
+    const HierarchicalState& state,
+    const std::vector<HierarchicalExternalForcing>& external_forcings) {
     std::string error;
     if (!validate_hierarchical_model(model, &error)) {
         throw std::invalid_argument("Invalid hierarchical model: " + error);
+    }
+    if (state.size() != model.levels.size()) {
+        throw std::invalid_argument("hierarchy state size must match model level count");
+    }
+
+    // Validate the complete feedback set before evaluating any level.
+    std::vector<const gfe::State*> feedback_by_level(model.levels.size(), nullptr);
+    for (const auto& input : external_forcings) {
+        if (input.target_level >= model.levels.size()) {
+            throw std::invalid_argument("external forcing target_level out of range");
+        }
+        if (feedback_by_level[input.target_level] != nullptr) {
+            throw std::invalid_argument("duplicate external forcing target_level");
+        }
+        if (input.values.size() != state[input.target_level].state.u.size()) {
+            throw std::invalid_argument("external forcing dimension must match target state dimension");
+        }
+        feedback_by_level[input.target_level] = &input.values;
     }
 
     const HierarchicalState current = normalize_state(model, state);
@@ -510,6 +535,9 @@ HierarchicalState step(const HierarchicalMINModel& model, const HierarchicalStat
 
     HierarchicalState next(current.size());
     for (std::size_t i = 0; i < current.size(); ++i) {
+        // The level model is copied as in the original stepper so its kernel
+        // and forcing can be specialised for this event. The full hierarchy
+        // model/topology is not copied or reconstructed.
         AberSOEModelSpec local_model = model.levels[i].model;
         gfe::MemoryKernelParams active_kernel = current[i].active_kernel;
 
@@ -528,9 +556,17 @@ HierarchicalState step(const HierarchicalMINModel& model, const HierarchicalStat
 
         const auto base_forcing = local_model.operators.forcing;
         const std::size_t target_dim = current[i].state.u.size();
-        local_model.operators.forcing = [&, i, base_forcing, target_dim](double t) {
+        const bool has_external = feedback_by_level[i] != nullptr;
+        const gfe::State external_values = has_external ? *feedback_by_level[i] : gfe::State{};
+        local_model.operators.forcing = [&, i, base_forcing, target_dim, has_external, external_values](double t) {
             gfe::State total = base_forcing ? base_forcing(t) : gfe::State(target_dim, 0.0);
             ensure_matching_dimensions(total, target_dim, "base forcing");
+            if (has_external) {
+                ensure_matching_dimensions(external_values, target_dim, "external forcing");
+                for (std::size_t k = 0; k < target_dim; ++k) {
+                    total[k] += external_values[k];
+                }
+            }
             for (const auto& edge : model.bottom_up_couplings) {
                 if (edge.target_level != i) {
                     continue;
@@ -580,57 +616,6 @@ HierarchicalState step_with_external_forcing(
         };
 
     return step(mod_model, state);
-}
-
-HierarchicalState step_with_external_forcings(
-    const HierarchicalMINModel& model,
-    const HierarchicalState& state,
-    const std::vector<HierarchicalExternalForcing>& external_forcings) {
-    std::string error;
-    if (!validate_hierarchical_model(model, &error)) {
-        throw std::invalid_argument("Invalid hierarchical model: " + error);
-    }
-
-    // Prepare and validate the complete feedback set before changing anything.
-    if (state.size() != model.levels.size()) {
-        throw std::invalid_argument("hierarchy state size must match model level count");
-    }
-    std::vector<bool> targeted(model.levels.size(), false);
-    for (const auto& input : external_forcings) {
-        if (input.target_level >= model.levels.size()) {
-            throw std::invalid_argument("external forcing target_level out of range");
-        }
-        if (targeted[input.target_level]) {
-            throw std::invalid_argument("duplicate external forcing target_level");
-        }
-        targeted[input.target_level] = true;
-        if (input.values.size() != state[input.target_level].state.u.size()) {
-            throw std::invalid_argument("external forcing dimension must match target state dimension");
-        }
-    }
-
-    // A shallow model copy preserves the constructed hierarchy topology and
-    // operators. Only the per-cycle forcing closures are replaced. step()
-    // still evaluates every level from the same pre-step state, so feedback
-    // is simultaneous rather than a sequence of artificial hierarchy steps.
-    HierarchicalMINModel cycle_model = model;
-    for (const auto& input : external_forcings) {
-        const auto original_forcing = cycle_model.levels[input.target_level].model.operators.forcing;
-        const gfe::State values = input.values;
-        cycle_model.levels[input.target_level].model.operators.forcing =
-            [original_forcing, values](double t) {
-                gfe::State total = original_forcing ? original_forcing(t)
-                                                    : gfe::State(values.size(), 0.0);
-                if (total.size() != values.size()) {
-                    throw std::invalid_argument("base forcing dimension does not match external feedback");
-                }
-                for (std::size_t k = 0; k < values.size(); ++k) {
-                    total[k] += values[k];
-                }
-                return total;
-            };
-    }
-    return step(cycle_model, state);
 }
 
 HierarchicalRunResult run(
