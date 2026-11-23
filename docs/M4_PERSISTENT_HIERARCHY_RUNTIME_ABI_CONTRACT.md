@@ -243,13 +243,13 @@ This is the active work ledger. Status values: **NOT STARTED**, **IN PROGRESS**,
 | M4-ABI-3 | Persistent single-level-input step | Handle-owned step, zero or one feedback, D4B active-kernel reset semantics and per-event parity | PASSED |
 | M4-ABI-4 | Multi-level feedback transaction | Multiple addressed vectors, exact dimensions, duplicate/out-of-range validation, compute-before-commit; no-mutation test passes | PASSED |
 | M4-ABI-5 | State and diagnostics inspection | Per-level state/kernel/spectral snapshot; exercised by persistent-vs-D4B parity tests | PASSED |
-| M4-ABI-6 | State restore/set | Atomic all-level validation and commit; dimension/time/finite checks | NOT STARTED |
+| M4-ABI-6 | State restore/set | Native atomic all-level validation and commit; dimension/time/kernel/finite checks; step counter restored | IMPLEMENTED — CI pending |
 | M4-ABI-7 | Python owning wrapper | Context-managed native owner; D2C director creates once per episode and sends feedback per event | PASSED |
 | M4-ABI-8 | D4B parity campaign | Two-/three-level deterministic parity, silent/forced sequences, multi-level feedback and invalid-input invariance | PASSED (tested scope; Linux 193 passed/4 skipped; Windows job passed) |
-| M4-ABI-9 | Checkpoint/restore | Versioned portable format, spec fingerprint, exact continuation tests | NOT STARTED — merge blocker |
+| M4-ABI-9 | Checkpoint/restore | Version-1 portable JSON; SHA-256 spec fingerprint and payload checksum; atomic file write; exact three-level continuation and rejection tests | IMPLEMENTED — CI pending |
 | M4-ABI-10 | HLA/HLB integration seam | Python feedback adapter and inspection path; hierarchy topology held fixed | NOT STARTED |
 | M4-ABI-11 | Confirmatory runtime campaign | Repeated episodes, lifecycle/memory-leak checks, timing and allocation profile | NOT STARTED |
-| M4-ABI-12 | Persistent-vs-D4B benchmark | Reproducible warm-up/repeated timing, model construction and allocation counts, parity-checked workloads, raw result artifact | NOT STARTED — merge blocker |
+| M4-ABI-12 | Persistent-vs-D4B benchmark | 3-level / 4-edge workload; 400 events, 7 repeats, 2 warm-ups; alternating order; parity gate; raw CI artifact; Python tracemalloc proxy (native allocator count explicitly uninstrumented) | IMPLEMENTED — benchmark result pending |
 
 ### Execution order and dependencies
 
@@ -275,28 +275,37 @@ Parallel work is appropriate only after the shared contract is frozen: Python wr
 2. No Leptograph C++ object ABI and no arbitrary Python callback crossing.
 3. No topology mutation in v1.
 4. No HLA/HLB performance claims before parity and controlled integration.
-5. Measure model construction count, per-event allocations, latency, and memory usage against the old D4B path; do not assume the persistent path is faster without measurement.
+5. Benchmark end-to-end latency, model-construction count, and Python allocation/peak-memory proxy against D4B. Native C++ allocator counts are not instrumented in this slice; do not infer native allocation reductions or speedup without measured evidence.
 6. Keep numerical correctness, interface performance, and Leptograph research outcomes as separate evidence categories.
 
 ## 7.1 Verification record
 
-Latest code-bearing CI run: [45170012695](https://github.com/johnsnowman488-oss/aberconics-framework/actions/runs/45170012695), head `896069758c9a257bc2a85e09f44ea00347d3662d`.
+### Previously verified baseline
 
-- Ubuntu and Windows C++ configure/build and CTest jobs: passed.
-- Ubuntu and Windows shared-library builds: passed.
-- Python 3.12 on Ubuntu: **193 passed, 4 skipped**.
-- Python 3.12 on Windows: **193 passed, 4 skipped**.
-- Linux module compile and experiment-lab JavaScript validation: passed.
-- Windows-only skipped Linux script validation as expected.
+Run [45170675516](https://github.com/johnsnowman488-oss/aberconics-framework/actions/runs/45170675516), head `6c65a2cf004f8b0d034a31743604fc7d92fb559f`:
+- Ubuntu and Windows C++ build/CTest: passed.
+- Ubuntu Python: 193 passed, 4 skipped; Windows Python job: passed.
+- The two-/three-level D4B parity campaign passed, including three 40-event sequences (120 events) and state/kernel/spectral comparisons.
 
-The parity suite includes a two-level coupled comparison and a three-level campaign with three deterministic 40-event sequences (120 events total), including silent steps. It compares each level's `u`, scalar `chi`, `t`, active kernels and spectral diagnostics. These results establish parity for the tested chains and sequences; they do not prove all possible topology/configuration combinations.
+### New restore and benchmark work
 
-Performance profiling, state set/restore, checkpointing, HLA/HLB coupling and confirmatory runtime experiments remain open.
+The following implementation has now been committed to the branch; final cross-platform CI is pending on the current head:
+- Native `gfe_c_hierarchy_restore`: validates every level's state and active kernel into a candidate snapshot, recomputes spectral diagnostics, and commits state plus step counter only after all levels pass.
+- Native `gfe_c_hierarchy_get_step_count`: exposes the committed synchronisation count.
+- Python checkpoint format `gfe.persistent_hierarchy.checkpoint`, version 1: JSON-serializable per-level `u/chi/t/gamma/w`, step count, SHA-256 fingerprint of the normalized immutable chain specification, and SHA-256 payload checksum.
+- Checkpoint file writes use a same-directory temporary file, flush/fsync, and atomic replace. Restore checks schema/version, checksum, spec identity, level count, dimensions, and finite/positive kernel constraints before calling native restore.
+- Python owner serializes its public operations with a reentrant lock so checkpoint snapshots cannot interleave with a step through the same owner.
+- Tests cover exact continuation across a three-level chain, immediate restored-state identity, mismatched-spec rejection, payload corruption, malformed dimensions, non-finite values, and native all-level atomicity when a later level is invalid.
+- Benchmark script compares D4B reconstruction-per-event against one persistent runtime on a three-level/four-edge workload. It uses 400 events, 7 measured repeats, 2 warm-up episodes, alternating execution order, and a per-event numerical parity gate. It reports create cost, event-loop latency, amortized episode latency, model construction counts, and Python tracemalloc peak memory. Native C++ allocator counts are explicitly not instrumented and are not inferred from Python tracemalloc.
+- CI runs the benchmark on Linux and uploads raw JSON as artifact `m4-persistent-vs-d4b`.
+
+The new checkpoint tests and benchmark must not be marked passed until the exact current branch-head CI run completes. No persistent speedup claim is made until the artifact has been inspected.
+
 
 ## 8. Immediate next actions
 
-1. Profile model construction count, per-event allocations, latency and memory against the old D4B path; do not infer speedup from parity.
-2. Design and implement atomic state restore/set, followed by versioned checkpoint/restore and exact-continuation tests.
-3. Integrate HLA and HLB through the Python coordinator while holding the SOE hierarchy and topology constant.
-4. Run repeated-episode lifecycle and memory checks, then the confirmatory runtime campaign.
-5. Keep this PR unmerged until the implementation review and next-stage ownership decision are complete.
+1. Complete Linux and Windows C++/Python CI on the final checkpoint/benchmark commit; resolve all failures.
+2. Inspect the benchmark artifact and record measured medians, dispersion, model-construction counts, parity error, and Python memory proxy. Treat native allocation counts as unmeasured.
+3. Run repeated create/step/checkpoint/restore/destroy cycles and verify stale handles, no state leakage between episodes, and bounded process memory.
+4. Review the final ABI/Python contract and update this ledger with exact run/artifact references.
+5. Keep the branch operational and unmerged. HLA/HLB coupling and the broader confirmatory runtime campaign remain subsequent work packages, not implied by ABI/checkpoint parity.
