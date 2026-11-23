@@ -2031,8 +2031,18 @@ int gfe_c_hierarchy_step(
             inputs.push_back(std::move(input));
         }
 
+        // D4B reconstructs the active kernel from the immutable chain spec
+        // at the start of every event. Preserve that numerical contract while
+        // keeping the model itself persistent across events.
+        auto current = runtime->state;
+        for (std::size_t i = 0; i < current.size(); ++i) {
+            current[i].active_kernel = runtime->model.levels[i].model.kernel;
+            current[i].spectral = gfe::spectral_units(
+                current[i].active_kernel.w, current[i].active_kernel.gamma);
+        }
+
         // Compute into a temporary result. Commit only after the full cycle succeeds.
-        auto next = abersoe::step_with_external_forcings(runtime->model, runtime->state, inputs);
+        auto next = abersoe::step_with_external_forcings(runtime->model, current, inputs);
         runtime->state = std::move(next);
         ++runtime->step_count;
         return GFE_C_STATUS_OK;
