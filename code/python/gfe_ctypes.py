@@ -5,7 +5,7 @@ from __future__ import annotations
 import ctypes
 import os
 from csv import writer
-from ctypes import POINTER, byref, c_char, c_char_p, c_double, c_int, c_size_t
+from ctypes import POINTER, byref, c_char, c_char_p, c_double, c_int, c_size_t, c_uint64
 from pathlib import Path
 from typing import Dict, List, Sequence
 
@@ -14,6 +14,7 @@ GFE_C_STATUS_OK = 0
 GFE_C_STATUS_INVALID_ARGUMENT = 1
 GFE_C_STATUS_RUNTIME_ERROR = 2
 GFE_C_STATUS_BUFFER_TOO_SMALL = 3
+GFE_C_STATUS_INVALID_HANDLE = 4
 
 GFE_C_FIT_BACKEND_NNLS_PG = 0
 GFE_C_FIT_BACKEND_PRONY = 1
@@ -292,6 +293,13 @@ class GfeCHierarchicalChainSpecView(ctypes.Structure):
         ("level_count", c_size_t),
         ("edges", POINTER(GfeCHierarchicalChainEdgeSpec)),
         ("edge_count", c_size_t),
+    ]
+
+class GfeCHierarchyFeedbackView(ctypes.Structure):
+    _fields_ = [
+        ("target_level", c_size_t),
+        ("values", POINTER(c_double)),
+        ("values_size", c_size_t),
     ]
 
 
@@ -681,6 +689,31 @@ def load_gfe_library(path: str | None = None) -> ctypes.CDLL:
         c_size_t,
     ]
     lib.gfe_c_hierarchical_step_chain_spec.restype = c_int
+
+    lib.gfe_c_hierarchy_create.argtypes = [
+        POINTER(GfeCHierarchicalChainSpecView), POINTER(c_uint64),
+        POINTER(c_char), c_size_t,
+    ]
+    lib.gfe_c_hierarchy_create.restype = c_int
+    lib.gfe_c_hierarchy_destroy.argtypes = [c_uint64, POINTER(c_char), c_size_t]
+    lib.gfe_c_hierarchy_destroy.restype = c_int
+    lib.gfe_c_hierarchy_get_level_count.argtypes = [
+        c_uint64, POINTER(c_size_t), POINTER(c_char), c_size_t,
+    ]
+    lib.gfe_c_hierarchy_get_level_count.restype = c_int
+    lib.gfe_c_hierarchy_step.argtypes = [
+        c_uint64, POINTER(GfeCHierarchyFeedbackView), c_size_t,
+        POINTER(c_char), c_size_t,
+    ]
+    lib.gfe_c_hierarchy_step.restype = c_int
+    lib.gfe_c_hierarchy_get_state.argtypes = [
+        c_uint64,
+        POINTER(GfeCStateMutView), c_size_t,
+        POINTER(GfeCMemoryKernelMutView), c_size_t,
+        POINTER(GfeCSpectralUnits), c_size_t,
+        POINTER(c_char), c_size_t,
+    ]
+    lib.gfe_c_hierarchy_get_state.restype = c_int
 
     lib.gfe_c_hierarchical_get_cross_level_report_for_chain_spec.argtypes = [
         POINTER(GfeCHierarchicalChainSpecView),
@@ -2445,6 +2478,188 @@ def step_hierarchical_chain_spec(
         "active_kernels": result_kernels,
         "spectral_units": result_spectral,
     }
+
+
+class PersistentHierarchyRuntime:
+    """Own a persistent native scalar custom-chain hierarchy.
+
+    The native handle owns the model and evolving state. Python retains the
+    loaded CDLL and specification buffers for deterministic lifetime
+    management, but the native create call copies the specification. Use as
+    a context manager or call close() explicitly.
+    """
+
+    def __init__(
+        self,
+        lib: ctypes.CDLL,
+        levels: List[Dict[str, object]],
+        edges: List[Dict[str, object]],
+    ) -> None:
+        self._lib = lib
+        self._closed = False
+        self._level_dims = [len(level["u"]) for level in levels]
+        self._memory_channels = [len(level["gamma"]) for level in levels]
+        spec, self._spec_keepalive = _build_hierarchical_chain_spec(levels, edges)
+        self._handle = c_uint64(0)
+        err = ctypes.create_string_buffer(512)
+        status = self._lib.gfe_c_hierarchy_create(
+            byref(spec), byref(self._handle), err, ctypes.sizeof(err)
+        )
+        if status != GFE_C_STATUS_OK:
+            raise RuntimeError(
+                f"gfe_c_hierarchy_create failed ({status}): {err.value.decode('utf-8')}"
+            )
+        self._level_count = c_size_t(0)
+        status = self._lib.gfe_c_hierarchy_get_level_count(
+            self._handle, byref(self._level_count), err, ctypes.sizeof(err)
+        )
+        if status != GFE_C_STATUS_OK:
+            self.close()
+            raise RuntimeError(
+                f"gfe_c_hierarchy_get_level_count failed ({status}): {err.value.decode('utf-8')}"
+            )
+        if self._level_count.value != len(levels):
+            self.close()
+            raise RuntimeError("Native hierarchy level count differs from supplied specification")
+
+    @property
+    def handle(self) -> int:
+        self._ensure_open()
+        return int(self._handle.value)
+
+    def _ensure_open(self) -> None:
+        if self._closed or not self._handle.value:
+            raise RuntimeError("PersistentHierarchyRuntime is closed")
+
+    def step(
+        self,
+        feedback_by_level: Dict[int, Sequence[float]] | None = None,
+    ) -> Dict[str, object]:
+        """Advance exactly one hierarchy synchronisation cycle.
+
+        feedback_by_level maps each target level to one vector. Multiple
+        levels are injected simultaneously; native code validates indices,
+        uniqueness, and dimensions before advancing.
+        """
+        self._ensure_open()
+        feedback_by_level = feedback_by_level or {}
+        keepalive: List[object] = []
+        records: List[GfeCHierarchyFeedbackView] = []
+        for target, values in sorted(feedback_by_level.items()):
+            vals = [float(v) for v in values]
+            buf = (c_double * len(vals))(*vals)
+            keepalive.append(buf)
+            records.append(GfeCHierarchyFeedbackView(
+                int(target), ctypes.cast(buf, POINTER(c_double)), len(vals)
+            ))
+        arr = (GfeCHierarchyFeedbackView * len(records))(*records) if records else None
+        err = ctypes.create_string_buffer(512)
+        status = self._lib.gfe_c_hierarchy_step(
+            self._handle,
+            arr if arr is not None else POINTER(GfeCHierarchyFeedbackView)(),
+            len(records),
+            err,
+            ctypes.sizeof(err),
+        )
+        if status != GFE_C_STATUS_OK:
+            raise RuntimeError(
+                f"gfe_c_hierarchy_step failed ({status}): {err.value.decode('utf-8')}"
+            )
+        return self.get_state()
+
+    def get_state(self) -> Dict[str, object]:
+        """Return a copied snapshot of all level states and diagnostics."""
+        self._ensure_open()
+        n = self._level_count.value
+        state_keepalive: List[object] = []
+        state_views: List[GfeCStateMutView] = []
+        kernel_views: List[GfeCMemoryKernelMutView] = []
+        for dim, channels in zip(self._level_dims, self._memory_channels):
+            u_buf = (c_double * dim)()
+            chi_buf = (c_double * channels)()
+            u_size = c_size_t(0)
+            chi_size = c_size_t(0)
+            t_val = c_double(0.0)
+            state_keepalive.extend([u_buf, chi_buf, u_size, chi_size, t_val])
+            state_views.append(GfeCStateMutView(
+                u_buf, dim, ctypes.pointer(u_size),
+                chi_buf, channels, ctypes.pointer(chi_size),
+                ctypes.pointer(t_val),
+            ))
+            gamma_buf = (c_double * channels)()
+            weights_buf = (c_double * channels)()
+            gamma_size = c_size_t(0)
+            weights_size = c_size_t(0)
+            state_keepalive.extend([gamma_buf, weights_buf, gamma_size, weights_size])
+            kernel_views.append(GfeCMemoryKernelMutView(
+                gamma_buf, channels, ctypes.pointer(gamma_size),
+                weights_buf, channels, ctypes.pointer(weights_size),
+            ))
+        state_arr = (GfeCStateMutView * n)(*state_views)
+        kernel_arr = (GfeCMemoryKernelMutView * n)(*kernel_views)
+        spectral_arr = (GfeCSpectralUnits * n)()
+        err = ctypes.create_string_buffer(512)
+        status = self._lib.gfe_c_hierarchy_get_state(
+            self._handle, state_arr, n, kernel_arr, n,
+            spectral_arr, n, err, ctypes.sizeof(err),
+        )
+        if status != GFE_C_STATUS_OK:
+            raise RuntimeError(
+                f"gfe_c_hierarchy_get_state failed ({status}): {err.value.decode('utf-8')}"
+            )
+        states, kernels, spectral = [], [], []
+        for i, (dim, channels) in enumerate(zip(self._level_dims, self._memory_channels)):
+            sv, kv = state_views[i], kernel_views[i]
+            states.append({
+                "u": [sv.u[j] for j in range(dim)],
+                "chi": [sv.chi[j] for j in range(channels)],
+                "t": sv.t[0],
+            })
+            kernels.append({
+                "gamma": [kv.gamma[j] for j in range(channels)],
+                "w": [kv.w[j] for j in range(channels)],
+            })
+            sp = spectral_arr[i]
+            spectral.append({
+                "mcap": sp.mcap, "mscale": sp.mscale, "mres": sp.mres,
+                "hmem": sp.hmem, "hnorm": sp.hnorm, "deff": sp.deff,
+            })
+        return {
+            "level_states": states,
+            "active_kernels": kernels,
+            "spectral_units": spectral,
+        }
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        err = ctypes.create_string_buffer(512)
+        status = self._lib.gfe_c_hierarchy_destroy(
+            self._handle, err, ctypes.sizeof(err)
+        )
+        self._closed = True
+        self._handle = c_uint64(0)
+        self._spec_keepalive = []
+        if status != GFE_C_STATUS_OK:
+            raise RuntimeError(
+                f"gfe_c_hierarchy_destroy failed ({status}): {err.value.decode('utf-8')}"
+            )
+
+    def __enter__(self) -> "PersistentHierarchyRuntime":
+        self._ensure_open()
+        return self
+
+    def __exit__(self, exc_type, exc, traceback) -> None:
+        self.close()
+
+
+def create_persistent_hierarchy_runtime(
+    lib: ctypes.CDLL,
+    levels: List[Dict[str, object]],
+    edges: List[Dict[str, object]],
+) -> PersistentHierarchyRuntime:
+    return PersistentHierarchyRuntime(lib, levels, edges)
+
 
 
 if __name__ == "__main__":
