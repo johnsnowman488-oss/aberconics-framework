@@ -533,7 +533,16 @@ def test_persistent_hierarchy_close_is_idempotent_and_invalidates_python_owner()
         "form": GFE_C_COUPLING_FORM_B, "coupling_index": 0,
     }]
     runtime = gfe.create_persistent_hierarchy_runtime(lib, levels, [])
+    stale_handle = runtime.handle
     runtime.close()
     runtime.close()
     with pytest.raises(RuntimeError, match="closed"):
         runtime.get_state()
+
+    # The native registry rejects stale tokens without dereferencing them.
+    count = gfe.ctypes.c_size_t(0)
+    err = gfe.ctypes.create_string_buffer(256)
+    status = lib.gfe_c_hierarchy_get_level_count(
+        stale_handle, gfe.ctypes.byref(count), err, gfe.ctypes.sizeof(err)
+    )
+    assert status == gfe.GFE_C_STATUS_INVALID_HANDLE
