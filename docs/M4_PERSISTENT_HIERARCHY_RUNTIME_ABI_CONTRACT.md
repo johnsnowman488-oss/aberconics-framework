@@ -47,7 +47,7 @@ Inspection of `abersoe::step` in `hierarchical_min.cpp` settles the multi-feedba
 - Top-down modulation is computed from the source level's pre-step state and applied to the target's active kernel for that cycle.
 - The old `step_with_external_forcing` shallow-copies the model and wraps one target level's base forcing before calling `step`.
 
-Therefore multi-level external feedback can be applied in one synchronisation cycle without repeated calls to the stepper: wrap the base forcing for each addressed level in one cycle-local model copy, then call `abersoe::step` exactly once. The new `step_with_external_forcings` follows this pattern, validates unique targets and exact target state dimensions, and computes the full next state before returning.
+Therefore multi-level external feedback can be applied in one synchronisation cycle without repeated calls to the stepper: wrap the base forcing for each addressed level in one cycle-local model copy, then call `abersoe::step` exactly once. The new `step_with_external_forcings` injects each validated vector directly into the corresponding per-level forcing closure inside the existing step loop. It validates unique targets and exact target state dimensions, computes the full next state before returning, and does not copy or reconstruct the full hierarchy model.
 
 **Important D4B parity detail:** the existing `gfe_c_hierarchical_step_chain_spec` rebuilds each level's active kernel from the immutable chain specification on every event before stepping. The persistent C API explicitly preserves this reset at each event. This prevents top-down-modulated kernels from accidentally becoming persistent across events when the D4B caller-owned state contract did not preserve them.
 
