@@ -528,11 +528,6 @@ HierarchicalState step_with_external_forcings(
     }
 
     const HierarchicalState current = normalize_state(model, state);
-    std::vector<HierarchicalObservable> observables(current.size());
-    for (std::size_t i = 0; i < current.size(); ++i) {
-        observables[i] = project_observable(current[i].state, model.levels[i].observable);
-    }
-
     HierarchicalState next(current.size());
     for (std::size_t i = 0; i < current.size(); ++i) {
         // The level model is copied as in the original stepper so its kernel
