@@ -717,6 +717,25 @@ GFE_C_API int gfe_c_hierarchy_get_state(
     char* error_msg,
     size_t error_msg_capacity);
 
+/* Restore a complete runtime snapshot atomically. State and kernel arrays must
+ * each contain exactly one entry per level. All values are validated before
+ * any runtime field is changed. The caller is responsible for verifying that
+ * the snapshot belongs to the same immutable chain specification. */
+GFE_C_API int gfe_c_hierarchy_restore(
+    gfe_c_hierarchy_handle handle,
+    const gfe_c_state_view* level_states,
+    const gfe_c_memory_kernel_view* active_kernels,
+    size_t level_count,
+    uint64_t step_count,
+    char* error_msg,
+    size_t error_msg_capacity);
+
+GFE_C_API int gfe_c_hierarchy_get_step_count(
+    gfe_c_hierarchy_handle handle,
+    uint64_t* out_step_count,
+    char* error_msg,
+    size_t error_msg_capacity);
+
 GFE_C_API int gfe_c_validate_memory_kernel(const gfe_c_memory_kernel_view* kernel,
                                            char* error_msg,
                                            size_t error_msg_capacity);
