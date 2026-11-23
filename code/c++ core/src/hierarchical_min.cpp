@@ -592,6 +592,9 @@ HierarchicalState step_with_external_forcings(
     }
 
     // Prepare and validate the complete feedback set before changing anything.
+    if (state.size() != model.levels.size()) {
+        throw std::invalid_argument("hierarchy state size must match model level count");
+    }
     std::vector<bool> targeted(model.levels.size(), false);
     for (const auto& input : external_forcings) {
         if (input.target_level >= model.levels.size()) {
@@ -601,10 +604,7 @@ HierarchicalState step_with_external_forcings(
             throw std::invalid_argument("duplicate external forcing target_level");
         }
         targeted[input.target_level] = true;
-        const std::size_t expected = model.levels[input.target_level].model.kernel.gamma.size();
-        (void)expected;
-        if (input.values.size() != model.levels[input.target_level].model.operators.apply_L(
-                state[input.target_level].state.u, state[input.target_level].state.t).size()) {
+        if (input.values.size() != state[input.target_level].state.u.size()) {
             throw std::invalid_argument("external forcing dimension must match target state dimension");
         }
     }
