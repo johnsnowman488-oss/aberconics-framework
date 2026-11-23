@@ -2748,9 +2748,9 @@ class PersistentHierarchyRuntime:
         destination.parent.mkdir(parents=True, exist_ok=True)
         temporary = destination.with_name(destination.name + ".tmp")
         try:
-            with temporary.open("w", encoding="utf-8", newline="\\n") as stream:
+            with temporary.open("w", encoding="utf-8", newline="\n") as stream:
                 stream.write(_canonical_json(payload))
-                stream.write("\\n")
+                stream.write("\n")
                 stream.flush()
                 os.fsync(stream.fileno())
             os.replace(temporary, destination)
