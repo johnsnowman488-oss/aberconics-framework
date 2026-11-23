@@ -582,6 +582,57 @@ HierarchicalState step_with_external_forcing(
     return step(mod_model, state);
 }
 
+HierarchicalState step_with_external_forcings(
+    const HierarchicalMINModel& model,
+    const HierarchicalState& state,
+    const std::vector<HierarchicalExternalForcing>& external_forcings) {
+    std::string error;
+    if (!validate_hierarchical_model(model, &error)) {
+        throw std::invalid_argument("Invalid hierarchical model: " + error);
+    }
+
+    // Prepare and validate the complete feedback set before changing anything.
+    std::vector<bool> targeted(model.levels.size(), false);
+    for (const auto& input : external_forcings) {
+        if (input.target_level >= model.levels.size()) {
+            throw std::invalid_argument("external forcing target_level out of range");
+        }
+        if (targeted[input.target_level]) {
+            throw std::invalid_argument("duplicate external forcing target_level");
+        }
+        targeted[input.target_level] = true;
+        const std::size_t expected = model.levels[input.target_level].model.kernel.gamma.size();
+        (void)expected;
+        if (input.values.size() != model.levels[input.target_level].model.operators.apply_L(
+                state[input.target_level].state.u, state[input.target_level].state.t).size()) {
+            throw std::invalid_argument("external forcing dimension must match target state dimension");
+        }
+    }
+
+    // A shallow model copy preserves the constructed hierarchy topology and
+    // operators. Only the per-cycle forcing closures are replaced. step()
+    // still evaluates every level from the same pre-step state, so feedback
+    // is simultaneous rather than a sequence of artificial hierarchy steps.
+    HierarchicalMINModel cycle_model = model;
+    for (const auto& input : external_forcings) {
+        const auto original_forcing = cycle_model.levels[input.target_level].model.operators.forcing;
+        const gfe::State values = input.values;
+        cycle_model.levels[input.target_level].model.operators.forcing =
+            [original_forcing, values](double t) {
+                gfe::State total = original_forcing ? original_forcing(t)
+                                                    : gfe::State(values.size(), 0.0);
+                if (total.size() != values.size()) {
+                    throw std::invalid_argument("base forcing dimension does not match external feedback");
+                }
+                for (std::size_t k = 0; k < values.size(); ++k) {
+                    total[k] += values[k];
+                }
+                return total;
+            };
+    }
+    return step(cycle_model, state);
+}
+
 HierarchicalRunResult run(
     const HierarchicalMINModel& model,
     const HierarchicalState& state0,
