@@ -129,6 +129,19 @@ HierarchicalState step_with_external_forcing(
     std::size_t forcing_level,
     const gfe::State& external_forcing);
 
+// Apply independent external forcing vectors to multiple levels during one
+// hierarchy synchronisation cycle. Each target level may appear at most once;
+// each vector must match that level's state dimension.
+struct HierarchicalExternalForcing {
+    std::size_t target_level = 0;
+    gfe::State values;
+};
+
+HierarchicalState step_with_external_forcings(
+    const HierarchicalMINModel& model,
+    const HierarchicalState& state,
+    const std::vector<HierarchicalExternalForcing>& external_forcings);
+
 HierarchicalRunResult run(
     const HierarchicalMINModel& model,
     const HierarchicalState& state0,
