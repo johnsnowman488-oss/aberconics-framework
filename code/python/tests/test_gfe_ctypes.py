@@ -648,11 +648,23 @@ def _checkpoint_test_spec():
             "linear_decay": [0.08], "forcing_bias": [0.01],
             "form": GFE_C_COUPLING_FORM_B, "coupling_index": 0,
         },
+        {
+            "name": "checkpoint_abstract", "gamma": [0.35, 0.08], "w": [0.6, 0.4],
+            "u": [0.025], "chi": [0.0, 0.0], "dt": 0.015,
+            "linear_decay": [0.06], "forcing_bias": [0.0],
+            "form": GFE_C_COUPLING_FORM_B, "coupling_index": 0,
+        },
     ]
     edges = [
         {"source_level": 0, "target_level": 1,
          "relation": GFE_C_HIERARCHICAL_RELATION_BOTTOM_UP,
          "gain": 0.35, "normalize_weights": True},
+        {"source_level": 1, "target_level": 2,
+         "relation": GFE_C_HIERARCHICAL_RELATION_BOTTOM_UP,
+         "gain": 0.2, "normalize_weights": True},
+        {"source_level": 2, "target_level": 1,
+         "relation": GFE_C_HIERARCHICAL_RELATION_TOP_DOWN,
+         "gain": 0.1, "normalize_weights": True},
         {"source_level": 1, "target_level": 0,
          "relation": GFE_C_HIERARCHICAL_RELATION_TOP_DOWN,
          "gain": 0.18, "normalize_weights": True},
@@ -681,6 +693,12 @@ def test_persistent_hierarchy_checkpoint_restore_exact_continuation(tmp_path):
     with gfe.create_persistent_hierarchy_runtime(lib, levels, edges) as resumed:
         resumed.load_checkpoint(checkpoint_path)
         assert resumed.step_count == checkpoint["step_count"] == 3
+        restored_snapshot = resumed.get_state()
+        for index, checkpoint_level in enumerate(checkpoint["levels"]):
+            assert restored_snapshot["level_states"][index]["u"] == checkpoint_level["u"]
+            assert restored_snapshot["level_states"][index]["chi"] == checkpoint_level["chi"]
+            assert restored_snapshot["active_kernels"][index]["gamma"] == checkpoint_level["gamma"]
+            assert restored_snapshot["active_kernels"][index]["w"] == checkpoint_level["w"]
         for feedback in sequence[3:]:
             resumed.step(feedback)
         actual = resumed.get_state()
@@ -745,5 +763,36 @@ def test_persistent_hierarchy_checkpoint_rejects_invalid_shapes_and_nonfinite_va
         bad_value["levels"][0]["u"] = [float("inf")]
         with pytest.raises(ValueError, match="checksum|non-portable"):
             runtime.restore(bad_value)
+        assert runtime.get_state() == before
+
+
+def test_native_hierarchy_restore_is_atomic_for_invalid_later_level():
+    try:
+        lib = load_gfe_library(_lib_path())
+    except OSError as exc:
+        pytest.skip(f"shared library unavailable: {exc}")
+    levels, edges = _checkpoint_test_spec()
+    with gfe.create_persistent_hierarchy_runtime(lib, levels, edges) as runtime:
+        runtime.step({0: [0.2]})
+        before = runtime.get_state()
+        state_views, kernel_views, keepalive = [], [], []
+        for state, kernel in zip(before["level_states"], before["active_kernels"]):
+            state_view, state_refs = gfe._build_state_view(state["u"], state["chi"], t=state["t"])
+            kernel_view, kernel_refs = gfe._build_kernel_view(kernel["gamma"], kernel["w"])
+            state_views.append(state_view)
+            kernel_views.append(kernel_view)
+            keepalive.extend(state_refs + kernel_refs)
+        # Corrupt the final level after earlier levels have already passed validation.
+        keepalive[-4][0] = float("nan")
+        state_array = (gfe.GfeCStateView * len(state_views))(*state_views)
+        kernel_array = (gfe.GfeCMemoryKernelView * len(kernel_views))(*kernel_views)
+        err = gfe.ctypes.create_string_buffer(512)
+        status = lib.gfe_c_hierarchy_restore(
+            runtime.handle, state_array, kernel_array, len(state_views),
+            gfe.c_uint64(999), err, gfe.ctypes.sizeof(err),
+        )
+        assert status == gfe.GFE_C_STATUS_INVALID_ARGUMENT
+        assert "finite" in err.value.decode("utf-8")
+        assert runtime.step_count == 1
         assert runtime.get_state() == before
 
