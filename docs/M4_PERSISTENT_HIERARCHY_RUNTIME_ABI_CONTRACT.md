@@ -243,13 +243,13 @@ This is the active work ledger. Status values: **NOT STARTED**, **IN PROGRESS**,
 | M4-ABI-3 | Persistent single-level-input step | Handle-owned step, zero or one feedback, D4B active-kernel reset semantics and per-event parity | PASSED |
 | M4-ABI-4 | Multi-level feedback transaction | Multiple addressed vectors, exact dimensions, duplicate/out-of-range validation, compute-before-commit; no-mutation test passes | PASSED |
 | M4-ABI-5 | State and diagnostics inspection | Per-level state/kernel/spectral snapshot; exercised by persistent-vs-D4B parity tests | PASSED |
-| M4-ABI-6 | State restore/set | Native atomic all-level validation and commit; dimension/time/kernel/finite checks; step counter restored | IMPLEMENTED — CI pending |
+| M4-ABI-6 | State restore/set | Native atomic all-level validation and commit; dimension/time/kernel/finite checks; step counter restored | PASSED |
 | M4-ABI-7 | Python owning wrapper | Context-managed native owner; D2C director creates once per episode and sends feedback per event | PASSED |
-| M4-ABI-8 | D4B parity campaign | Two-/three-level deterministic parity, silent/forced sequences, multi-level feedback and invalid-input invariance | PASSED (tested scope; Linux 193 passed/4 skipped; Windows job passed) |
-| M4-ABI-9 | Checkpoint/restore | Version-1 portable JSON; SHA-256 spec fingerprint and payload checksum; atomic file write; exact three-level continuation and rejection tests | IMPLEMENTED — CI pending |
+| M4-ABI-8 | D4B parity campaign | Two-/three-level deterministic parity, silent/forced sequences, multi-level feedback and invalid-input invariance | PASSED (tested scope; Linux and Windows 198 passed/4 skipped) |
+| M4-ABI-9 | Checkpoint/restore | Version-1 portable JSON; SHA-256 spec fingerprint and payload checksum; atomic file write; exact three-level continuation and rejection tests | PASSED |
 | M4-ABI-10 | HLA/HLB integration seam | Python feedback adapter and inspection path; hierarchy topology held fixed | NOT STARTED |
-| M4-ABI-11 | Confirmatory runtime campaign | Repeated episodes, lifecycle/memory-leak checks, timing and allocation profile | NOT STARTED |
-| M4-ABI-12 | Persistent-vs-D4B benchmark | 3-level / 4-edge workload; 400 events, 7 repeats, 2 warm-ups; alternating order; parity gate; raw CI artifact; Python tracemalloc proxy (native allocator count explicitly uninstrumented) | IMPLEMENTED — benchmark result pending |
+| M4-ABI-11 | Confirmatory runtime campaign | Repeated create/step/checkpoint/restore/destroy cycles and stale-handle rejection | PASSED (24-cycle lifecycle test; native heap-leak profiling not instrumented) |
+| M4-ABI-12 | Persistent-vs-D4B benchmark | 3-level / 4-edge workload; 400 events, 7 repeats, 2 warm-ups; alternating order; parity gate; raw JSON evidence | PASSED (1.865x measured episode speedup; native allocator count not instrumented) |
 
 ### Execution order and dependencies
 
@@ -280,32 +280,47 @@ Parallel work is appropriate only after the shared contract is frozen: Python wr
 
 ## 7.1 Verification record
 
-### Previously verified baseline
+### Final cross-platform verification
 
-Run [45170675516](https://github.com/johnsnowman488-oss/aberconics-framework/actions/runs/45170675516), head `6c65a2cf004f8b0d034a31743604fc7d92fb559f`:
+Workflow run [45173581148](https://github.com/johnsnowman488-oss/aberconics-framework/actions/runs/45173581148), tested code/workflow head `9f5273ff15cb78c44900bff328053ae16a309294`:
 - Ubuntu and Windows C++ build/CTest: passed.
-- Ubuntu Python: 193 passed, 4 skipped; Windows Python job: passed.
-- The two-/three-level D4B parity campaign passed, including three 40-event sequences (120 events) and state/kernel/spectral comparisons.
+- Ubuntu Python 3.12.16: **198 passed, 4 skipped**.
+- Windows Python 3.12.10: **198 passed, 4 skipped**.
+- Linux module compilation and experiment-lab JavaScript validation: passed.
+- The 24-cycle create/step/checkpoint/restore/destroy lifecycle test passed on both operating systems.
+- The three-level D4B parity campaign remains green; checkpoint exact-continuation and native atomic-restore tests are included in the 198 passing tests.
 
-### New restore and benchmark work
+The latest follow-up commit preserves benchmark evidence and updates this ledger; it does not change runtime code.
 
-The following implementation has now been committed to the branch; final cross-platform CI is pending on the current head:
-- Native `gfe_c_hierarchy_restore`: validates every level's state and active kernel into a candidate snapshot, recomputes spectral diagnostics, and commits state plus step counter only after all levels pass.
-- Native `gfe_c_hierarchy_get_step_count`: exposes the committed synchronisation count.
+### Checkpoint contract now implemented
+
+- Native `gfe_c_hierarchy_restore` validates every level's state and active kernel into a candidate snapshot, recomputes spectral diagnostics, and commits state plus step counter only after all levels pass.
+- Native `gfe_c_hierarchy_get_step_count` exposes the committed synchronisation count.
 - Python checkpoint format `gfe.persistent_hierarchy.checkpoint`, version 1: JSON-serializable per-level `u/chi/t/gamma/w`, step count, SHA-256 fingerprint of the normalized immutable chain specification, and SHA-256 payload checksum.
 - Checkpoint file writes use a same-directory temporary file, flush/fsync, and atomic replace. Restore checks schema/version, checksum, spec identity, level count, dimensions, and finite/positive kernel constraints before calling native restore.
-- Python owner serializes its public operations with a reentrant lock so checkpoint snapshots cannot interleave with a step through the same owner.
-- Tests cover exact continuation across a three-level chain, immediate restored-state identity, mismatched-spec rejection, payload corruption, malformed dimensions, non-finite values, and native all-level atomicity when a later level is invalid.
-- Benchmark script compares D4B reconstruction-per-event against one persistent runtime on a three-level/four-edge workload. It uses 400 events, 7 measured repeats, 2 warm-up episodes, alternating execution order, and a per-event numerical parity gate. It reports create cost, event-loop latency, amortized episode latency, model construction counts, and Python tracemalloc peak memory. Native C++ allocator counts are explicitly not instrumented and are not inferred from Python tracemalloc.
-- CI runs the benchmark on Linux and uploads raw JSON as artifact `m4-persistent-vs-d4b`.
+- The Python owner serializes its public operations with a reentrant lock. Tests verify exact continuation on a three-level chain, immediate restored-state identity, mismatched-spec rejection, payload corruption, malformed dimensions, non-finite values, and native all-level atomicity when a later level is invalid.
+- A checkpoint is portable between processes provided the caller recreates the same immutable chain specification and uses a compatible checkpoint-format version; native handles themselves are process-local.
 
-The new checkpoint tests and benchmark must not be marked passed until the exact current branch-head CI run completes. No persistent speedup claim is made until the artifact has been inspected.
+### Persistent-vs-D4B benchmark
+
+Raw result preserved at [`docs/benchmarks/M4_PERSISTENT_VS_D4B_2026-11-23.json`](benchmarks/M4_PERSISTENT_VS_D4B_2026-11-23.json). CI artifact: [`m4-persistent-vs-d4b`](https://github.com/johnsnowman488-oss/aberconics-framework/actions/runs/45173581148/artifacts/14817039055), artifact ZIP SHA-256 `5fc7d3e0ed5b556febbade3bf4c6cba9b2ac43622fcb9d0b531fce64c2246ce6`.
+
+Workload: three levels, four coupling edges, 400 events per episode, two warm-up episodes, seven measured repeats, alternating execution order; CPython 3.12.16 on the Linux CI runner. Timing includes Python ctypes calls and per-event state/diagnostic transfer on both paths.
+
+| Metric | D4B | Persistent |
+|---|---:|---:|
+| Median episode time | 47.185 ms | 25.304 ms including creation |
+| Median per-event time | 0.11796 ms | 0.06326 ms amortized |
+| Chain model constructions / episode | 400 | 1 |
+| Python tracemalloc peak | 1,773,929 bytes | 1,784,314 bytes |
+
+Measured persistent episode speedup: **1.865x**. Maximum absolute numerical discrepancy over the full benchmark trace: **0.0**. The persistent path's Python peak was about 0.6% higher; this is not a memory reduction result. Native C++ allocation counts and native heap usage were not instrumented, so no native allocation or memory-saving claim is made. This is one controlled workload, not a universal speedup claim.
 
 
-## 8. Immediate next actions
+## 8. Remaining work and branch policy
 
-1. Complete Linux and Windows C++/Python CI on the final checkpoint/benchmark commit; resolve all failures.
-2. Inspect the benchmark artifact and record measured medians, dispersion, model-construction counts, parity error, and Python memory proxy. Treat native allocation counts as unmeasured.
-3. Run repeated create/step/checkpoint/restore/destroy cycles and verify stale handles, no state leakage between episodes, and bounded process memory.
-4. Review the final ABI/Python contract and update this ledger with exact run/artifact references.
-5. Keep the branch operational and unmerged. HLA/HLB coupling and the broader confirmatory runtime campaign remain subsequent work packages, not implied by ABI/checkpoint parity.
+1. M4 persistent execution, multi-level feedback, atomic restore, versioned checkpoint/restore, exact continuation, cross-platform tests, lifecycle behavior, and the measured D4B comparison are operational and passed for the tested scope.
+2. Native allocator/heap instrumentation is a separate performance-diagnostics improvement; it is not claimed by the current benchmark.
+3. HLA/HLB coupling and the broader confirmatory runtime campaign remain subsequent research work packages. Keep the topology and scalar custom-chain ABI fixed until those are explicitly opened.
+4. This branch is being retained as an operational research branch. No merge into `main` is planned.
+
