@@ -2115,4 +2115,136 @@ int gfe_c_hierarchy_get_state(
     }
 }
 
+
+int gfe_c_hierarchy_restore(
+    gfe_c_hierarchy_handle handle,
+    const gfe_c_state_view* level_states,
+    const gfe_c_memory_kernel_view* active_kernels,
+    size_t level_count,
+    uint64_t step_count,
+    char* error_msg,
+    size_t error_msg_capacity) {
+    try {
+        if (!level_states || !active_kernels) {
+            write_error(error_msg, error_msg_capacity, "Null hierarchy restore input array");
+            return GFE_C_STATUS_INVALID_ARGUMENT;
+        }
+        const auto runtime = find_hierarchy_runtime(handle);
+        if (!runtime) {
+            write_error(error_msg, error_msg_capacity, "Invalid or destroyed hierarchy handle");
+            return GFE_C_STATUS_INVALID_HANDLE;
+        }
+        std::lock_guard<std::mutex> lock(runtime->mutex);
+        if (runtime->closed) {
+            write_error(error_msg, error_msg_capacity, "Hierarchy handle is closed");
+            return GFE_C_STATUS_INVALID_HANDLE;
+        }
+        if (level_count != runtime->state.size()) {
+            write_error(error_msg, error_msg_capacity, "Restore level_count must equal hierarchy level count");
+            return GFE_C_STATUS_INVALID_ARGUMENT;
+        }
+
+        // Build and validate a complete candidate snapshot before committing.
+        abersoe::HierarchicalState restored(runtime->state.size());
+        for (std::size_t i = 0; i < restored.size(); ++i) {
+            const auto& input_state = level_states[i];
+            const auto& input_kernel = active_kernels[i];
+            const auto& expected = runtime->state[i];
+            if (!input_state.u || !input_state.chi || !input_kernel.gamma || !input_kernel.w ||
+                input_state.u_size != expected.state.u.size() ||
+                input_state.chi_size != expected.state.chi.size() ||
+                input_kernel.gamma_size != expected.active_kernel.gamma.size() ||
+                input_kernel.w_size != expected.active_kernel.w.size() ||
+                input_kernel.gamma_size != input_kernel.w_size ||
+                input_kernel.gamma_size != input_state.chi_size) {
+                write_error(error_msg, error_msg_capacity, "Restore dimensions must match the immutable hierarchy specification");
+                return GFE_C_STATUS_INVALID_ARGUMENT;
+            }
+            if (!std::isfinite(input_state.t)) {
+                write_error(error_msg, error_msg_capacity, "Restore time must be finite");
+                return GFE_C_STATUS_INVALID_ARGUMENT;
+            }
+            restored[i].state.u.assign(input_state.u, input_state.u + input_state.u_size);
+            restored[i].state.chi.assign(input_state.chi, input_state.chi + input_state.chi_size);
+            restored[i].state.t = input_state.t;
+            restored[i].active_kernel.gamma.assign(input_kernel.gamma, input_kernel.gamma + input_kernel.gamma_size);
+            restored[i].active_kernel.w.assign(input_kernel.w, input_kernel.w + input_kernel.w_size);
+
+            for (double value : restored[i].state.u) {
+                if (!std::isfinite(value)) {
+                    write_error(error_msg, error_msg_capacity, "Restore state u must contain only finite values");
+                    return GFE_C_STATUS_INVALID_ARGUMENT;
+                }
+            }
+            for (double value : restored[i].state.chi) {
+                if (!std::isfinite(value)) {
+                    write_error(error_msg, error_msg_capacity, "Restore state chi must contain only finite values");
+                    return GFE_C_STATUS_INVALID_ARGUMENT;
+                }
+            }
+            double weight_sum = 0.0;
+            for (std::size_t k = 0; k < input_kernel.gamma_size; ++k) {
+                const double gamma = restored[i].active_kernel.gamma[k];
+                const double weight = restored[i].active_kernel.w[k];
+                if (!std::isfinite(gamma) || gamma <= 0.0 ||
+                    !std::isfinite(weight) || weight < 0.0) {
+                    write_error(error_msg, error_msg_capacity, "Restore kernel requires finite positive gamma and finite non-negative weights");
+                    return GFE_C_STATUS_INVALID_ARGUMENT;
+                }
+                weight_sum += weight;
+            }
+            if (!std::isfinite(weight_sum) || weight_sum <= 0.0) {
+                write_error(error_msg, error_msg_capacity, "Restore kernel weights must have a finite positive sum");
+                return GFE_C_STATUS_INVALID_ARGUMENT;
+            }
+            restored[i].spectral = gfe::spectral_units(
+                restored[i].active_kernel.w, restored[i].active_kernel.gamma);
+        }
+
+        runtime->state = std::move(restored);
+        runtime->step_count = step_count;
+        return GFE_C_STATUS_OK;
+    } catch (const std::invalid_argument& e) {
+        write_error(error_msg, error_msg_capacity, e.what());
+        return GFE_C_STATUS_INVALID_ARGUMENT;
+    } catch (const std::exception& e) {
+        write_error(error_msg, error_msg_capacity, e.what());
+        return GFE_C_STATUS_RUNTIME_ERROR;
+    } catch (...) {
+        write_error(error_msg, error_msg_capacity, "Unknown hierarchy restore error");
+        return GFE_C_STATUS_RUNTIME_ERROR;
+    }
+}
+
+int gfe_c_hierarchy_get_step_count(
+    gfe_c_hierarchy_handle handle,
+    uint64_t* out_step_count,
+    char* error_msg,
+    size_t error_msg_capacity) {
+    try {
+        if (!out_step_count) {
+            write_error(error_msg, error_msg_capacity, "Null step-count output");
+            return GFE_C_STATUS_INVALID_ARGUMENT;
+        }
+        const auto runtime = find_hierarchy_runtime(handle);
+        if (!runtime) {
+            write_error(error_msg, error_msg_capacity, "Invalid or destroyed hierarchy handle");
+            return GFE_C_STATUS_INVALID_HANDLE;
+        }
+        std::lock_guard<std::mutex> lock(runtime->mutex);
+        if (runtime->closed) {
+            write_error(error_msg, error_msg_capacity, "Hierarchy handle is closed");
+            return GFE_C_STATUS_INVALID_HANDLE;
+        }
+        *out_step_count = runtime->step_count;
+        return GFE_C_STATUS_OK;
+    } catch (const std::exception& e) {
+        write_error(error_msg, error_msg_capacity, e.what());
+        return GFE_C_STATUS_RUNTIME_ERROR;
+    } catch (...) {
+        write_error(error_msg, error_msg_capacity, "Unknown hierarchy step-count query error");
+        return GFE_C_STATUS_RUNTIME_ERROR;
+    }
+}
+
 } // extern "C"
