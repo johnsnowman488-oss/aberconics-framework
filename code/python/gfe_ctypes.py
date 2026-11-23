@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 import os
+import threading
 from csv import writer
 from ctypes import POINTER, byref, c_char, c_char_p, c_double, c_int, c_size_t, c_uint64
 from pathlib import Path
@@ -2531,6 +2532,14 @@ def _canonical_json(value: object) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
 
 
+def _runtime_synchronized(method):
+    """Serialize public operations on one Python owner; reentrant for snapshots."""
+    def wrapped(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return wrapped
+
+
 class PersistentHierarchyRuntime:
     """Own a persistent native scalar custom-chain hierarchy.
 
@@ -2547,6 +2556,7 @@ class PersistentHierarchyRuntime:
         edges: List[Dict[str, object]],
     ) -> None:
         self._lib = lib
+        self._lock = threading.RLock()
         self._closed = False
         self._level_dims = [len(level["u"]) for level in levels]
         self._memory_channels = [len(level["gamma"]) for level in levels]
@@ -2577,6 +2587,7 @@ class PersistentHierarchyRuntime:
             raise RuntimeError("Native hierarchy level count differs from supplied specification")
 
     @property
+    @_runtime_synchronized
     def handle(self) -> int:
         self._ensure_open()
         return int(self._handle.value)
@@ -2585,6 +2596,7 @@ class PersistentHierarchyRuntime:
         if self._closed or not self._handle.value:
             raise RuntimeError("PersistentHierarchyRuntime is closed")
 
+    @_runtime_synchronized
     def step(
         self,
         feedback_by_level: Dict[int, Sequence[float]] | None = None,
@@ -2621,6 +2633,7 @@ class PersistentHierarchyRuntime:
             )
         return self.get_state()
 
+    @_runtime_synchronized
     def get_state(self) -> Dict[str, object]:
         """Return a copied snapshot of all level states and diagnostics."""
         self._ensure_open()
@@ -2684,6 +2697,7 @@ class PersistentHierarchyRuntime:
             "spectral_units": spectral,
         }
 
+    @_runtime_synchronized
     def close(self) -> None:
         if self._closed:
             return
@@ -2700,6 +2714,7 @@ class PersistentHierarchyRuntime:
             )
 
     @property
+    @_runtime_synchronized
     def step_count(self) -> int:
         """Return the native runtime's committed synchronisation count."""
         self._ensure_open()
@@ -2714,6 +2729,7 @@ class PersistentHierarchyRuntime:
             )
         return int(count.value)
 
+    @_runtime_synchronized
     def checkpoint(self) -> Dict[str, object]:
         """Return a versioned, checksummed, JSON-serializable runtime snapshot."""
         self._ensure_open()
@@ -2758,6 +2774,7 @@ class PersistentHierarchyRuntime:
             if temporary.exists():
                 temporary.unlink()
 
+    @_runtime_synchronized
     def restore(self, payload: Dict[str, object]) -> None:
         """Atomically restore a checkpoint after format, hash, and shape checks."""
         self._ensure_open()
@@ -2819,6 +2836,7 @@ class PersistentHierarchyRuntime:
                 f"gfe_c_hierarchy_restore failed ({status}): {err.value.decode('utf-8')}"
             )
 
+    @_runtime_synchronized
     def load_checkpoint(self, path: str | os.PathLike[str]) -> None:
         """Read a versioned JSON checkpoint and atomically restore this runtime."""
         try:
