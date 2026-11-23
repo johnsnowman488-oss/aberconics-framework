@@ -62,6 +62,7 @@ from .experiments import (
 from .ffi import (
     available_abersoe_scenarios,
     available_hierarchical_scenarios,
+    create_persistent_hierarchy_runtime,
     load_library,
 )
 from .learning import (
@@ -199,6 +200,7 @@ __all__ = [
     "assess_python_baseline_run",
     "available_abersoe_scenarios",
     "available_hierarchical_scenarios",
+    "create_persistent_hierarchy_runtime",
     "build_reference_lorenz63_scaffold",
     "build_python_lorenz63_baseline_scaffold",
     "analyze_trace_store_windows",
