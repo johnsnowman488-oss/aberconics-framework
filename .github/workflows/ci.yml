@@ -118,3 +118,20 @@ jobs:
           Path("/tmp/experiment-lab.js").write_text(scripts[0])
           PY
           node --check /tmp/experiment-lab.js
+
+      - name: Run M4 persistent-vs-D4B benchmark
+        if: runner.os == 'Linux'
+        env:
+          PYTHONPATH: code/python
+        run: |
+          python code/python/benchmarks/benchmark_persistent_hierarchy.py \
+            --events 400 --repeats 7 --warmup 2 \
+            --output artifacts/m4-persistent-vs-d4b.json
+
+      - name: Upload M4 benchmark evidence
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: m4-persistent-vs-d4b
+          path: artifacts/m4-persistent-vs-d4b.json
+          if-no-files-found: error
