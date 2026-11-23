@@ -1,7 +1,7 @@
 # M4 Persistent Custom-Chain Hierarchy Runtime
 ## ABI Contract, Ownership Model, and Implementation Ledger
 
-**Status:** ABI and runtime implementation in progress — awaiting latest cross-platform CI and parity campaign  
+**Status:** Persistent execution and tested D4B parity passed on Linux/Windows; checkpoint/restore and performance benchmark remain open — PR not merge-ready  
 **Branch:** `m4/persistent-hierarchy-abi-contract`  
 **Base:** `main`  
 **Scope:** Evolve the existing scalar custom-chain hierarchy ABI into a persistent native runtime for HLA/HLB. Preserve the current D4B numerical contract.
@@ -245,10 +245,10 @@ This is the active work ledger. Status values: **NOT STARTED**, **IN PROGRESS**,
 | M4-ABI-5 | State and diagnostics inspection | Per-level state/kernel/spectral snapshot; exercised by persistent-vs-D4B parity tests | PASSED |
 | M4-ABI-6 | State restore/set | Atomic all-level validation and commit; dimension/time/finite checks | NOT STARTED |
 | M4-ABI-7 | Python owning wrapper | Context-managed native owner; D2C director creates once per episode and sends feedback per event | PASSED |
-| M4-ABI-8 | D4B parity campaign | Two-/three-level deterministic parity, silent/forced sequences, multi-level feedback and invalid-input invariance; 193 passed, 4 skipped on each OS | PASSED (tested scope) |
-| M4-ABI-9 | Checkpoint/restore | Versioned portable format, spec fingerprint, exact continuation tests | NOT STARTED |
+| M4-ABI-8 | D4B parity campaign | Two-/three-level deterministic parity, silent/forced sequences, multi-level feedback and invalid-input invariance | PASSED (tested scope; Linux 193 passed/4 skipped; Windows job passed) |
+| M4-ABI-9 | Checkpoint/restore | Versioned portable format, spec fingerprint, exact continuation tests | NOT STARTED — merge blocker |
 | M4-ABI-10 | HLA/HLB integration seam | Python feedback adapter and inspection path; hierarchy topology held fixed | NOT STARTED |
-| M4-ABI-11 | Confirmatory runtime campaign | Repeated episodes, lifecycle/memory-leak checks, timing and allocation profile | NOT STARTED |
+| M4-ABI-11 | Confirmatory runtime campaign | Repeated episodes, lifecycle/memory-leak checks, timing and allocation profile | NOT STARTED |\n| M4-ABI-12 | Persistent-vs-D4B benchmark | Reproducible warm-up/repeated timing, model construction and allocation counts, parity-checked workloads, raw result artifact | NOT STARTED — merge blocker |
 
 ### Execution order and dependencies
 
