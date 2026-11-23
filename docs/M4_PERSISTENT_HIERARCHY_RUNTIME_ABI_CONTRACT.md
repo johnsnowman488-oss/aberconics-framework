@@ -37,11 +37,25 @@ The current step function validates the chain, constructs the model inside the c
 
 The Python wrapper builds specification, state, forcing, kernel, and spectral ctypes buffers for each call. Its current state contract uses scalar per-channel `chi` arrays. Do not conflate this with vector-valued memory state.
 
+## 2.1 Confirmed stepping semantics from the C++ implementation
+
+Inspection of `abersoe::step` in `hierarchical_min.cpp` settles the multi-feedback question:
+
+- The stepper first normalizes a single pre-step hierarchy state and computes observables from that state.
+- It then computes each level's next state from that same pre-step hierarchy state.
+- Bottom-up coupling contributions are accumulated into the target level's forcing during that level's one step.
+- Top-down modulation is computed from the source level's pre-step state and applied to the target's active kernel for that cycle.
+- The old `step_with_external_forcing` shallow-copies the model and wraps one target level's base forcing before calling `step`.
+
+Therefore multi-level external feedback can be applied in one synchronisation cycle without repeated calls to the stepper: wrap the base forcing for each addressed level in one cycle-local model copy, then call `abersoe::step` exactly once. The new `step_with_external_forcings` follows this pattern, validates unique targets and exact target state dimensions, and computes the full next state before returning.
+
+**Important D4B parity detail:** the existing `gfe_c_hierarchical_step_chain_spec` rebuilds each level's active kernel from the immutable chain specification on every event before stepping. The persistent C API explicitly preserves this reset at each event. This prevents top-down-modulated kernels from accidentally becoming persistent across events when the D4B caller-owned state contract did not preserve them.
+
 ## 3. Design decisions (proposed contract)
 
 ### 3.1 Opaque handle and lifecycle
 
-Introduce an opaque C handle, conceptually:
+Introduce an opaque 64-bit handle token (not a raw pointer). The implementation uses a native registry of shared runtime owners, so stale or unknown tokens can be rejected without dereferencing caller-supplied addresses. Conceptually:
 
 ```c
 typedef struct gfe_c_hierarchy_runtime* gfe_c_hierarchy_handle;
@@ -57,7 +71,7 @@ int gfe_c_hierarchy_destroy(
     char* error_msg, size_t error_msg_capacity);
 ```
 
-The handle is created once from a validated, copied chain specification. It is destroyed exactly once. A successful destroy invalidates the handle. Null, unknown, or already-destroyed handles must fail safely where the implementation can detect them; callers must not reuse a destroyed pointer.
+The handle is created once from a validated, copied chain specification. A successful destroy removes its token from the registry and marks the shared runtime closed. Null, unknown, or already-destroyed tokens return the appended INVALID_HANDLE status. The Python owner makes close idempotent; direct C callers must not reuse a destroyed token.
 
 The runtime owns:
 - the copied immutable chain specification and topology;
@@ -114,7 +128,7 @@ Semantics:
 - the existing engine's forcing semantics and ordering are preserved for the one-input case;
 - multi-input combination/order semantics must be specified by the C++ hierarchy implementation and tested. The ABI must not invent a summation rule that the engine does not support.
 
-The first implementation should support the feedback patterns required by HLA/HLB without arbitrary callbacks. More expressive typed feedback channels can be added later with an explicit ABI version.
+The first implementation supports multiple independently addressed level vectors in one call, without arbitrary callbacks. Duplicate targets are rejected. Empty feedback means free evolution. The C++ stepper receives all feedback in a single call, so it evaluates all levels against one pre-step state. More expressive typed feedback channels can be added later with an explicit ABI version.
 
 ### 3.4 Transaction and failure semantics
 
@@ -223,14 +237,14 @@ This is the active work ledger. Status values: **NOT STARTED**, **IN PROGRESS**,
 
 | ID | Work package | Deliverable / exit gate | Status |
 |---|---|---|---|
-| M4-ABI-0 | Contract and ownership design | This draft reviewed; exact structs/status/lifecycle rules reconciled with header and engine | IN PROGRESS |
-| M4-ABI-1 | Native runtime type | RAII-owned model + hierarchy state; spec copied once; explicit lifetime | NOT STARTED |
-| M4-ABI-2 | Create/destroy/discovery ABI | Opaque handle, versioned options, level count; invalid/null/double-destroy tests | NOT STARTED |
-| M4-ABI-3 | Persistent single-level-input step | One feedback target and silent step parity with D4B | NOT STARTED |
-| M4-ABI-4 | Multi-level feedback transaction | Addressed inputs; duplicate/out-of-range/dimension validation; no partial commit | NOT STARTED |
-| M4-ABI-5 | State and diagnostics inspection | Two-phase buffer protocol; per-level state/kernel/spectral snapshot | NOT STARTED |
+| M4-ABI-0 | Contract and ownership design | C++ step semantics, handle token, status, and ownership contract reconciled with implementation | PASSED |
+| M4-ABI-1 | Native runtime type | Shared registry-owned runtime containing persistent model/state and per-handle mutex | IN PROGRESS |
+| M4-ABI-2 | Create/destroy/discovery ABI | 64-bit opaque token, create/destroy, level count, stale-token status | IN PROGRESS |
+| M4-ABI-3 | Persistent single-level-input step | Handle-owned step, zero or one feedback, D4B active-kernel reset semantics | IN PROGRESS |
+| M4-ABI-4 | Multi-level feedback transaction | Multiple addressed vectors, exact dimensions, duplicate/out-of-range validation, compute-before-commit | IN PROGRESS |
+| M4-ABI-5 | State and diagnostics inspection | Per-level state/kernel/spectral snapshot with required-size-first buffer validation | IN PROGRESS |
 | M4-ABI-6 | State restore/set | Atomic all-level validation and commit; dimension/time/finite checks | NOT STARTED |
-| M4-ABI-7 | Python owning wrapper | One create per episode/runtime; deterministic close; no per-step spec rebuild | NOT STARTED |
+| M4-ABI-7 | Python owning wrapper | Context-managed native owner; D2C director now creates once per episode and sends feedback per event | IN PROGRESS |
 | M4-ABI-8 | D4B parity campaign | Two-/three-level deterministic parity, silent/forced sequences, invalid-input invariance | NOT STARTED |
 | M4-ABI-9 | Checkpoint/restore | Versioned portable format, spec fingerprint, exact continuation tests | NOT STARTED |
 | M4-ABI-10 | HLA/HLB integration seam | Python feedback adapter and inspection path; hierarchy topology held fixed | NOT STARTED |
@@ -265,8 +279,8 @@ Parallel work is appropriate only after the shared contract is frozen: Python wr
 
 ## 8. Immediate next actions
 
-1. Review the exact C++ hierarchy model/state types and `step_with_external_forcing` semantics, especially how multiple level inputs can be represented without changing the numerical model.
-2. Resolve handle error/status and versioned-struct conventions against the existing header style.
-3. Freeze the minimal v1 signatures and ownership/lifecycle wording.
-4. Implement native runtime RAII type and create/destroy first.
-5. Add a persistent one-input step and prove D4B parity before multi-level feedback.
+1. Build the branch on Linux and Windows; resolve any compiler or ABI issues.
+2. Run the existing D4B suite plus persistent-vs-D4B per-event parity tests.
+3. Run multi-level feedback, invalid-input no-mutation, and stale-handle tests.
+4. Profile model construction count, per-event allocations, latency, and memory against the old path.
+5. Only after parity is green, freeze the implementation slice and proceed to checkpointing and HLA/HLB integration.
