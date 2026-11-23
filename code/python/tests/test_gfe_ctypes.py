@@ -610,7 +610,7 @@ def test_persistent_runtime_three_level_multisequence_d4b_parity_campaign():
                     forcing_level=0,
                 )
                 d4b_states = reference["level_states"]
-                actual = runtime.step({0: [forcing]})
+                actual = runtime.step({0: [forcing]}) if forcing != 0.0 else runtime.step()
                 for level_index, (expected, observed) in enumerate(
                     zip(d4b_states, actual["level_states"])
                 ):
