@@ -1,7 +1,7 @@
 # M4 Persistent Custom-Chain Hierarchy Runtime
 ## ABI Contract, Ownership Model, and Implementation Ledger
 
-**Status:** Contract/design draft — implementation not started  
+**Status:** ABI and runtime implementation in progress — awaiting latest cross-platform CI and parity campaign  
 **Branch:** `m4/persistent-hierarchy-abi-contract`  
 **Base:** `main`  
 **Scope:** Evolve the existing scalar custom-chain hierarchy ABI into a persistent native runtime for HLA/HLB. Preserve the current D4B numerical contract.
@@ -47,7 +47,7 @@ Inspection of `abersoe::step` in `hierarchical_min.cpp` settles the multi-feedba
 - Top-down modulation is computed from the source level's pre-step state and applied to the target's active kernel for that cycle.
 - The old `step_with_external_forcing` shallow-copies the model and wraps one target level's base forcing before calling `step`.
 
-Therefore multi-level external feedback can be applied in one synchronisation cycle without repeated calls to the stepper: wrap the base forcing for each addressed level in one cycle-local model copy, then call `abersoe::step` exactly once. The new `step_with_external_forcings` injects each validated vector directly into the corresponding per-level forcing closure inside the existing step loop. It validates unique targets and exact target state dimensions, computes the full next state before returning, and does not copy or reconstruct the full hierarchy model.
+Therefore multi-level external feedback can be applied in one synchronisation cycle without repeated calls to the stepper: attach each validated vector to its target level's local forcing closure during the existing per-level step loop, then evaluate the hierarchy exactly once. The new `step_with_external_forcings` injects each validated vector directly into the corresponding per-level forcing closure inside the existing step loop. It validates unique targets and exact target state dimensions, computes the full next state before returning, and does not copy or reconstruct the full hierarchy model.
 
 **Important D4B parity detail:** the existing `gfe_c_hierarchical_step_chain_spec` rebuilds each level's active kernel from the immutable chain specification on every event before stepping. The persistent C API explicitly preserves this reset at each event. This prevents top-down-modulated kernels from accidentally becoming persistent across events when the D4B caller-owned state contract did not preserve them.
 
@@ -58,7 +58,7 @@ Therefore multi-level external feedback can be applied in one synchronisation cy
 Introduce an opaque 64-bit handle token (not a raw pointer). The implementation uses a native registry of shared runtime owners, so stale or unknown tokens can be rejected without dereferencing caller-supplied addresses. Conceptually:
 
 ```c
-typedef struct gfe_c_hierarchy_runtime* gfe_c_hierarchy_handle;
+typedef uint64_t gfe_c_hierarchy_handle;
 
 int gfe_c_hierarchy_create(
     const gfe_c_hierarchical_chain_spec_view* spec,
