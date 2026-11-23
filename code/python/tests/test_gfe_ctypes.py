@@ -546,3 +546,90 @@ def test_persistent_hierarchy_close_is_idempotent_and_invalidates_python_owner()
         stale_handle, gfe.ctypes.byref(count), err, gfe.ctypes.sizeof(err)
     )
     assert status == gfe.GFE_C_STATUS_INVALID_HANDLE
+
+
+@pytest.mark.smoke
+def test_persistent_runtime_three_level_multisequence_d4b_parity_campaign():
+    """Exercise persistent-vs-D4B parity across three levels and varied event sequences."""
+    try:
+        lib = load_gfe_library(_lib_path())
+    except OSError as exc:
+        pytest.skip(f"shared library unavailable: {exc}")
+
+    levels = [
+        {
+            "name": "sensory", "gamma": [1.4, 0.5], "w": [0.7, 0.3],
+            "u": [0.15], "chi": [0.0, 0.0], "dt": 0.01,
+            "linear_decay": [0.2], "forcing_bias": [0.0],
+            "form": GFE_C_COUPLING_FORM_B, "coupling_index": 0,
+        },
+        {
+            "name": "context", "gamma": [0.8, 0.2], "w": [0.55, 0.45],
+            "u": [-0.05], "chi": [0.0, 0.0], "dt": 0.01,
+            "linear_decay": [0.12], "forcing_bias": [0.005],
+            "form": GFE_C_COUPLING_FORM_B, "coupling_index": 0,
+        },
+        {
+            "name": "abstract", "gamma": [0.35, 0.08], "w": [0.6, 0.4],
+            "u": [0.025], "chi": [0.0, 0.0], "dt": 0.01,
+            "linear_decay": [0.06], "forcing_bias": [0.0],
+            "form": GFE_C_COUPLING_FORM_B, "coupling_index": 0,
+        },
+    ]
+    edges = [
+        {"source_level": 0, "target_level": 1,
+         "relation": GFE_C_HIERARCHICAL_RELATION_BOTTOM_UP,
+         "gain": 0.3, "normalize_weights": True},
+        {"source_level": 1, "target_level": 2,
+         "relation": GFE_C_HIERARCHICAL_RELATION_BOTTOM_UP,
+         "gain": 0.2, "normalize_weights": True},
+        {"source_level": 2, "target_level": 1,
+         "relation": GFE_C_HIERARCHICAL_RELATION_TOP_DOWN,
+         "gain": 0.1, "normalize_weights": True},
+        {"source_level": 1, "target_level": 0,
+         "relation": GFE_C_HIERARCHICAL_RELATION_TOP_DOWN,
+         "gain": 0.15, "normalize_weights": True},
+    ]
+    sequences = [
+        [0.0] * 40,
+        [0.1 * ((i % 7) - 3) for i in range(40)],
+        [0.2 if i % 3 == 0 else (-0.1 if i % 3 == 1 else 0.0) for i in range(40)],
+    ]
+
+    for sequence_index, sequence in enumerate(sequences):
+        d4b_states = [
+            {"u": list(level["u"]), "chi": list(level["chi"]), "t": float(level.get("t", 0.0))}
+            for level in levels
+        ]
+        with gfe.create_persistent_hierarchy_runtime(lib, levels, edges) as runtime:
+            for event_index, forcing in enumerate(sequence):
+                reference = gfe.step_hierarchical_chain_spec(
+                    lib, levels, edges,
+                    level_states=d4b_states,
+                    external_forcing=[forcing],
+                    forcing_level=0,
+                )
+                d4b_states = reference["level_states"]
+                actual = runtime.step({0: [forcing]})
+                for level_index, (expected, observed) in enumerate(
+                    zip(d4b_states, actual["level_states"])
+                ):
+                    assert observed["u"] == pytest.approx(
+                        expected["u"], abs=1e-11
+                    ), (sequence_index, event_index, level_index, "u")
+                    assert observed["chi"] == pytest.approx(
+                        expected["chi"], abs=1e-11
+                    ), (sequence_index, event_index, level_index, "chi")
+                    assert observed["t"] == pytest.approx(
+                        expected["t"], abs=1e-12
+                    ), (sequence_index, event_index, level_index, "t")
+                for expected, observed in zip(
+                    reference["active_kernels"], actual["active_kernels"]
+                ):
+                    assert observed["gamma"] == pytest.approx(expected["gamma"], abs=1e-11)
+                    assert observed["w"] == pytest.approx(expected["w"], abs=1e-11)
+                for expected, observed in zip(
+                    reference["spectral_units"], actual["spectral_units"]
+                ):
+                    for key in ("mcap", "mscale", "mres", "hmem", "hnorm", "deff"):
+                        assert observed[key] == pytest.approx(expected[key], abs=1e-10)
