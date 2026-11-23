@@ -418,3 +418,122 @@ def test_ctypes_hierarchical_step_chain_spec():
         forcing_level=0,
     )
     assert result3["level_states"][0]["t"] == pytest.approx(0.03)
+
+
+@pytest.mark.smoke
+def test_persistent_hierarchy_runtime_matches_d4b_single_input_each_event():
+    """Persistent native execution reproduces the caller-owned D4B step sequence."""
+    try:
+        lib = load_gfe_library(_lib_path())
+    except OSError as exc:
+        pytest.skip(f"shared library unavailable: {exc}")
+
+    levels = [
+        {
+            "name": "fast", "gamma": [1.0, 0.4], "w": [0.65, 0.35],
+            "u": [0.2], "chi": [0.0, 0.0], "dt": 0.01,
+            "linear_decay": [0.25], "forcing_bias": [0.0],
+            "form": GFE_C_COUPLING_FORM_B, "coupling_index": 0,
+        },
+        {
+            "name": "context", "gamma": [0.7, 0.15], "w": [0.6, 0.4],
+            "u": [-0.1], "chi": [0.0, 0.0], "dt": 0.01,
+            "linear_decay": [0.08], "forcing_bias": [0.01],
+            "form": GFE_C_COUPLING_FORM_B, "coupling_index": 0,
+        },
+    ]
+    edges = [
+        {
+            "source_level": 0, "target_level": 1,
+            "relation": GFE_C_HIERARCHICAL_RELATION_BOTTOM_UP,
+            "gain": 0.35, "normalize_weights": True,
+        },
+        {
+            "source_level": 1, "target_level": 0,
+            "relation": GFE_C_HIERARCHICAL_RELATION_TOP_DOWN,
+            "gain": 0.18, "normalize_weights": True,
+        },
+    ]
+    d4b_states = [
+        {"u": list(level["u"]), "chi": list(level["chi"]), "t": float(level.get("t", 0.0))}
+        for level in levels
+    ]
+    sequence = [0.5, 0.0, -0.25, 0.75, 0.0, 0.1]
+
+    with gfe.create_persistent_hierarchy_runtime(lib, levels, edges) as runtime:
+        for forcing in sequence:
+            d4b = gfe.step_hierarchical_chain_spec(
+                lib, levels, edges,
+                level_states=d4b_states,
+                external_forcing=[forcing],
+                forcing_level=0,
+            )
+            d4b_states = d4b["level_states"]
+            persistent = runtime.step({0: [forcing]})
+            for left, right in zip(d4b_states, persistent["level_states"]):
+                assert right["u"] == pytest.approx(left["u"], abs=1e-11)
+                assert right["chi"] == pytest.approx(left["chi"], abs=1e-11)
+                assert right["t"] == pytest.approx(left["t"], abs=1e-12)
+            for left, right in zip(d4b["active_kernels"], persistent["active_kernels"]):
+                assert right["gamma"] == pytest.approx(left["gamma"], abs=1e-11)
+                assert right["w"] == pytest.approx(left["w"], abs=1e-11)
+            for left, right in zip(d4b["spectral_units"], persistent["spectral_units"]):
+                for key in ("mcap", "mscale", "mres", "hmem", "hnorm", "deff"):
+                    assert right[key] == pytest.approx(left[key], abs=1e-10)
+
+
+@pytest.mark.smoke
+def test_persistent_hierarchy_multilevel_feedback_is_one_atomic_cycle():
+    """Two addressed inputs affect their levels in one step; invalid input does not commit."""
+    try:
+        lib = load_gfe_library(_lib_path())
+    except OSError as exc:
+        pytest.skip(f"shared library unavailable: {exc}")
+
+    levels = [
+        {
+            "name": "lower", "gamma": [1.0, 0.4], "w": [0.65, 0.35],
+            "u": [0.0], "chi": [0.0, 0.0], "dt": 0.01,
+            "linear_decay": [0.25], "forcing_bias": [0.0],
+            "form": GFE_C_COUPLING_FORM_B, "coupling_index": 0,
+        },
+        {
+            "name": "upper", "gamma": [0.7, 0.15], "w": [0.6, 0.4],
+            "u": [0.0], "chi": [0.0, 0.0], "dt": 0.01,
+            "linear_decay": [0.08], "forcing_bias": [0.0],
+            "form": GFE_C_COUPLING_FORM_B, "coupling_index": 0,
+        },
+    ]
+    with gfe.create_persistent_hierarchy_runtime(lib, levels, []) as runtime:
+        before = runtime.get_state()
+        after = runtime.step({0: [0.5], 1: [-0.25]})
+        assert after["level_states"][0]["u"][0] > before["level_states"][0]["u"][0]
+        assert after["level_states"][1]["u"][0] < before["level_states"][1]["u"][0]
+        assert after["level_states"][0]["t"] == pytest.approx(0.01)
+        assert after["level_states"][1]["t"] == pytest.approx(0.01)
+
+        stable = runtime.get_state()
+        with pytest.raises(RuntimeError, match="Feedback values"):
+            runtime.step({0: [0.5, 0.25]})
+        unchanged = runtime.get_state()
+        assert unchanged["level_states"] == stable["level_states"]
+        assert unchanged["active_kernels"] == stable["active_kernels"]
+
+
+@pytest.mark.smoke
+def test_persistent_hierarchy_close_is_idempotent_and_invalidates_python_owner():
+    try:
+        lib = load_gfe_library(_lib_path())
+    except OSError as exc:
+        pytest.skip(f"shared library unavailable: {exc}")
+    levels = [{
+        "name": "single", "gamma": [1.0], "w": [1.0],
+        "u": [0.0], "chi": [0.0], "dt": 0.01,
+        "linear_decay": [0.1], "forcing_bias": [0.0],
+        "form": GFE_C_COUPLING_FORM_B, "coupling_index": 0,
+    }]
+    runtime = gfe.create_persistent_hierarchy_runtime(lib, levels, [])
+    runtime.close()
+    runtime.close()
+    with pytest.raises(RuntimeError, match="closed"):
+        runtime.get_state()
