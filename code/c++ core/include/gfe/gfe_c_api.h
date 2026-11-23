@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stddef.h>
+#include <stdint.h>
 
 #if defined(_WIN32)
 #  if defined(GFE_CORE_STATIC)
@@ -22,7 +23,8 @@ typedef enum gfe_c_status {
     GFE_C_STATUS_OK = 0,
     GFE_C_STATUS_INVALID_ARGUMENT = 1,
     GFE_C_STATUS_RUNTIME_ERROR = 2,
-    GFE_C_STATUS_BUFFER_TOO_SMALL = 3
+    GFE_C_STATUS_BUFFER_TOO_SMALL = 3,
+    GFE_C_STATUS_INVALID_HANDLE = 4
 } gfe_c_status;
 
 typedef enum gfe_c_bool {
@@ -313,6 +315,17 @@ typedef struct gfe_c_hierarchical_chain_spec_view {
     const gfe_c_hierarchical_chain_edge_spec* edges;
     size_t edge_count;
 } gfe_c_hierarchical_chain_spec_view;
+
+/* Persistent scalar custom-chain runtime. Handles are opaque 64-bit tokens,
+ * not pointers. A handle is valid until successful destroy; stale/unknown
+ * tokens return GFE_C_STATUS_INVALID_HANDLE without dereferencing memory. */
+typedef uint64_t gfe_c_hierarchy_handle;
+
+typedef struct gfe_c_hierarchy_feedback_view {
+    size_t target_level;
+    const double* values;
+    size_t values_size;
+} gfe_c_hierarchy_feedback_view;
 
 typedef struct gfe_c_hierarchical_level_summary_view {
     double* t;
@@ -647,6 +660,56 @@ GFE_C_API int gfe_c_hierarchical_step_chain_spec(
     const double* external_forcing,
     size_t external_forcing_size,
     size_t forcing_level,
+    gfe_c_memory_kernel_mut_view* active_kernels,
+    size_t active_kernel_count,
+    gfe_c_spectral_units* spectral_units,
+    size_t spectral_count,
+    char* error_msg,
+    size_t error_msg_capacity);
+
+/* Persistent runtime API. Creation copies the complete chain specification,
+ * constructs the native model once, and initializes handle-owned state from
+ * each level's initial_state. Caller specification buffers may be released
+ * after create returns. Operations on one handle are serialized internally;
+ * independent handles may execute concurrently. Destroy must not be called
+ * concurrently with another operation on the same handle.
+ *
+ * Step accepts zero or more independent feedback vectors. Each target level
+ * may occur once per cycle and each vector must exactly match that level's
+ * state dimension. All feedback is applied in one hierarchy synchronisation
+ * cycle using the same pre-step state. On failure the stored state is unchanged.
+ *
+ * get_state follows the existing capacity/required-size convention: required
+ * sizes are reported before capacity validation, and no output arrays are
+ * partially copied if any view is undersized. */
+GFE_C_API int gfe_c_hierarchy_create(
+    const gfe_c_hierarchical_chain_spec_view* spec,
+    gfe_c_hierarchy_handle* out_handle,
+    char* error_msg,
+    size_t error_msg_capacity);
+
+GFE_C_API int gfe_c_hierarchy_destroy(
+    gfe_c_hierarchy_handle handle,
+    char* error_msg,
+    size_t error_msg_capacity);
+
+GFE_C_API int gfe_c_hierarchy_get_level_count(
+    gfe_c_hierarchy_handle handle,
+    size_t* out_level_count,
+    char* error_msg,
+    size_t error_msg_capacity);
+
+GFE_C_API int gfe_c_hierarchy_step(
+    gfe_c_hierarchy_handle handle,
+    const gfe_c_hierarchy_feedback_view* feedback,
+    size_t feedback_count,
+    char* error_msg,
+    size_t error_msg_capacity);
+
+GFE_C_API int gfe_c_hierarchy_get_state(
+    gfe_c_hierarchy_handle handle,
+    gfe_c_state_mut_view* level_states,
+    size_t level_count,
     gfe_c_memory_kernel_mut_view* active_kernels,
     size_t active_kernel_count,
     gfe_c_spectral_units* spectral_units,
