@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import platform
 import statistics
 import sys
 import time
@@ -181,6 +182,11 @@ def main():
         "events_per_episode": args.events,
         "repeats": args.repeats,
         "warmup_episodes": args.warmup,
+        "environment": {
+            "platform": platform.platform(),
+            "python": sys.version.split()[0],
+            "implementation": platform.python_implementation(),
+        },
         "hierarchy_levels": len(levels),
         "coupling_edges": len(edges),
         "timing_scope": "end-to-end Python ctypes calls including per-event state and diagnostics transfer",
