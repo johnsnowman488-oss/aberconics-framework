@@ -31,7 +31,7 @@ from __future__ import annotations
 import ctypes
 from dataclasses import dataclass, field
 
-from ..ffi import step_hierarchy_raw
+from ..ffi import create_persistent_hierarchy_runtime
 from .bridge import DigitalMemoryConfig, DigitalMemoryState
 from .director import DigitalEpisode
 from .traces import DigitalTrace, DigitalTraceStep
@@ -117,7 +117,6 @@ class HierarchicalDigitalDirector:
         if not episode.forcings:
             raise ValueError("episode must contain at least one forcing step")
 
-        level_states = [_initial_level_state(level) for level in self.levels]
         traces = [
             DigitalTrace(
                 experiment_name=f"{experiment_name}::level{index}",
@@ -128,49 +127,45 @@ class HierarchicalDigitalDirector:
         kernels_all: list[list[dict[str, object]]] = []
         spectral_all: list[list[dict[str, float]]] = []
 
-        for step_index, (forcing, token) in enumerate(zip(episode.forcings, episode.tokens)):
-            forcing_values = [float(value) for value in forcing]
-            if len(forcing_values) != self.state_dim:
-                raise ValueError("forcing dimension must match director state_dim")
+        # The native hierarchy is created once for the episode. C++ owns its
+        # evolving state; Python only supplies event feedback and reads snapshots.
+        with create_persistent_hierarchy_runtime(self.lib, self.levels, self.edges) as runtime:
+            level_states = runtime.get_state()["level_states"]
+            for step_index, (forcing, token) in enumerate(zip(episode.forcings, episode.tokens)):
+                forcing_values = [float(value) for value in forcing]
+                if len(forcing_values) != self.state_dim:
+                    raise ValueError("forcing dimension must match director state_dim")
 
-            step_result = step_hierarchy_raw(
-                self.lib,
-                self.levels,
-                self.edges,
-                level_states=level_states,
-                external_forcing=forcing_values,
-                forcing_level=0,
-            )
-            level_states = step_result["level_states"]
-            active_kernels = step_result["active_kernels"]
-            spectral_units = step_result["spectral_units"]
-            kernels_all.append(active_kernels)
-            spectral_all.append(spectral_units)
+                step_result = runtime.step({0: forcing_values})
+                level_states = step_result["level_states"]
+                active_kernels = step_result["active_kernels"]
+                spectral_units = step_result["spectral_units"]
+                kernels_all.append(active_kernels)
+                spectral_all.append(spectral_units)
 
-            for level_index, (level_state, trace) in enumerate(zip(level_states, traces)):
-                # The ABI reports chi as one scalar per channel; store each as
-                # a single-element channel vector to preserve the
-                # DigitalDirector trace convention (channel vectors per state
-                # coordinate).
-                chi_channels = [[float(value)] for value in level_state["chi"]]
-                trace.add_step(
-                    DigitalTraceStep(
-                        step=step_index,
-                        t=float(level_state["t"]),
-                        token=token if level_index == 0 else None,
-                        forcing=(
-                            list(forcing_values)
-                            if level_index == 0
-                            else [0.0] * len(level_state["u"])
-                        ),
-                        u=[float(value) for value in level_state["u"]],
-                        chi=chi_channels,
-                        metadata={
-                            "active_kernel": active_kernels[level_index],
-                            "spectral": spectral_units[level_index],
-                        },
+                for level_index, (level_state, trace) in enumerate(zip(level_states, traces)):
+                    # The ABI reports chi as one scalar per channel; store each as
+                    # a single-element channel vector to preserve the
+                    # DigitalDirector trace convention.
+                    chi_channels = [[float(value)] for value in level_state["chi"]]
+                    trace.add_step(
+                        DigitalTraceStep(
+                            step=step_index,
+                            t=float(level_state["t"]),
+                            token=token if level_index == 0 else None,
+                            forcing=(
+                                list(forcing_values)
+                                if level_index == 0
+                                else [0.0] * len(level_state["u"])
+                            ),
+                            u=[float(value) for value in level_state["u"]],
+                            chi=chi_channels,
+                            metadata={
+                                "active_kernel": active_kernels[level_index],
+                                "spectral": spectral_units[level_index],
+                            },
+                        )
                     )
-                )
 
         level0 = level_states[0]
         final_state = DigitalMemoryState(
