@@ -633,3 +633,117 @@ def test_persistent_runtime_three_level_multisequence_d4b_parity_campaign():
                 ):
                     for key in ("mcap", "mscale", "mres", "hmem", "hnorm", "deff"):
                         assert observed[key] == pytest.approx(expected[key], abs=1e-10)
+
+def _checkpoint_test_spec():
+    levels = [
+        {
+            "name": "checkpoint_fast", "gamma": [1.0, 0.4], "w": [0.65, 0.35],
+            "u": [0.12], "chi": [0.0, 0.0], "dt": 0.01,
+            "linear_decay": [0.25], "forcing_bias": [0.0],
+            "form": GFE_C_COUPLING_FORM_B, "coupling_index": 0,
+        },
+        {
+            "name": "checkpoint_slow", "gamma": [0.7, 0.15], "w": [0.6, 0.4],
+            "u": [-0.04], "chi": [0.0, 0.0], "dt": 0.02,
+            "linear_decay": [0.08], "forcing_bias": [0.01],
+            "form": GFE_C_COUPLING_FORM_B, "coupling_index": 0,
+        },
+    ]
+    edges = [
+        {"source_level": 0, "target_level": 1,
+         "relation": GFE_C_HIERARCHICAL_RELATION_BOTTOM_UP,
+         "gain": 0.35, "normalize_weights": True},
+        {"source_level": 1, "target_level": 0,
+         "relation": GFE_C_HIERARCHICAL_RELATION_TOP_DOWN,
+         "gain": 0.18, "normalize_weights": True},
+    ]
+    return levels, edges
+
+
+def test_persistent_hierarchy_checkpoint_restore_exact_continuation(tmp_path):
+    try:
+        lib = load_gfe_library(_lib_path())
+    except OSError as exc:
+        pytest.skip(f"shared library unavailable: {exc}")
+    levels, edges = _checkpoint_test_spec()
+    sequence = [{0: [0.2]}, {}, {0: [-0.1]}, {1: [0.05]}, {0: [0.0]}, {0: [0.3], 1: [-0.02]}]
+
+    with gfe.create_persistent_hierarchy_runtime(lib, levels, edges) as uninterrupted:
+        for feedback in sequence[:3]:
+            uninterrupted.step(feedback)
+        checkpoint = uninterrupted.checkpoint()
+        checkpoint_path = tmp_path / "hierarchy-checkpoint.json"
+        uninterrupted.save_checkpoint(checkpoint_path)
+        for feedback in sequence[3:]:
+            uninterrupted.step(feedback)
+        expected = uninterrupted.get_state()
+
+    with gfe.create_persistent_hierarchy_runtime(lib, levels, edges) as resumed:
+        resumed.load_checkpoint(checkpoint_path)
+        assert resumed.step_count == checkpoint["step_count"] == 3
+        for feedback in sequence[3:]:
+            resumed.step(feedback)
+        actual = resumed.get_state()
+
+    for expected_state, actual_state in zip(expected["level_states"], actual["level_states"]):
+        assert actual_state["u"] == pytest.approx(expected_state["u"], abs=1e-13)
+        assert actual_state["chi"] == pytest.approx(expected_state["chi"], abs=1e-13)
+        assert actual_state["t"] == pytest.approx(expected_state["t"], abs=1e-13)
+    for expected_kernel, actual_kernel in zip(expected["active_kernels"], actual["active_kernels"]):
+        assert actual_kernel["gamma"] == pytest.approx(expected_kernel["gamma"], abs=1e-13)
+        assert actual_kernel["w"] == pytest.approx(expected_kernel["w"], abs=1e-13)
+
+
+def test_persistent_hierarchy_checkpoint_rejects_wrong_spec_and_corruption_atomically():
+    try:
+        lib = load_gfe_library(_lib_path())
+    except OSError as exc:
+        pytest.skip(f"shared library unavailable: {exc}")
+    levels, edges = _checkpoint_test_spec()
+    with gfe.create_persistent_hierarchy_runtime(lib, levels, edges) as source:
+        source.step({0: [0.25]})
+        valid = source.checkpoint()
+
+    changed_edges = [dict(edge) for edge in edges]
+    changed_edges[0]["gain"] += 0.01
+    with gfe.create_persistent_hierarchy_runtime(lib, levels, changed_edges) as mismatched:
+        before = mismatched.get_state()
+        with pytest.raises(ValueError, match="fingerprint"):
+            mismatched.restore(valid)
+        assert mismatched.get_state() == before
+
+    with gfe.create_persistent_hierarchy_runtime(lib, levels, edges) as target:
+        before = target.get_state()
+        corrupted = {**valid, "levels": [dict(level) for level in valid["levels"]]}
+        corrupted["levels"][0]["u"] = [999.0]
+        with pytest.raises(ValueError, match="checksum"):
+            target.restore(corrupted)
+        assert target.get_state() == before
+
+
+def test_persistent_hierarchy_checkpoint_rejects_invalid_shapes_and_nonfinite_values():
+    try:
+        lib = load_gfe_library(_lib_path())
+    except OSError as exc:
+        pytest.skip(f"shared library unavailable: {exc}")
+    levels, edges = _checkpoint_test_spec()
+    with gfe.create_persistent_hierarchy_runtime(lib, levels, edges) as runtime:
+        valid = runtime.checkpoint()
+        before = runtime.get_state()
+
+        bad_shape = {**valid, "levels": [dict(level) for level in valid["levels"]]}
+        bad_shape["levels"][0]["u"] = [1.0, 2.0]
+        bad_shape.pop("payload_sha256")
+        bad_shape["payload_sha256"] = __import__("hashlib").sha256(
+            gfe._canonical_json(bad_shape).encode("utf-8")
+        ).hexdigest()
+        with pytest.raises(ValueError, match="dimensions"):
+            runtime.restore(bad_shape)
+        assert runtime.get_state() == before
+
+        bad_value = {**valid, "levels": [dict(level) for level in valid["levels"]]}
+        bad_value["levels"][0]["u"] = [float("inf")]
+        with pytest.raises(ValueError, match="checksum|non-portable"):
+            runtime.restore(bad_value)
+        assert runtime.get_state() == before
+
