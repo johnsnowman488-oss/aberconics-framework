@@ -79,7 +79,7 @@ class HierarchicalDigitalDirector:
     """Stream ``DigitalEpisode`` forcing schedules through one persistent native hierarchy handle.
 
     ``levels``/``edges`` use the chain-spec dict format consumed by
-    :func:`d2c.ffi.step_hierarchy_raw`.  A single-level flat chain (empty
+    :func:`d2c.ffi.create_persistent_hierarchy_runtime`.  A single-level flat chain (empty
     ``edges``, one level) reproduces the C++ ABERSOE substrate without any
     hierarchy coupling and doubles as the ABI-vs-Python parity vehicle.
 
