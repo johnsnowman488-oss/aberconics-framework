@@ -796,3 +796,44 @@ def test_native_hierarchy_restore_is_atomic_for_invalid_later_level():
         assert runtime.step_count == 1
         assert runtime.get_state() == before
 
+
+def test_persistent_hierarchy_repeated_create_step_checkpoint_restore_destroy_lifecycle():
+    try:
+        lib = load_gfe_library(_lib_path())
+    except OSError as exc:
+        pytest.skip(f"shared library unavailable: {exc}")
+    levels, edges = _checkpoint_test_spec()
+    stale_handles = []
+    for episode in range(24):
+        with gfe.create_persistent_hierarchy_runtime(lib, levels, edges) as runtime:
+            stale_handles.append(runtime.handle)
+            for event in range(4):
+                runtime.step({0: [0.01 * (episode + event)]})
+            checkpoint = runtime.checkpoint()
+            assert runtime.step_count == 4
+        with gfe.create_persistent_hierarchy_runtime(lib, levels, edges) as resumed:
+            resumed.restore(checkpoint)
+            assert resumed.step_count == 4
+            assert resumed.get_state() == runtime_snapshot(checkpoint)
+        err = gfe.ctypes.create_string_buffer(256)
+        count = gfe.c_size_t(0)
+        status = lib.gfe_c_hierarchy_get_level_count(
+            stale_handles[-1], gfe.ctypes.byref(count), err, gfe.ctypes.sizeof(err)
+        )
+        assert status == gfe.GFE_C_STATUS_INVALID_HANDLE
+    assert len(set(stale_handles)) == len(stale_handles)
+
+
+def runtime_snapshot(checkpoint):
+    return {
+        "level_states": [
+            {"u": list(level["u"]), "chi": list(level["chi"]), "t": level["t"]}
+            for level in checkpoint["levels"]
+        ],
+        "active_kernels": [
+            {"gamma": list(level["gamma"]), "w": list(level["w"])}
+            for level in checkpoint["levels"]
+        ],
+        "spectral_units": [],
+    }
+
