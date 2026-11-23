@@ -238,14 +238,14 @@ This is the active work ledger. Status values: **NOT STARTED**, **IN PROGRESS**,
 | ID | Work package | Deliverable / exit gate | Status |
 |---|---|---|---|
 | M4-ABI-0 | Contract and ownership design | C++ step semantics, handle token, status, and ownership contract reconciled with implementation | PASSED |
-| M4-ABI-1 | Native runtime type | Shared registry-owned runtime containing persistent model/state and per-handle mutex | IN PROGRESS |
-| M4-ABI-2 | Create/destroy/discovery ABI | 64-bit opaque token, create/destroy, level count, stale-token status | IN PROGRESS |
-| M4-ABI-3 | Persistent single-level-input step | Handle-owned step, zero or one feedback, D4B active-kernel reset semantics | IN PROGRESS |
-| M4-ABI-4 | Multi-level feedback transaction | Multiple addressed vectors, exact dimensions, duplicate/out-of-range validation, compute-before-commit | IN PROGRESS |
-| M4-ABI-5 | State and diagnostics inspection | Per-level state/kernel/spectral snapshot with required-size-first buffer validation | IN PROGRESS |
+| M4-ABI-1 | Native runtime type | Shared registry-owned runtime containing persistent model/state and per-handle mutex; Linux/Windows builds and C++ tests pass | PASSED |
+| M4-ABI-2 | Create/destroy/discovery ABI | 64-bit opaque token, create/destroy, level count, stale-token rejection test | PASSED |
+| M4-ABI-3 | Persistent single-level-input step | Handle-owned step, zero or one feedback, D4B active-kernel reset semantics and per-event parity | PASSED |
+| M4-ABI-4 | Multi-level feedback transaction | Multiple addressed vectors, exact dimensions, duplicate/out-of-range validation, compute-before-commit; no-mutation test passes | PASSED |
+| M4-ABI-5 | State and diagnostics inspection | Per-level state/kernel/spectral snapshot; exercised by persistent-vs-D4B parity tests | PASSED |
 | M4-ABI-6 | State restore/set | Atomic all-level validation and commit; dimension/time/finite checks | NOT STARTED |
-| M4-ABI-7 | Python owning wrapper | Context-managed native owner; D2C director now creates once per episode and sends feedback per event | IN PROGRESS |
-| M4-ABI-8 | D4B parity campaign | Two-/three-level deterministic parity, silent/forced sequences, invalid-input invariance | NOT STARTED |
+| M4-ABI-7 | Python owning wrapper | Context-managed native owner; D2C director creates once per episode and sends feedback per event | PASSED |
+| M4-ABI-8 | D4B parity campaign | Two-/three-level deterministic parity, silent/forced sequences, multi-level feedback and invalid-input invariance; 193 passed, 4 skipped on each OS | PASSED (tested scope) |
 | M4-ABI-9 | Checkpoint/restore | Versioned portable format, spec fingerprint, exact continuation tests | NOT STARTED |
 | M4-ABI-10 | HLA/HLB integration seam | Python feedback adapter and inspection path; hierarchy topology held fixed | NOT STARTED |
 | M4-ABI-11 | Confirmatory runtime campaign | Repeated episodes, lifecycle/memory-leak checks, timing and allocation profile | NOT STARTED |
@@ -277,10 +277,25 @@ Parallel work is appropriate only after the shared contract is frozen: Python wr
 5. Measure model construction count, per-event allocations, latency, and memory usage against the old D4B path; do not assume the persistent path is faster without measurement.
 6. Keep numerical correctness, interface performance, and Leptograph research outcomes as separate evidence categories.
 
+## 7.1 Verification record
+
+Latest code-bearing CI run: [45170012695](https://github.com/johnsnowman488-oss/aberconics-framework/actions/runs/45170012695), head `896069758c9a257bc2a85e09f44ea00347d3662d`.
+
+- Ubuntu and Windows C++ configure/build and CTest jobs: passed.
+- Ubuntu and Windows shared-library builds: passed.
+- Python 3.12 on Ubuntu: **193 passed, 4 skipped**.
+- Python 3.12 on Windows: **193 passed, 4 skipped**.
+- Linux module compile and experiment-lab JavaScript validation: passed.
+- Windows-only skipped Linux script validation as expected.
+
+The parity suite includes a two-level coupled comparison and a three-level campaign with three deterministic 40-event sequences (120 events total), including silent steps. It compares each level's `u`, scalar `chi`, `t`, active kernels and spectral diagnostics. These results establish parity for the tested chains and sequences; they do not prove all possible topology/configuration combinations.
+
+Performance profiling, state set/restore, checkpointing, HLA/HLB coupling and confirmatory runtime experiments remain open.
+
 ## 8. Immediate next actions
 
-1. Build the branch on Linux and Windows; resolve any compiler or ABI issues.
-2. Run the existing D4B suite plus persistent-vs-D4B per-event parity tests.
-3. Run multi-level feedback, invalid-input no-mutation, and stale-handle tests.
-4. Profile model construction count, per-event allocations, latency, and memory against the old path.
-5. Only after parity is green, freeze the implementation slice and proceed to checkpointing and HLA/HLB integration.
+1. Profile model construction count, per-event allocations, latency and memory against the old D4B path; do not infer speedup from parity.
+2. Design and implement atomic state restore/set, followed by versioned checkpoint/restore and exact-continuation tests.
+3. Integrate HLA and HLB through the Python coordinator while holding the SOE hierarchy and topology constant.
+4. Run repeated-episode lifecycle and memory checks, then the confirmatory runtime campaign.
+5. Keep this PR unmerged until the implementation review and next-stage ownership decision are complete.
