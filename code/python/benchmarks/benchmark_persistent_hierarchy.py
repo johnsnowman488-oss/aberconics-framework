@@ -145,11 +145,17 @@ def main():
             raise SystemExit("warm-up parity failure")
 
     d4b_times, create_times, persistent_times, errors = [], [], [], []
-    for _ in range(args.repeats):
-        d4b_elapsed, d4b_trace = run_d4b(lib, levels, edges, sequence)
-        create_elapsed, persistent_elapsed, persistent_trace = run_persistent(
-            lib, levels, edges, sequence
-        )
+    for repeat_index in range(args.repeats):
+        if repeat_index % 2 == 0:
+            create_elapsed, persistent_elapsed, persistent_trace = run_persistent(
+                lib, levels, edges, sequence
+            )
+            d4b_elapsed, d4b_trace = run_d4b(lib, levels, edges, sequence)
+        else:
+            d4b_elapsed, d4b_trace = run_d4b(lib, levels, edges, sequence)
+            create_elapsed, persistent_elapsed, persistent_trace = run_persistent(
+                lib, levels, edges, sequence
+            )
         error = max_parity_error(d4b_trace, persistent_trace)
         if error > 1e-10:
             raise SystemExit(f"numerical parity failure: max_abs_error={error:.3e}")
