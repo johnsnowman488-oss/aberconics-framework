@@ -1,0 +1,111 @@
+{
+  "benchmark": "persistent_hierarchy_vs_d4b",
+  "construction_counts_per_episode": {
+    "d4b_chain_model_constructions": 400,
+    "persistent_chain_model_constructions": 1
+  },
+  "coupling_edges": 4,
+  "d4b_episode": {
+    "max_ms": 51.95134499999199,
+    "median_ms": 47.185291000005236,
+    "min_ms": 46.570916999996825,
+    "p25_ms": 46.58687399999906,
+    "p75_ms": 48.44008599999938,
+    "samples_ms": [
+      51.951345,
+      48.742573,
+      46.586874,
+      46.570917,
+      48.440086,
+      46.659394,
+      47.185291
+    ]
+  },
+  "d4b_per_event_ms_median": 0.11796322750001309,
+  "environment": {
+    "implementation": "CPython",
+    "platform": "Linux-7.0.0-1020-azure-x86_64-with-glibc2.43",
+    "python": "3.12.16"
+  },
+  "events_per_episode": 400,
+  "hierarchy_levels": 3,
+  "max_abs_numerical_parity_error": 0.0,
+  "native_allocation_count": {
+    "note": "No native allocator hook is enabled; do not infer C++ allocation reductions from tracemalloc",
+    "status": "not_instrumented"
+  },
+  "persistent_amortized_total_per_event_ms": 0.06325931500001047,
+  "persistent_creation": {
+    "max_ms": 0.23017799999536237,
+    "median_ms": 0.20620600000142986,
+    "min_ms": 0.1555480000092757,
+    "p25_ms": 0.18346599999574664,
+    "p75_ms": 0.21043000000986467,
+    "samples_ms": [
+      0.198514,
+      0.206206,
+      0.230178,
+      0.155548,
+      0.183466,
+      0.21043,
+      0.222464
+    ]
+  },
+  "persistent_step_loop": {
+    "max_ms": 29.801380000009203,
+    "median_ms": 25.09752000000276,
+    "min_ms": 24.064596000002325,
+    "p25_ms": 24.489496000001054,
+    "p75_ms": 26.116901999998277,
+    "samples_ms": [
+      26.116902,
+      29.80138,
+      24.489496,
+      24.064596,
+      25.09752,
+      29.19064,
+      24.612028
+    ]
+  },
+  "persistent_step_per_event_ms_median": 0.0627438000000069,
+  "persistent_total_episode_ms_median": 25.30372600000419,
+  "persistent_total_episode_speedup_vs_d4b": 1.8647566370263977,
+  "python_tracemalloc_peak_bytes": {
+    "d4b": 1773929,
+    "persistent": 1784314,
+    "scope_note": "Python allocations only; native C++ allocations are not included"
+  },
+  "raw_samples_seconds": {
+    "d4b_episode": [
+      0.05195134499999199,
+      0.0487425729999984,
+      0.04658687399999906,
+      0.046570916999996825,
+      0.04844008599999938,
+      0.04665939400000241,
+      0.047185291000005236
+    ],
+    "persistent_creation": [
+      0.00019851400000447939,
+      0.00020620600000142986,
+      0.00023017799999536237,
+      0.0001555480000092757,
+      0.00018346599999574664,
+      0.00021043000000986467,
+      0.00022246399998948618
+    ],
+    "persistent_step_loop": [
+      0.026116901999998277,
+      0.029801380000009203,
+      0.024489496000001054,
+      0.024064596000002325,
+      0.02509752000000276,
+      0.029190639999995938,
+      0.024612027999992847
+    ]
+  },
+  "repeats": 7,
+  "timing_scope": "end-to-end Python ctypes calls including per-event state and diagnostics transfer",
+  "version": 1,
+  "warmup_episodes": 2
+}

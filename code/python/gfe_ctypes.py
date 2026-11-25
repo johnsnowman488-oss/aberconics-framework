@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import ctypes
+import hashlib
+import json
+import math
 import os
+import threading
 from csv import writer
-from ctypes import POINTER, byref, c_char, c_char_p, c_double, c_int, c_size_t
+from ctypes import POINTER, byref, c_char, c_char_p, c_double, c_int, c_size_t, c_uint64
 from pathlib import Path
 from typing import Dict, List, Sequence
 
@@ -14,6 +18,7 @@ GFE_C_STATUS_OK = 0
 GFE_C_STATUS_INVALID_ARGUMENT = 1
 GFE_C_STATUS_RUNTIME_ERROR = 2
 GFE_C_STATUS_BUFFER_TOO_SMALL = 3
+GFE_C_STATUS_INVALID_HANDLE = 4
 
 GFE_C_FIT_BACKEND_NNLS_PG = 0
 GFE_C_FIT_BACKEND_PRONY = 1
@@ -292,6 +297,13 @@ class GfeCHierarchicalChainSpecView(ctypes.Structure):
         ("level_count", c_size_t),
         ("edges", POINTER(GfeCHierarchicalChainEdgeSpec)),
         ("edge_count", c_size_t),
+    ]
+
+class GfeCHierarchyFeedbackView(ctypes.Structure):
+    _fields_ = [
+        ("target_level", c_size_t),
+        ("values", POINTER(c_double)),
+        ("values_size", c_size_t),
     ]
 
 
@@ -681,6 +693,41 @@ def load_gfe_library(path: str | None = None) -> ctypes.CDLL:
         c_size_t,
     ]
     lib.gfe_c_hierarchical_step_chain_spec.restype = c_int
+
+    lib.gfe_c_hierarchy_create.argtypes = [
+        POINTER(GfeCHierarchicalChainSpecView), POINTER(c_uint64),
+        POINTER(c_char), c_size_t,
+    ]
+    lib.gfe_c_hierarchy_create.restype = c_int
+    lib.gfe_c_hierarchy_destroy.argtypes = [c_uint64, POINTER(c_char), c_size_t]
+    lib.gfe_c_hierarchy_destroy.restype = c_int
+    lib.gfe_c_hierarchy_get_level_count.argtypes = [
+        c_uint64, POINTER(c_size_t), POINTER(c_char), c_size_t,
+    ]
+    lib.gfe_c_hierarchy_get_level_count.restype = c_int
+    lib.gfe_c_hierarchy_step.argtypes = [
+        c_uint64, POINTER(GfeCHierarchyFeedbackView), c_size_t,
+        POINTER(c_char), c_size_t,
+    ]
+    lib.gfe_c_hierarchy_step.restype = c_int
+    lib.gfe_c_hierarchy_get_state.argtypes = [
+        c_uint64,
+        POINTER(GfeCStateMutView), c_size_t,
+        POINTER(GfeCMemoryKernelMutView), c_size_t,
+        POINTER(GfeCSpectralUnits), c_size_t,
+        POINTER(c_char), c_size_t,
+    ]
+    lib.gfe_c_hierarchy_get_state.restype = c_int
+
+    lib.gfe_c_hierarchy_restore.argtypes = [
+        c_uint64, POINTER(GfeCStateView), POINTER(GfeCMemoryKernelView),
+        c_size_t, c_uint64, POINTER(c_char), c_size_t,
+    ]
+    lib.gfe_c_hierarchy_restore.restype = c_int
+    lib.gfe_c_hierarchy_get_step_count.argtypes = [
+        c_uint64, POINTER(c_uint64), POINTER(c_char), c_size_t,
+    ]
+    lib.gfe_c_hierarchy_get_step_count.restype = c_int
 
     lib.gfe_c_hierarchical_get_cross_level_report_for_chain_spec.argtypes = [
         POINTER(GfeCHierarchicalChainSpecView),
@@ -2445,6 +2492,375 @@ def step_hierarchical_chain_spec(
         "active_kernels": result_kernels,
         "spectral_units": result_spectral,
     }
+
+
+def _canonical_hierarchy_spec(
+    levels: List[Dict[str, object]],
+    edges: List[Dict[str, object]],
+) -> Dict[str, object]:
+    """Normalize the immutable custom-chain specification for portable hashing."""
+    canonical_levels = []
+    for idx, level in enumerate(levels):
+        u = [float(v) for v in level["u"]]
+        dim = len(u)
+        decay = [float(v) for v in level.get("linear_decay", [])]
+        bias = [float(v) for v in level.get("forcing_bias", [])]
+        canonical_levels.append({
+            "name": str(level.get("name", f"level_{idx}")),
+            "gamma": [float(v) for v in level["gamma"]],
+            "w": [float(v) for v in level["w"]],
+            "u": u,
+            "chi": [float(v) for v in level.get("chi", [])],
+            "t": float(level.get("t", 0.0)),
+            "dt": float(level.get("dt", 0.01)),
+            "linear_decay": decay if decay else [1.0] * dim,
+            "forcing_bias": bias if bias else [0.0] * dim,
+            "form": int(level.get("form", GFE_C_COUPLING_FORM_B)),
+            "coupling_index": int(level.get("coupling_index", 0)),
+        })
+    canonical_edges = [{
+        "source_level": int(edge["source_level"]),
+        "target_level": int(edge["target_level"]),
+        "relation": int(edge["relation"]),
+        "gain": float(edge.get("gain", 1.0)),
+        "normalize_weights": bool(edge.get("normalize_weights", True)),
+    } for edge in edges]
+    return {"levels": canonical_levels, "edges": canonical_edges}
+
+
+def _canonical_json(value: object) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+
+
+def _runtime_synchronized(method):
+    """Serialize public operations on one Python owner; reentrant for snapshots."""
+    def wrapped(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return wrapped
+
+
+class PersistentHierarchyRuntime:
+    """Own a persistent native scalar custom-chain hierarchy.
+
+    The native handle owns the model and evolving state. Python retains the
+    loaded CDLL and specification buffers for deterministic lifetime
+    management, but the native create call copies the specification. Use as
+    a context manager or call close() explicitly.
+    """
+
+    def __init__(
+        self,
+        lib: ctypes.CDLL,
+        levels: List[Dict[str, object]],
+        edges: List[Dict[str, object]],
+    ) -> None:
+        self._lib = lib
+        self._lock = threading.RLock()
+        self._closed = False
+        self._level_dims = [len(level["u"]) for level in levels]
+        self._memory_channels = [len(level["gamma"]) for level in levels]
+        self._spec_fingerprint = hashlib.sha256(
+            _canonical_json(_canonical_hierarchy_spec(levels, edges)).encode("utf-8")
+        ).hexdigest()
+        spec, self._spec_keepalive = _build_hierarchical_chain_spec(levels, edges)
+        self._handle = c_uint64(0)
+        err = ctypes.create_string_buffer(512)
+        status = self._lib.gfe_c_hierarchy_create(
+            byref(spec), byref(self._handle), err, ctypes.sizeof(err)
+        )
+        if status != GFE_C_STATUS_OK:
+            raise RuntimeError(
+                f"gfe_c_hierarchy_create failed ({status}): {err.value.decode('utf-8')}"
+            )
+        self._level_count = c_size_t(0)
+        status = self._lib.gfe_c_hierarchy_get_level_count(
+            self._handle, byref(self._level_count), err, ctypes.sizeof(err)
+        )
+        if status != GFE_C_STATUS_OK:
+            self.close()
+            raise RuntimeError(
+                f"gfe_c_hierarchy_get_level_count failed ({status}): {err.value.decode('utf-8')}"
+            )
+        if self._level_count.value != len(levels):
+            self.close()
+            raise RuntimeError("Native hierarchy level count differs from supplied specification")
+
+    @property
+    @_runtime_synchronized
+    def handle(self) -> int:
+        self._ensure_open()
+        return int(self._handle.value)
+
+    def _ensure_open(self) -> None:
+        if self._closed or not self._handle.value:
+            raise RuntimeError("PersistentHierarchyRuntime is closed")
+
+    @_runtime_synchronized
+    def step(
+        self,
+        feedback_by_level: Dict[int, Sequence[float]] | None = None,
+    ) -> Dict[str, object]:
+        """Advance exactly one hierarchy synchronisation cycle.
+
+        feedback_by_level maps each target level to one vector. Multiple
+        levels are injected simultaneously; native code validates indices,
+        uniqueness, and dimensions before advancing.
+        """
+        self._ensure_open()
+        feedback_by_level = feedback_by_level or {}
+        keepalive: List[object] = []
+        records: List[GfeCHierarchyFeedbackView] = []
+        for target, values in sorted(feedback_by_level.items()):
+            vals = [float(v) for v in values]
+            buf = (c_double * len(vals))(*vals)
+            keepalive.append(buf)
+            records.append(GfeCHierarchyFeedbackView(
+                int(target), ctypes.cast(buf, POINTER(c_double)), len(vals)
+            ))
+        arr = (GfeCHierarchyFeedbackView * len(records))(*records) if records else None
+        err = ctypes.create_string_buffer(512)
+        status = self._lib.gfe_c_hierarchy_step(
+            self._handle,
+            arr if arr is not None else POINTER(GfeCHierarchyFeedbackView)(),
+            len(records),
+            err,
+            ctypes.sizeof(err),
+        )
+        if status != GFE_C_STATUS_OK:
+            raise RuntimeError(
+                f"gfe_c_hierarchy_step failed ({status}): {err.value.decode('utf-8')}"
+            )
+        return self.get_state()
+
+    @_runtime_synchronized
+    def get_state(self) -> Dict[str, object]:
+        """Return a copied snapshot of all level states and diagnostics."""
+        self._ensure_open()
+        n = self._level_count.value
+        state_keepalive: List[object] = []
+        state_views: List[GfeCStateMutView] = []
+        kernel_views: List[GfeCMemoryKernelMutView] = []
+        for dim, channels in zip(self._level_dims, self._memory_channels):
+            u_buf = (c_double * dim)()
+            chi_buf = (c_double * channels)()
+            u_size = c_size_t(0)
+            chi_size = c_size_t(0)
+            t_val = c_double(0.0)
+            state_keepalive.extend([u_buf, chi_buf, u_size, chi_size, t_val])
+            state_views.append(GfeCStateMutView(
+                u_buf, dim, ctypes.pointer(u_size),
+                chi_buf, channels, ctypes.pointer(chi_size),
+                ctypes.pointer(t_val),
+            ))
+            gamma_buf = (c_double * channels)()
+            weights_buf = (c_double * channels)()
+            gamma_size = c_size_t(0)
+            weights_size = c_size_t(0)
+            state_keepalive.extend([gamma_buf, weights_buf, gamma_size, weights_size])
+            kernel_views.append(GfeCMemoryKernelMutView(
+                gamma_buf, channels, ctypes.pointer(gamma_size),
+                weights_buf, channels, ctypes.pointer(weights_size),
+            ))
+        state_arr = (GfeCStateMutView * n)(*state_views)
+        kernel_arr = (GfeCMemoryKernelMutView * n)(*kernel_views)
+        spectral_arr = (GfeCSpectralUnits * n)()
+        err = ctypes.create_string_buffer(512)
+        status = self._lib.gfe_c_hierarchy_get_state(
+            self._handle, state_arr, n, kernel_arr, n,
+            spectral_arr, n, err, ctypes.sizeof(err),
+        )
+        if status != GFE_C_STATUS_OK:
+            raise RuntimeError(
+                f"gfe_c_hierarchy_get_state failed ({status}): {err.value.decode('utf-8')}"
+            )
+        states, kernels, spectral = [], [], []
+        for i, (dim, channels) in enumerate(zip(self._level_dims, self._memory_channels)):
+            sv, kv = state_views[i], kernel_views[i]
+            states.append({
+                "u": [sv.u[j] for j in range(dim)],
+                "chi": [sv.chi[j] for j in range(channels)],
+                "t": sv.t[0],
+            })
+            kernels.append({
+                "gamma": [kv.gamma[j] for j in range(channels)],
+                "w": [kv.w[j] for j in range(channels)],
+            })
+            sp = spectral_arr[i]
+            spectral.append({
+                "mcap": sp.mcap, "mscale": sp.mscale, "mres": sp.mres,
+                "hmem": sp.hmem, "hnorm": sp.hnorm, "deff": sp.deff,
+            })
+        return {
+            "level_states": states,
+            "active_kernels": kernels,
+            "spectral_units": spectral,
+        }
+
+    @_runtime_synchronized
+    def close(self) -> None:
+        if self._closed:
+            return
+        err = ctypes.create_string_buffer(512)
+        status = self._lib.gfe_c_hierarchy_destroy(
+            self._handle, err, ctypes.sizeof(err)
+        )
+        self._closed = True
+        self._handle = c_uint64(0)
+        self._spec_keepalive = []
+        if status != GFE_C_STATUS_OK:
+            raise RuntimeError(
+                f"gfe_c_hierarchy_destroy failed ({status}): {err.value.decode('utf-8')}"
+            )
+
+    @property
+    @_runtime_synchronized
+    def step_count(self) -> int:
+        """Return the native runtime's committed synchronisation count."""
+        self._ensure_open()
+        count = c_uint64(0)
+        err = ctypes.create_string_buffer(512)
+        status = self._lib.gfe_c_hierarchy_get_step_count(
+            self._handle, byref(count), err, ctypes.sizeof(err)
+        )
+        if status != GFE_C_STATUS_OK:
+            raise RuntimeError(
+                f"gfe_c_hierarchy_get_step_count failed ({status}): {err.value.decode('utf-8')}"
+            )
+        return int(count.value)
+
+    @_runtime_synchronized
+    def checkpoint(self) -> Dict[str, object]:
+        """Return a versioned, checksummed, JSON-serializable runtime snapshot."""
+        self._ensure_open()
+        snapshot = self.get_state()
+        states = snapshot["level_states"]
+        kernels = snapshot["active_kernels"]
+        levels = []
+        for state, kernel in zip(states, kernels):
+            levels.append({
+                "u": list(state["u"]),
+                "chi": list(state["chi"]),
+                "t": float(state["t"]),
+                "gamma": list(kernel["gamma"]),
+                "w": list(kernel["w"]),
+            })
+        payload: Dict[str, object] = {
+            "format": "gfe.persistent_hierarchy.checkpoint",
+            "version": 1,
+            "spec_sha256": self._spec_fingerprint,
+            "step_count": self.step_count,
+            "levels": levels,
+        }
+        payload["payload_sha256"] = hashlib.sha256(
+            _canonical_json(payload).encode("utf-8")
+        ).hexdigest()
+        return payload
+
+    def save_checkpoint(self, path: str | os.PathLike[str]) -> None:
+        """Atomically write a portable UTF-8 JSON checkpoint file."""
+        payload = self.checkpoint()
+        destination = Path(path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary = destination.with_name(destination.name + ".tmp")
+        try:
+            with temporary.open("w", encoding="utf-8", newline="\n") as stream:
+                stream.write(_canonical_json(payload))
+                stream.write("\n")
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, destination)
+        finally:
+            if temporary.exists():
+                temporary.unlink()
+
+    @_runtime_synchronized
+    def restore(self, payload: Dict[str, object]) -> None:
+        """Atomically restore a checkpoint after format, hash, and shape checks."""
+        self._ensure_open()
+        required = {"format", "version", "spec_sha256", "step_count", "levels", "payload_sha256"}
+        if not isinstance(payload, dict) or set(payload) != required:
+            raise ValueError("checkpoint fields do not match version-1 schema")
+        if payload["format"] != "gfe.persistent_hierarchy.checkpoint" or payload["version"] != 1:
+            raise ValueError("unsupported hierarchy checkpoint format or version")
+        if payload["spec_sha256"] != self._spec_fingerprint:
+            raise ValueError("checkpoint specification fingerprint does not match this hierarchy")
+        digest_input = {key: value for key, value in payload.items() if key != "payload_sha256"}
+        try:
+            digest = hashlib.sha256(_canonical_json(digest_input).encode("utf-8")).hexdigest()
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"checkpoint contains non-portable JSON values: {exc}") from exc
+        if not isinstance(payload["payload_sha256"], str) or digest != payload["payload_sha256"]:
+            raise ValueError("checkpoint payload checksum mismatch")
+        step_count = payload["step_count"]
+        if isinstance(step_count, bool) or not isinstance(step_count, int) or step_count < 0 or step_count > (2**64 - 1):
+            raise ValueError("checkpoint step_count must be an unsigned 64-bit integer")
+        levels = payload["levels"]
+        if not isinstance(levels, list) or len(levels) != self._level_count.value:
+            raise ValueError("checkpoint level count does not match this hierarchy")
+
+        state_views: List[GfeCStateView] = []
+        kernel_views: List[GfeCMemoryKernelView] = []
+        keepalive: List[object] = []
+        for index, level in enumerate(levels):
+            if not isinstance(level, dict) or set(level) != {"u", "chi", "t", "gamma", "w"}:
+                raise ValueError(f"checkpoint level {index} has an invalid schema")
+            u = [float(v) for v in level["u"]]
+            chi = [float(v) for v in level["chi"]]
+            gamma = [float(v) for v in level["gamma"]]
+            weights = [float(v) for v in level["w"]]
+            t = float(level["t"])
+            if len(u) != self._level_dims[index] or len(chi) != self._memory_channels[index]:
+                raise ValueError(f"checkpoint level {index} state dimensions do not match")
+            if len(gamma) != self._memory_channels[index] or len(weights) != self._memory_channels[index]:
+                raise ValueError(f"checkpoint level {index} kernel dimensions do not match")
+            if not all(math.isfinite(v) for v in u + chi + gamma + weights + [t]):
+                raise ValueError(f"checkpoint level {index} contains non-finite values")
+            if any(v <= 0.0 for v in gamma) or any(v < 0.0 for v in weights) or sum(weights) <= 0.0:
+                raise ValueError(f"checkpoint level {index} has an invalid memory kernel")
+            state_view, state_refs = _build_state_view(u, chi, t=t)
+            kernel_view, kernel_refs = _build_kernel_view(gamma, weights)
+            state_views.append(state_view)
+            kernel_views.append(kernel_view)
+            keepalive.extend(state_refs + kernel_refs)
+
+        state_array = (GfeCStateView * len(state_views))(*state_views)
+        kernel_array = (GfeCMemoryKernelView * len(kernel_views))(*kernel_views)
+        err = ctypes.create_string_buffer(512)
+        status = self._lib.gfe_c_hierarchy_restore(
+            self._handle, state_array, kernel_array, len(state_views),
+            c_uint64(step_count), err, ctypes.sizeof(err),
+        )
+        if status != GFE_C_STATUS_OK:
+            raise RuntimeError(
+                f"gfe_c_hierarchy_restore failed ({status}): {err.value.decode('utf-8')}"
+            )
+
+    @_runtime_synchronized
+    def load_checkpoint(self, path: str | os.PathLike[str]) -> None:
+        """Read a versioned JSON checkpoint and atomically restore this runtime."""
+        try:
+            with Path(path).open("r", encoding="utf-8") as stream:
+                payload = json.load(stream)
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"could not read hierarchy checkpoint: {exc}") from exc
+        self.restore(payload)
+
+    def __enter__(self) -> "PersistentHierarchyRuntime":
+        self._ensure_open()
+        return self
+
+    def __exit__(self, exc_type, exc, traceback) -> None:
+        self.close()
+
+
+def create_persistent_hierarchy_runtime(
+    lib: ctypes.CDLL,
+    levels: List[Dict[str, object]],
+    edges: List[Dict[str, object]],
+) -> PersistentHierarchyRuntime:
+    return PersistentHierarchyRuntime(lib, levels, edges)
+
 
 
 if __name__ == "__main__":
