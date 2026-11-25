@@ -1,7 +1,7 @@
 # M4 Persistent Custom-Chain Hierarchy Runtime
 ## ABI Contract, Ownership Model, and Implementation Ledger
 
-**Status:** Persistent execution and tested D4B parity passed on Linux/Windows; checkpoint/restore and performance benchmark remain open — PR not merge-ready  
+**Status:** Persistent execution, D4B parity, checkpoint/restore, benchmark, and compiled HLA/HLB integration smoke passed for the tested scope; broader HLA/HLB P6 stability remains separate — operational research branch, not planned for main merge  
 **Branch:** `m4/persistent-hierarchy-abi-contract`  
 **Base:** `main`  
 **Scope:** Evolve the existing scalar custom-chain hierarchy ABI into a persistent native runtime for HLA/HLB. Preserve the current D4B numerical contract.
@@ -247,7 +247,7 @@ This is the active work ledger. Status values: **NOT STARTED**, **IN PROGRESS**,
 | M4-ABI-7 | Python owning wrapper | Context-managed native owner; D2C director creates once per episode and sends feedback per event | PASSED |
 | M4-ABI-8 | D4B parity campaign | Two-/three-level deterministic parity, silent/forced sequences, multi-level feedback and invalid-input invariance | PASSED (tested scope; Linux and Windows 198 passed/4 skipped) |
 | M4-ABI-9 | Checkpoint/restore | Version-1 portable JSON; SHA-256 spec fingerprint and payload checksum; atomic file write; exact three-level continuation and rejection tests | PASSED |
-| M4-ABI-10 | HLA/HLB integration seam | Python feedback adapter and inspection path; hierarchy topology held fixed | NOT STARTED |
+| M4-ABI-10 | HLA/HLB integration seam | Python feedback adapter, inspection, checkpoint continuation and trusted rollback against compiled shared library | PASSED (tested scope; full HLA/HLB P6 adaptive-stability campaign remains in relational research repo) |
 | M4-ABI-11 | Confirmatory runtime campaign | Repeated create/step/checkpoint/restore/destroy cycles and stale-handle rejection | PASSED (24-cycle lifecycle test; native heap-leak profiling not instrumented) |
 | M4-ABI-12 | Persistent-vs-D4B benchmark | 3-level / 4-edge workload; 400 events, 7 repeats, 2 warm-ups; alternating order; parity gate; raw JSON evidence | PASSED (1.865x measured episode speedup; native allocator count not instrumented) |
 
@@ -301,6 +301,18 @@ The latest follow-up commit preserves benchmark evidence and updates this ledger
 - The Python owner serializes its public operations with a reentrant lock. Tests verify exact continuation on a three-level chain, immediate restored-state identity, mismatched-spec rejection, payload corruption, malformed dimensions, non-finite values, and native all-level atomicity when a later level is invalid.
 - A checkpoint is portable between processes provided the caller recreates the same immutable chain specification and uses a compatible checkpoint-format version; native handles themselves are process-local.
 
+
+### HLA/HLB compiled-runtime integration evidence
+
+The relational research repository exercised this runtime through the production `gfe_ctypes.create_persistent_hierarchy_runtime` factory:
+
+- Native HLA/HLB smoke: [45719571218](https://github.com/johnsnowman488-oss/relational-grassmannian-research/actions/runs/45719571218).
+- Follow-up trusted rollback smoke: [45719954794](https://github.com/johnsnowman488-oss/relational-grassmannian-research/actions/runs/45719954794).
+- Pinned source commit: `2539df6bda7ef3c9dd7c707abe26eff8bdbb59de`.
+- Compiled Linux shared-library SHA-256: `38b278a93a5b3fa3b544f55d958a2f7a44bb6e1d39154e63072f5ed7be511e4b`.
+- Both HLA and HLB completed real native handle creation, two-step execution, checkpoint/restore continuation, and composite trusted rollback. HLB's relation record remained present after rollback.
+- This closes ABI-10 for the tested integration seam. It does not certify the HLA/HLB adaptive P6 stability model or a global stability theorem; those remain owned by the relational research programme.
+
 ### Persistent-vs-D4B benchmark
 
 Raw result preserved at [`docs/benchmarks/M4_PERSISTENT_VS_D4B_2026-11-23.json`](benchmarks/M4_PERSISTENT_VS_D4B_2026-11-23.json). CI artifact: [`m4-persistent-vs-d4b`](https://github.com/johnsnowman488-oss/aberconics-framework/actions/runs/45173581148/artifacts/14817039055), artifact ZIP SHA-256 `5fc7d3e0ed5b556febbade3bf4c6cba9b2ac43622fcb9d0b531fce64c2246ce6`.
@@ -321,6 +333,6 @@ Measured persistent episode speedup: **1.865x**. Maximum absolute numerical disc
 
 1. M4 persistent execution, multi-level feedback, atomic restore, versioned checkpoint/restore, exact continuation, cross-platform tests, lifecycle behavior, and the measured D4B comparison are operational and passed for the tested scope.
 2. Native allocator/heap instrumentation is a separate performance-diagnostics improvement; it is not claimed by the current benchmark.
-3. HLA/HLB coupling and the broader confirmatory runtime campaign remain subsequent research work packages. Keep the topology and scalar custom-chain ABI fixed until those are explicitly opened.
+3. HLA/HLB compiled-runtime integration, checkpoint continuation, and trusted rollback have now been exercised from `relational-grassmannian-research` against this pinned runtime. The matched HLA/HLB task campaign also passed there. Full P6 coupled adaptive-stability acceptance remains a separate open research gate in that repository. Keep the topology and scalar custom-chain ABI fixed.
 4. This branch is being retained as an operational research branch. No merge into `main` is planned.
 
