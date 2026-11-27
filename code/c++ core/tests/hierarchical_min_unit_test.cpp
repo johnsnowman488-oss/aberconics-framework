@@ -369,6 +369,61 @@ int main() {
                 return 1;
             }
         }
+        {
+            abersoe::HierarchicalChainSpec spec;
+            spec.levels.push_back({"fast",
+                                   gfe::MemoryKernelParams{gfe::Vec{0.4, 0.1}, gfe::Vec{0.25, 0.25}},
+                                   abersoe::AberSOEState{gfe::State{0.0, 0.0}, gfe::Vec{0.0, 0.0}, 0.0},
+                                   0.01,
+                                   gfe::State{0.0, 0.0},
+                                   gfe::State{0.0, 0.0},
+                                   gfe::CouplingForm::NegativeFeedback,
+                                   0});
+            spec.levels.push_back({"slow",
+                                   gfe::MemoryKernelParams{gfe::Vec{0.3, 0.05}, gfe::Vec{0.25, 0.25}},
+                                   abersoe::AberSOEState{gfe::State{0.0, 0.0}, gfe::Vec{0.0, 0.0}, 0.0},
+                                   0.01,
+                                   gfe::State{0.0, 0.0},
+                                   gfe::State{0.0, 0.0},
+                                   gfe::CouplingForm::NegativeFeedback,
+                                   0});
+            spec.edges.push_back({1, 0, abersoe::HierarchicalChainRelationType::TopDown, 1.0, true});
+            const auto model = abersoe::make_hierarchical_model_from_spec(spec);
+            const auto modulation = model.top_down_couplings.front().modulation(
+                gfe::State{1.0e9, -1.0e9});
+            const auto kernel = abersoe::materialize_positive_kernel(modulation);
+            double weight_sum = 0.0;
+            for (double weight : kernel.w) {
+                if (!std::isfinite(weight) || weight <= 0.0) {
+                    std::cerr << "bounded top-down modulation must preserve finite positive weights\n";
+                    return 1;
+                }
+                weight_sum += weight;
+            }
+            for (double gamma : kernel.gamma) {
+                if (!std::isfinite(gamma) || gamma <= 0.0) {
+                    std::cerr << "bounded top-down modulation must preserve finite positive decay rates\n";
+                    return 1;
+                }
+            }
+            if (std::fabs(weight_sum - 1.0) > 1e-12) {
+                std::cerr << "normalized top-down weights should sum to one\n";
+                return 1;
+            }
+            const auto spectral = gfe::spectral_units(kernel.w, kernel.gamma);
+            if (!std::isfinite(spectral.mcap)) {
+                std::cerr << "large finite observables must not produce non-finite spectral Mcap\n";
+                return 1;
+            }
+
+            spec.edges.front().gain = 51.0;
+            std::string error;
+            if (abersoe::validate_hierarchical_chain_spec(spec, &error)) {
+                std::cerr << "top-down gain beyond the bounded modulation contract should fail validation\n";
+                return 1;
+            }
+        }
+
     } catch (const std::exception& e) {
         std::cerr << "hierarchical_min_unit_test failed: " << e.what() << "\n";
         return 1;
