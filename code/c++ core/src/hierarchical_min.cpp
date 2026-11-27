@@ -308,6 +308,14 @@ bool validate_hierarchical_chain_spec(const HierarchicalChainSpec& spec, std::st
             }
             return false;
         }
+        if (edge.relation == HierarchicalChainRelationType::TopDown &&
+            std::fabs(edge.gain) > 50.0) {
+            if (error) {
+                *error = "chain top-down edge[" + std::to_string(i) +
+                         "] gain magnitude must not exceed 50 for bounded exponential modulation";
+            }
+            return false;
+        }
         const std::size_t source_dim = spec.levels[edge.source_level].initial_state.u.size();
         const std::size_t target_dim = spec.levels[edge.target_level].initial_state.u.size();
         if (edge.relation == HierarchicalChainRelationType::BottomUp &&
@@ -387,19 +395,27 @@ HierarchicalMINModel make_hierarchical_model_from_spec(const HierarchicalChainSp
             const auto base_kernel = spec.levels[edge.target_level].kernel;
             coupling.modulation = [gain = edge.gain, normalize = edge.normalize_weights, base_kernel](
                                       const HierarchicalObservable& obs) {
-                double drive = 0.0;
+                long double drive = 0.0L;
                 for (double v : obs) {
-                    drive += std::fabs(v);
+                    if (!std::isfinite(v)) {
+                        throw std::invalid_argument("top-down observable must contain only finite values");
+                    }
+                    drive += std::fabs(static_cast<long double>(v));
                 }
-                drive /= static_cast<double>(obs.empty() ? 1 : obs.size());
+                drive /= static_cast<long double>(obs.empty() ? 1 : obs.size());
+                // Saturate the observable before it enters the exponential
+                // kernel modulation. Persistent SOE state may grow over long
+                // sequences; unbounded drive otherwise underflows gamma and
+                // overflows the normalized weight sum.
+                const double bounded_drive = static_cast<double>(std::tanh(drive));
                 PositiveKernelModulation m;
                 m.normalize_weights = normalize;
                 m.alpha.resize(base_kernel.w.size());
                 m.beta.resize(base_kernel.gamma.size());
                 for (std::size_t k = 0; k < base_kernel.w.size(); ++k) {
                     const double base_w = std::max(base_kernel.w[k], 1e-12);
-                    m.alpha[k] = std::log(base_w) + gain * drive;
-                    m.beta[k] = std::log(base_kernel.gamma[k]) - gain * drive;
+                    m.alpha[k] = std::log(base_w) + gain * bounded_drive;
+                    m.beta[k] = std::log(base_kernel.gamma[k]) - gain * bounded_drive;
                 }
                 return m;
             };
@@ -446,16 +462,48 @@ gfe::MemoryKernelParams materialize_positive_kernel(const PositiveKernelModulati
     out.gamma.resize(modulation.beta.size());
     out.w.resize(modulation.alpha.size());
 
-    double w_sum = 0.0;
-    for (std::size_t i = 0; i < modulation.alpha.size(); ++i) {
-        out.w[i] = std::exp(modulation.alpha[i]);
-        out.gamma[i] = std::exp(modulation.beta[i]);
-        w_sum += out.w[i];
+    const double log_min = std::log(std::numeric_limits<double>::min());
+    const double log_max = std::log(std::numeric_limits<double>::max());
+    for (double beta : modulation.beta) {
+        if (!std::isfinite(beta) || beta < log_min || beta > log_max) {
+            throw std::invalid_argument("kernel modulation gamma exponent is outside the finite positive range");
+        }
+    }
+    for (double alpha : modulation.alpha) {
+        if (!std::isfinite(alpha)) {
+            throw std::invalid_argument("kernel modulation weight exponent must be finite");
+        }
     }
 
     if (modulation.normalize_weights) {
+        // Stable softmax: subtract the maximum log-weight before exponentiation.
+        // Clip only the extreme tail to preserve strictly positive channels.
+        const double alpha_max = *std::max_element(
+            modulation.alpha.begin(), modulation.alpha.end());
+        double w_sum = 0.0;
+        for (std::size_t i = 0; i < modulation.alpha.size(); ++i) {
+            const double shifted = std::max(modulation.alpha[i] - alpha_max, -700.0);
+            out.w[i] = std::exp(shifted);
+            w_sum += out.w[i];
+        }
+        if (!std::isfinite(w_sum) || w_sum <= 0.0) {
+            throw std::invalid_argument("normalized kernel modulation produced an invalid weight sum");
+        }
         for (double& w : out.w) {
             w /= w_sum;
+        }
+    } else {
+        for (std::size_t i = 0; i < modulation.alpha.size(); ++i) {
+            if (modulation.alpha[i] < log_min || modulation.alpha[i] > log_max) {
+                throw std::invalid_argument("kernel modulation weight exponent is outside the finite positive range");
+            }
+            out.w[i] = std::exp(modulation.alpha[i]);
+        }
+    }
+    for (std::size_t i = 0; i < modulation.beta.size(); ++i) {
+        out.gamma[i] = std::exp(modulation.beta[i]);
+        if (!std::isfinite(out.gamma[i]) || out.gamma[i] <= 0.0) {
+            throw std::invalid_argument("kernel modulation produced a non-positive or non-finite decay rate");
         }
     }
 
