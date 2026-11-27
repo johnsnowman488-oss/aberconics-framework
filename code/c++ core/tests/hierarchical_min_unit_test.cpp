@@ -411,7 +411,7 @@ int main() {
                 return 1;
             }
             const auto spectral = gfe::spectral_units(kernel.w, kernel.gamma);
-            if (!std::isfinite(spectral.mcap)) {
+            if (!std::isfinite(spectral.Mcap)) {
                 std::cerr << "large finite observables must not produce non-finite spectral Mcap\n";
                 return 1;
             }
